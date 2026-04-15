@@ -752,6 +752,7 @@ fn is_model_downloaded(
         "distil-large-v3",
         "parakeet-v2",
         "parakeet-v3",
+        "qwen3-asr-0.6b",
     ];
     if !VALID_MODEL_IDS.contains(&model_id.as_str()) {
         return Err(CommandError::Database(
@@ -787,6 +788,7 @@ fn get_model_path(downloader: State<DownloaderState>, model_id: String) -> Comma
         "distil-large-v3",
         "parakeet-v2",
         "parakeet-v3",
+        "qwen3-asr-0.6b",
     ];
     if !VALID_MODEL_IDS.contains(&model_id.as_str()) {
         return Err(CommandError::Database(
@@ -915,6 +917,9 @@ fn add_transcription(
         "distil-medium.en",
         "distil-large-v2",
         "distil-large-v3",
+        "parakeet-v2",
+        "parakeet-v3",
+        "qwen3-asr-0.6b",
     ];
     if !VALID_MODEL_IDS.contains(&model_id.as_str()) {
         return Err(CommandError::Database(

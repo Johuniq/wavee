@@ -397,6 +397,14 @@ impl Database {
                 "Previous Parakeet English model with stable transcription quality.",
                 "[\"en\"]",
             ),
+            (
+                "qwen3-asr-0.6b",
+                "Qwen3-ASR 0.6B",
+                "1.9 GB",
+                1880_i64 * 1024 * 1024,
+                "Qwen3-ASR speech recognition model for accurate multilingual transcription.",
+                "[\"en\", \"zh\"]",
+            ),
         ];
 
         for (id, name, size, size_bytes, description, languages) in models {

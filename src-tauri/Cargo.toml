@@ -84,6 +84,7 @@ getrandom = { version = "0.2", features = ["std"] }
 # Whisper speech-to-text
 whisper-rs = "0.16"
 transcribe-rs = { version = "0.3.11", features = ["onnx"] }
+qwen3-asr = { path = "vendor/qwen3-asr", default-features = false }
 
 # Audio processing
 hound = "3.5"
@@ -98,8 +99,12 @@ uuid = { version = "1", features = ["v4"] }
 symphonia = { version = "0.5.5", features = ["mp3", "ogg", "flac", "aac", "isomp4"] }
 
 # Platform-specific GPU acceleration for Whisper
+[target.'cfg(target_os = "windows")'.dependencies]
+transcribe-rs = { version = "0.3.11", features = ["onnx", "ort-directml"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 whisper-rs = { version = "0.16", features = ["metal"] }
+transcribe-rs = { version = "0.3.11", features = ["onnx", "ort-coreml"] }
 
 # Linux: CUDA support for NVIDIA GPUs (optional, falls back to CPU if unavailable)
 # Note: Requires CUDA toolkit installed. Comment out if not using NVIDIA GPU.

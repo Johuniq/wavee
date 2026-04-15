@@ -1,17 +1,22 @@
+use qwen3_asr::{best_device, AsrInference, TranscribeOptions};
 use std::path::Path;
 use transcribe_rs::onnx::parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity};
 use transcribe_rs::onnx::Quantization;
+use transcribe_rs::{set_ort_accelerator, OrtAccelerator};
 use transcribe_rs::TranscriptionResult;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 pub enum Transcriber {
     Whisper(WhisperTranscriber),
     Parakeet(ParakeetTranscriber),
+    Qwen3Asr(Qwen3AsrTranscriber),
 }
 
 impl Transcriber {
     pub fn new(model_id: &str, model_path: &str, language: &str) -> Result<Self, String> {
-        if model_id.starts_with("parakeet-") {
+        if model_id.starts_with("qwen3-asr-") {
+            Ok(Self::Qwen3Asr(Qwen3AsrTranscriber::new(model_path)?))
+        } else if model_id.starts_with("parakeet-") {
             Ok(Self::Parakeet(ParakeetTranscriber::new(model_path)?))
         } else {
             Ok(Self::Whisper(WhisperTranscriber::new(
@@ -24,6 +29,7 @@ impl Transcriber {
         match self {
             Self::Whisper(transcriber) => transcriber.transcribe(audio_samples),
             Self::Parakeet(transcriber) => transcriber.transcribe(audio_samples),
+            Self::Qwen3Asr(transcriber) => transcriber.transcribe(audio_samples),
         }
     }
 
@@ -31,6 +37,41 @@ impl Transcriber {
         if let Self::Whisper(transcriber) = self {
             transcriber.set_language(language);
         }
+    }
+}
+
+pub struct Qwen3AsrTranscriber {
+    engine: AsrInference,
+}
+
+impl Qwen3AsrTranscriber {
+    pub fn new(model_path: &str) -> Result<Self, String> {
+        let model_dir = Path::new(model_path);
+        if !model_dir.is_dir() {
+            return Err(format!(
+                "Qwen3-ASR model directory not found: {}",
+                model_path
+            ));
+        }
+
+        let device = best_device();
+        let engine = AsrInference::load(model_dir, device)
+            .map_err(|e| format!("Failed to load Qwen3-ASR model: {}", e))?;
+
+        Ok(Self { engine })
+    }
+
+    pub fn transcribe(&self, audio_samples: &[f32]) -> Result<String, String> {
+        if audio_samples.is_empty() {
+            return Err("No audio samples to transcribe".to_string());
+        }
+
+        let result = self
+            .engine
+            .transcribe_samples(audio_samples, TranscribeOptions::default())
+            .map_err(|e| format!("Qwen3-ASR transcription failed: {}", e))?;
+
+        Ok(result.text)
     }
 }
 
@@ -172,6 +213,8 @@ pub struct ParakeetTranscriber {
 
 impl ParakeetTranscriber {
     pub fn new(model_path: &str) -> Result<Self, String> {
+        configure_ort_acceleration();
+
         let model_dir = Path::new(model_path);
         if !model_dir.is_dir() {
             return Err(format!(
@@ -204,6 +247,24 @@ impl ParakeetTranscriber {
 
         Ok(result.text)
     }
+}
+
+fn configure_ort_acceleration() {
+    #[cfg(target_os = "windows")]
+    let accelerator = OrtAccelerator::DirectMl;
+
+    #[cfg(target_os = "macos")]
+    let accelerator = OrtAccelerator::CoreMl;
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    let accelerator = OrtAccelerator::Auto;
+
+    set_ort_accelerator(accelerator);
+    log::info!(
+        "Using ONNX Runtime accelerator preference: {} (compiled: {:?})",
+        accelerator,
+        OrtAccelerator::available()
+    );
 }
 
 // Model download URLs (Hugging Face)
@@ -327,8 +388,51 @@ pub fn get_parakeet_files(model_id: &str) -> Option<&'static [ParakeetFile]> {
     }
 }
 
+pub fn get_qwen3_asr_files(model_id: &str) -> Option<&'static [ParakeetFile]> {
+    const QWEN3_ASR_06B_FILES: &[ParakeetFile] = &[
+        ParakeetFile {
+            filename: "chat_template.json",
+            url: "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/main/chat_template.json",
+        },
+        ParakeetFile {
+            filename: "config.json",
+            url: "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/main/config.json",
+        },
+        ParakeetFile {
+            filename: "generation_config.json",
+            url: "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/main/generation_config.json",
+        },
+        ParakeetFile {
+            filename: "merges.txt",
+            url: "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/main/merges.txt",
+        },
+        ParakeetFile {
+            filename: "model.safetensors",
+            url: "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/main/model.safetensors",
+        },
+        ParakeetFile {
+            filename: "preprocessor_config.json",
+            url: "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/main/preprocessor_config.json",
+        },
+        ParakeetFile {
+            filename: "tokenizer_config.json",
+            url: "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/main/tokenizer_config.json",
+        },
+        ParakeetFile {
+            filename: "vocab.json",
+            url: "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/main/vocab.json",
+        },
+    ];
+
+    match model_id {
+        "qwen3-asr-0.6b" => Some(QWEN3_ASR_06B_FILES),
+        _ => None,
+    }
+}
+
 pub fn get_model_filename(model_id: &str) -> String {
     match model_id {
+        "qwen3-asr-0.6b" => "qwen3-asr-0.6b".to_string(),
         "parakeet-v3" => "parakeet-tdt-0.6b-v3-int8".to_string(),
         "parakeet-v2" => "parakeet-tdt-0.6b-v2-int8".to_string(),
         // Distil models have different naming

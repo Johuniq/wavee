@@ -267,4 +267,20 @@ export const PARAKEET_MODELS: WhisperModel[] = [
   },
 ];
 
-export const ALL_MODELS = [...WHISPER_MODELS, ...PARAKEET_MODELS];
+export const QWEN3_ASR_MODELS: WhisperModel[] = [
+  {
+    id: "qwen3-asr-0.6b",
+    name: "Qwen3-ASR 0.6B",
+    size: "1.9 GB",
+    sizeBytes: 1880 * 1024 * 1024,
+    description:
+      "Qwen3-ASR speech recognition model for accurate multilingual transcription.",
+    languages: ["en", "zh"],
+  },
+];
+
+export const ALL_MODELS = [
+  ...WHISPER_MODELS,
+  ...PARAKEET_MODELS,
+  ...QWEN3_ASR_MODELS,
+];
