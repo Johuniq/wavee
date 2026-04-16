@@ -6,7 +6,7 @@ set -e
 
 RELEASE_DIR="./release-signing"
 PRIVATE_KEY="$HOME/.tauri/wavee.key"
-VERSION="1.0.1"
+VERSION="1.0.0"
 WINDOWS_SETUP="./src-tauri/target/release/bundle/nsis/Wavee_${VERSION}_x64-setup.exe"
 WINDOWS_MSI="./src-tauri/target/release/bundle/msi/Wavee_${VERSION}_x64_en-US.msi"
 

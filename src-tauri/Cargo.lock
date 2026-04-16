@@ -7291,7 +7291,7 @@ dependencies = [
 
 [[package]]
 name = "wavee"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "aes-gcm",
  "arboard",
