@@ -307,7 +307,7 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
                       Free Forever on Linux! 🐧
                     </h3>
                     <p className="text-xs text-green-600/80 dark:text-green-400/80 mt-0.5">
-                      WaveType is completely free for Linux users. No license required, no trial limits.
+                      Wavee is completely free for Linux users. No license required, no trial limits.
                       Thank you for supporting open source!
                     </p>
                   </div>
@@ -383,7 +383,7 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
                     </span>
                   </div>
                   <p className="text-xs text-foreground/60 mt-1">
-                    Purchase a license to continue using WaveType
+                    Purchase a license to continue using Wavee
                   </p>
                 </div>
               )}
@@ -484,7 +484,7 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
                     <p className="text-xs text-foreground/60">
                       {isTrial
                         ? "Enter your license key to unlock unlimited access"
-                        : "Enter your license key to activate WaveType Pro"}
+                        : "Enter your license key to activate Wavee Pro"}
                     </p>
                   </div>
                 </div>
@@ -622,11 +622,11 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
                       <h2 className="font-semibold text-sm text-foreground">
                         {isTrial || isTrialExpired
                           ? "Upgrade to Pro"
-                          : "Get WaveType Pro"}
+                          : "Get Wavee Pro"}
                       </h2>
                       <p className="text-xs text-foreground/60">
                         {isTrial
-                          ? "Continue using WaveType after your trial ends"
+                          ? "Continue using Wavee after your trial ends"
                           : isTrialExpired
                           ? "Your trial has ended - purchase to continue"
                           : "Unlock all features with a Pro license"}
@@ -636,7 +636,7 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
 
                   <button
                     className="glass-button w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
-                    onClick={() => openUrl("https://polar.sh/johuniq/wavetype")}
+                    onClick={() => openUrl("https://polar.sh/johuniq/wavee")}
                   >
                     <ExternalLink className="h-4 w-4" />
                     {isTrial || isTrialExpired

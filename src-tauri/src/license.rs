@@ -1,4 +1,4 @@
-//! Production-grade License Management for WaveType
+//! Production-grade License Management for Wavee
 //!
 //! Implements Polar.sh License Key API integration with:
 //! - Device activation with unique device fingerprinting
@@ -384,7 +384,7 @@ fn get_device_conditions(device_id: &str) -> serde_json::Value {
 // =============================================================================
 
 fn get_cache_dir() -> Option<PathBuf> {
-    dirs::data_dir().map(|d| d.join("com.johuniq.WaveType"))
+    dirs::data_dir().map(|d| d.join("com.johuniq.wavee"))
 }
 
 fn get_cache_path() -> Option<PathBuf> {

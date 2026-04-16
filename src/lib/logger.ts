@@ -1,5 +1,5 @@
 /**
- * Production-grade logging utility for WaveType
+ * Production-grade logging utility for Wavee
  * Provides structured logging with levels, timestamps, and context
  */
 

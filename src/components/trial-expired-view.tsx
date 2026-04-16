@@ -84,7 +84,7 @@ export function TrialExpiredView({
         </h2>
         <p className="text-sm text-muted-foreground text-center mt-2">
           Your 7-day free trial has expired. Purchase a license to continue
-          using WaveType.
+          using Wavee.
         </p>
 
         {/* Messages */}
@@ -114,14 +114,14 @@ export function TrialExpiredView({
                       <Sparkles className="h-5 w-5 text-primary" />
                     </div>
                     <div className="flex-1">
-                      <h3 className="font-medium">Get WaveType Pro</h3>
+                      <h3 className="font-medium">Get Wavee Pro</h3>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Unlimited voice-to-text, lifetime updates
                       </p>
                       <Button
                         className="mt-3 w-full"
                         onClick={() =>
-                          openUrl("https://polar.sh/johuniq/wavetype")
+                          openUrl("https://polar.sh/johuniq/wavee")
                         }
                       >
                         <ExternalLink className="mr-2 h-4 w-4" />

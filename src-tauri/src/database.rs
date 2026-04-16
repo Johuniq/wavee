@@ -111,7 +111,7 @@ pub struct Database {
 impl Database {
     pub fn new(app_data_dir: PathBuf) -> Result<Self> {
         std::fs::create_dir_all(&app_data_dir).ok();
-        let db_path = app_data_dir.join("WaveType.db");
+        let db_path = app_data_dir.join("Wavee.db");
         let conn = Connection::open(db_path)?;
 
         let db = Self {
@@ -272,6 +272,21 @@ impl Database {
         // Insert default license record if not exists
         conn.execute("INSERT OR IGNORE INTO license (id) VALUES (1)", [])?;
 
+        const REMOVED_MODEL_IDS: &[&str] = &[
+            "distil-medium.en",
+            "distil-large-v2",
+            "distil-large-v3",
+            "canary",
+            "canary-nvidia",
+            "nvidia-canary",
+            "nvidia-canary-1b",
+            "nvidia-canary-qwen-2.5b",
+        ];
+
+        for model_id in REMOVED_MODEL_IDS {
+            conn.execute("DELETE FROM models WHERE id = ?1", params![model_id])?;
+        }
+
         // Insert default Whisper models
         let models: Vec<(&str, &str, &str, i64, &str, &str)> = vec![
             (
@@ -362,30 +377,6 @@ impl Database {
                 "166 MB",
                 166_i64 * 1024 * 1024,
                 "Fast English transcription with accuracy close to Whisper Small.",
-                "[\"en\"]",
-            ),
-            (
-                "distil-medium.en",
-                "Distil Whisper Medium English",
-                "390 MB",
-                390_i64 * 1024 * 1024,
-                "Recommended English model for fast, accurate dictation.",
-                "[\"en\"]",
-            ),
-            (
-                "distil-large-v2",
-                "Distil Whisper Large v2",
-                "756 MB",
-                756_i64 * 1024 * 1024,
-                "Fast large English model with strong accuracy.",
-                "[\"en\"]",
-            ),
-            (
-                "distil-large-v3",
-                "Distil Whisper Large v3",
-                "756 MB",
-                756_i64 * 1024 * 1024,
-                "Latest Distil Whisper model with excellent English transcription quality.",
                 "[\"en\"]",
             ),
             (
@@ -666,6 +657,13 @@ impl Database {
     }
 
     // Transcription history operations
+    fn escape_like_pattern(search: &str) -> String {
+        search
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_")
+    }
+
     pub fn add_transcription(
         &self,
         text: &str,
@@ -686,17 +684,21 @@ impl Database {
         &self,
         limit: i32,
         offset: i32,
+        search: Option<&str>,
     ) -> Result<Vec<TranscriptionHistory>> {
         let conn = self.conn.lock().unwrap();
+        let search = search.unwrap_or("").trim();
+        let pattern = format!("%{}%", Self::escape_like_pattern(search));
         let mut stmt = conn.prepare(
             "SELECT id, text, model_id, language, duration_ms, created_at
              FROM transcription_history
+             WHERE (?3 = '' OR text LIKE ?4 ESCAPE '\\')
              ORDER BY created_at DESC
              LIMIT ?1 OFFSET ?2",
         )?;
 
         let history = stmt
-            .query_map(params![limit, offset], |row| {
+            .query_map(params![limit, offset, search, pattern], |row| {
                 Ok(TranscriptionHistory {
                     id: row.get(0)?,
                     text: row.get(1)?,
@@ -711,12 +713,16 @@ impl Database {
         Ok(history)
     }
 
-    pub fn get_transcription_history_count(&self) -> Result<i64> {
+    pub fn get_transcription_history_count(&self, search: Option<&str>) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
-        let count: i64 =
-            conn.query_row("SELECT COUNT(*) FROM transcription_history", [], |row| {
-                row.get(0)
-            })?;
+        let search = search.unwrap_or("").trim();
+        let pattern = format!("%{}%", Self::escape_like_pattern(search));
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM transcription_history
+             WHERE (?1 = '' OR text LIKE ?2 ESCAPE '\\')",
+            params![search, pattern],
+            |row| row.get(0),
+        )?;
         Ok(count)
     }
 

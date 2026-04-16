@@ -1,4 +1,4 @@
-// WaveType - Type Definitions
+// Wavee - Type Definitions
 
 // Available Whisper models for offline transcription
 export interface WhisperModel {
@@ -481,17 +481,6 @@ export function getModelCategories(model: WhisperModel): ModelBadgeCategory[] {
 
 // Available transcription models
 export const WHISPER_MODELS: WhisperModel[] = [
-  // ========== RECOMMENDED ==========
-  {
-    id: "distil-medium.en",
-    name: "Distil Whisper Medium English",
-    size: "390 MB",
-    sizeBytes: 390 * 1024 * 1024,
-    description: "Recommended English model for fast, accurate dictation.",
-    languages: ["en"],
-    recommended: true,
-  },
-
   // ========== STANDARD WHISPER (Multilingual) ==========
   {
     id: "tiny",
@@ -571,24 +560,6 @@ export const WHISPER_MODELS: WhisperModel[] = [
     description: "Fast English transcription with accuracy close to Whisper Small.",
     languages: ["en"],
   },
-  {
-    id: "distil-large-v2",
-    name: "Distil Whisper Large v2",
-    size: "756 MB",
-    sizeBytes: 756 * 1024 * 1024,
-    description: "Fast large English model with strong accuracy.",
-    languages: ["en"],
-  },
-  {
-    id: "distil-large-v3",
-    name: "Distil Whisper Large v3",
-    size: "756 MB",
-    sizeBytes: 756 * 1024 * 1024,
-    description:
-      "Latest Distil Whisper model with excellent English transcription quality.",
-    languages: ["en"],
-  },
-
   // ========== LARGE MODELS (Best Accuracy) ==========
   {
     id: "large-v3",

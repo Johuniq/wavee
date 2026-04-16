@@ -187,7 +187,7 @@ export function UpdaterView() {
             />
           </div>
           <p className="text-xs text-foreground/60 mt-2">
-            Keep WaveType open while the update downloads.
+            Keep Wavee open while the update downloads.
           </p>
         </div>
       )}

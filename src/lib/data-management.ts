@@ -1,5 +1,5 @@
 /**
- * Data management utilities for WaveType
+ * Data management utilities for Wavee
  * Export, import, backup, and cleanup functions
  */
 

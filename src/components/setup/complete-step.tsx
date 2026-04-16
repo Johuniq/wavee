@@ -31,7 +31,7 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
             Setup Complete
           </h2>
           <p className="text-sm text-foreground/60 text-center mt-1">
-            WaveType is ready to use
+            Wavee is ready to use
           </p>
 
           <div className="glass-card w-full mt-6 p-4 rounded-2xl space-y-3">
@@ -110,7 +110,7 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
           className="glass-button w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
         >
           <Sparkles className="h-4 w-4" />
-          Start Using WaveType
+          Start Using Wavee
         </button>
       </div>
     </div>

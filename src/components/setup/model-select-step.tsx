@@ -16,12 +16,14 @@ import {
   type WhisperModel,
 } from "@/types";
 import { Check, Download, HardDrive, Loader2, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface ModelSelectStepProps {
   onNext: () => void;
   onBack: () => void;
 }
+
+const ONBOARDING_RECOMMENDED_MODEL_ID = "parakeet-v3";
 
 export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
   const {
@@ -38,13 +40,49 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
 
   // Get models from database, fallback to static list
   const dbModels = useAvailableModels();
-  const models: WhisperModel[] =
+  const sourceModels: WhisperModel[] =
     dbModels.length > 0 ? dbModels : ALL_MODELS;
+  const models = useMemo(
+    () =>
+      [...sourceModels].sort((a, b) => {
+        if (a.id === ONBOARDING_RECOMMENDED_MODEL_ID) return -1;
+        if (b.id === ONBOARDING_RECOMMENDED_MODEL_ID) return 1;
+        return 0;
+      }),
+    [sourceModels]
+  );
 
   const [downloadingModelId, setDownloadingModelId] = useState<string | null>(
     null
   );
   const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedModel || models.length === 0) return;
+
+    const defaultModel =
+      models.find((model) => model.id === ONBOARDING_RECOMMENDED_MODEL_ID) ||
+      models[0];
+
+    setSelectedModel(defaultModel);
+    if (!isLanguageSupportedByModel(defaultModel, settings.language)) {
+      updateSettings({ language: getDefaultLanguageForModel(defaultModel) });
+    }
+
+    isModelDownloaded(defaultModel.id)
+      .then((downloaded) => {
+        setModelStatus(downloaded ? "downloaded" : "not-downloaded");
+      })
+      .catch(console.error);
+  }, [
+    selectedModel,
+    models,
+    settings.language,
+    setSelectedModel,
+    updateSettings,
+    setModelStatus,
+  ]);
+
   // Listen for download progress events
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -179,7 +217,7 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
                         <span className="font-medium text-sm text-foreground">
                           {model.name}
                         </span>
-                        {model.recommended && (
+                        {model.id === ONBOARDING_RECOMMENDED_MODEL_ID && (
                           <span className="glass-badge flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-foreground/90 text-white bg-green font-medium">
                             <Sparkles className="h-3 w-3" />
                             Recommended

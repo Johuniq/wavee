@@ -1,5 +1,5 @@
 /**
- * Auto-updater API for WaveType
+ * Auto-updater API for Wavee
  * Handles checking for updates and installing them from GitHub releases
  */
 

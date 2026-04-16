@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# WaveType Development Script
+# Wavee Development Script
 # Quick development setup and run
 
 set -e
 
-echo "🔧 WaveType Development Mode"
+echo "🔧 Wavee Development Mode"
 echo "==========================="
 
 # Check if we're in the right directory

@@ -1,6 +1,6 @@
 /**
  * Toast notification hook using Sonner (shadcn/ui)
- * Production-grade notification system for WaveType
+ * Production-grade notification system for Wavee
  */
 
 import { toast as sonnerToast } from "sonner";

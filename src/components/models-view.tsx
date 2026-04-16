@@ -576,7 +576,7 @@ export function ModelsView({ onClose }: ModelsViewProps) {
                       <p className="text-xs text-foreground/60 mt-1">
                         {isCanceling
                           ? "Canceling download..."
-                          : "Keep WaveType open while this downloads."}
+                          : "Keep Wavee open while this downloads."}
                       </p>
                     </div>
                   )}

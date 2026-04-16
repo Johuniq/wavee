@@ -9,15 +9,15 @@ use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextPar
 pub enum Transcriber {
     Whisper(WhisperTranscriber),
     Parakeet(ParakeetTranscriber),
-    Qwen3Asr(Qwen3AsrTranscriber),
+    Qwen3Asr(Box<Qwen3AsrTranscriber>),
 }
 
 impl Transcriber {
     pub fn new(model_id: &str, model_path: &str, language: &str) -> Result<Self, String> {
         if model_id.starts_with("qwen3-asr-") {
-            Ok(Self::Qwen3Asr(Qwen3AsrTranscriber::new(
+            Ok(Self::Qwen3Asr(Box::new(Qwen3AsrTranscriber::new(
                 model_path, language,
-            )?))
+            )?)))
         } else if model_id.starts_with("parakeet-") {
             Ok(Self::Parakeet(ParakeetTranscriber::new(
                 model_path, language,
@@ -281,7 +281,7 @@ impl ParakeetTranscriber {
 }
 
 fn configure_ort_acceleration() {
-    let accelerator = std::env::var("WAVETYPE_ORT_ACCELERATOR")
+    let accelerator = std::env::var("WAVEE_ORT_ACCELERATOR")
         .ok()
         .and_then(|value| value.parse::<OrtAccelerator>().ok())
         .unwrap_or_else(default_ort_accelerator);
@@ -300,7 +300,7 @@ fn default_ort_accelerator() -> OrtAccelerator {
         // DirectML is fast when it works, but on some Windows GPU/driver
         // combinations it can hard-fail during ONNX MemcpyToHost nodes. CPU is
         // the safer production default; advanced users can opt into DirectML
-        // with WAVETYPE_ORT_ACCELERATOR=directml.
+        // with WAVEE_ORT_ACCELERATOR=directml.
         OrtAccelerator::CpuOnly
     }
 
@@ -375,18 +375,6 @@ pub fn get_model_url(model_id: &str) -> Option<String> {
         // Distil-Whisper models (6x faster, similar accuracy)
         "distil-small.en" => Some(format!(
             "{}/distil-small.en/resolve/main/ggml-distil-small.en.bin",
-            distil_base
-        )),
-        "distil-medium.en" => Some(format!(
-            "{}/distil-medium.en/resolve/main/ggml-distil-medium.en.bin",
-            distil_base
-        )),
-        "distil-large-v2" => Some(format!(
-            "{}/distil-large-v2/resolve/main/ggml-distil-large-v2.bin",
-            distil_base
-        )),
-        "distil-large-v3" => Some(format!(
-            "{}/distil-large-v3/resolve/main/ggml-distil-large-v3.bin",
             distil_base
         )),
 
@@ -521,9 +509,6 @@ pub fn get_model_filename(model_id: &str) -> String {
         "parakeet-v2" => "parakeet-tdt-0.6b-v2-int8".to_string(),
         // Distil models have different naming
         "distil-small.en" => "ggml-distil-small.en.bin".to_string(),
-        "distil-medium.en" => "ggml-distil-medium.en.bin".to_string(),
-        "distil-large-v2" => "ggml-distil-large-v2.bin".to_string(),
-        "distil-large-v3" => "ggml-distil-large-v3.bin".to_string(),
         // English-only models
         "tiny.en" => "ggml-tiny.en.bin".to_string(),
         "base.en" => "ggml-base.en.bin".to_string(),

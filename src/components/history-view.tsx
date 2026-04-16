@@ -17,6 +17,7 @@ import {
   reportError,
   type TranscriptionHistoryItem,
 } from "@/lib/voice-api";
+import { Input } from "@/components/ui/input";
 import {
   AlertCircle,
   ArrowLeft,
@@ -26,7 +27,9 @@ import {
   History,
   Loader2,
   RefreshCcw,
+  Search,
   Trash2,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -47,12 +50,16 @@ export function HistoryView({ onClose }: HistoryViewProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [isClearing, setIsClearing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const hasSearch = debouncedSearchTerm.trim().length > 0;
 
   const getErrorMessage = (error: unknown) =>
     error instanceof Error ? error.message : String(error || "Something went wrong");
 
-  const loadHistory = async (reset: boolean = false) => {
+  const loadHistory = useCallback(async (reset: boolean = false) => {
+    const search = debouncedSearchTerm.trim() || undefined;
     if (reset) {
       setIsLoading(true);
       setHistory([]);
@@ -61,8 +68,8 @@ export function HistoryView({ onClose }: HistoryViewProps) {
     }
     try {
       const [items, count] = await Promise.all([
-        getTranscriptionHistory(PAGE_SIZE, 0),
-        getTranscriptionHistoryCount(),
+        getTranscriptionHistory(PAGE_SIZE, 0, search),
+        getTranscriptionHistoryCount(search),
       ]);
       setHistory(items);
       setTotalCount(count);
@@ -77,7 +84,7 @@ export function HistoryView({ onClose }: HistoryViewProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [debouncedSearchTerm]);
 
   const loadMore = useCallback(async () => {
     if (isLoadingMore || !hasMore) return;
@@ -86,7 +93,8 @@ export function HistoryView({ onClose }: HistoryViewProps) {
     setActionError(null);
     try {
       const offset = history.length;
-      const items = await getTranscriptionHistory(PAGE_SIZE, offset);
+      const search = debouncedSearchTerm.trim() || undefined;
+      const items = await getTranscriptionHistory(PAGE_SIZE, offset, search);
 
       if (items.length === 0) {
         setHasMore(false);
@@ -104,7 +112,7 @@ export function HistoryView({ onClose }: HistoryViewProps) {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [history.length, totalCount, isLoadingMore, hasMore]);
+  }, [history.length, totalCount, isLoadingMore, hasMore, debouncedSearchTerm]);
 
   // Intersection Observer for infinite scroll
   useEffect(() => {
@@ -135,8 +143,16 @@ export function HistoryView({ onClose }: HistoryViewProps) {
   }, [loadMore, hasMore, isLoadingMore, isLoading]);
 
   useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [searchTerm]);
+
+  useEffect(() => {
     loadHistory(true);
-  }, []);
+  }, [loadHistory]);
 
   const handleCopy = async (text: string, id: number) => {
     try {
@@ -181,6 +197,8 @@ export function HistoryView({ onClose }: HistoryViewProps) {
       setHistory([]);
       setTotalCount(0);
       setHasMore(false);
+      setSearchTerm("");
+      setDebouncedSearchTerm("");
     } catch (error) {
       const message = getErrorMessage(error);
       console.error("Failed to clear history:", error);
@@ -273,6 +291,28 @@ export function HistoryView({ onClose }: HistoryViewProps) {
         )}
       </div>
 
+      <div className="px-4 py-3 border-b border-white/10 bg-white/20 dark:bg-black/10">
+        <div className="relative flex items-center">
+          <Search className="pointer-events-none absolute left-3 h-4 w-4 text-foreground/45" />
+          <Input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search history"
+            aria-label="Search transcription history"
+            className="h-9 rounded-md border border-white/25 bg-white/65 pl-9 pr-10 text-sm text-foreground shadow-none placeholder:text-foreground/45 transition-colors focus-visible:border-foreground/25 focus-visible:ring-2 focus-visible:ring-foreground/10 dark:border-white/10 dark:bg-white/[0.08] dark:focus-visible:border-white/25"
+          />
+          {searchTerm && (
+            <button
+              className="absolute right-2 rounded-md p-1 text-foreground/45 transition-colors hover:bg-foreground/10 hover:text-foreground"
+              onClick={() => setSearchTerm("")}
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Content */}
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center">
@@ -292,11 +332,26 @@ export function HistoryView({ onClose }: HistoryViewProps) {
               )}
             </div>
             <h3 className="font-semibold text-foreground mb-1">
-              {loadError ? "History unavailable" : "No transcriptions yet"}
+              {loadError
+                ? "History unavailable"
+                : hasSearch
+                  ? "No matches found"
+                  : "No transcriptions yet"}
             </h3>
             <p className="text-sm text-foreground/60">
-              {loadError || "Your transcription history will appear here"}
+              {loadError ||
+                (hasSearch
+                  ? "No transcriptions match your search"
+                  : "Your transcription history will appear here")}
             </p>
+            {hasSearch && !loadError && (
+              <button
+                className="mt-4 rounded-md px-3 py-1.5 text-sm font-medium text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground"
+                onClick={() => setSearchTerm("")}
+              >
+                Clear search
+              </button>
+            )}
             {loadError && (
               <button
                 className="glass-button px-4 py-2 rounded-xl text-sm font-medium mt-4 flex items-center gap-2"
@@ -378,7 +433,8 @@ export function HistoryView({ onClose }: HistoryViewProps) {
               )}
               {!hasMore && history.length > 0 && (
                 <p className="text-sm text-foreground/50">
-                  Showing all {totalCount} transcriptions
+                  Showing all {totalCount}{" "}
+                  {hasSearch ? "matching transcriptions" : "transcriptions"}
                 </p>
               )}
             </div>

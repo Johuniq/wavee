@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "WaveType",
+  "productName": "Wavee",
   "version": "1.0.0",
-  "identifier": "com.johuniq.WaveType",
+  "identifier": "com.johuniq.wavee",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,13 +12,17 @@
   "app": {
     "windows": [
       {
-        "title": "WaveType",
+        "title": "Wavee",
         "label": "main",
         "width": 420,
         "height": 560,
-        "minWidth": 360,
-        "minHeight": 480,
-        "resizable": true,
+        "minWidth": 420,
+        "minHeight": 560,
+        "maxWidth": 420,
+        "maxHeight": 560,
+        "resizable": false,
+        "minimizable": false,
+        "maximizable": false,
         "center": true,
         "decorations": true,
         "transparent": false,
@@ -61,9 +65,9 @@
     "resources": [],
     "category": "Utility",
     "shortDescription": "Voice-to-text desktop app powered by AI",
-    "longDescription": "WaveType is a powerful voice-to-text application that lets you dictate text anywhere on your computer using AI-powered speech recognition. Features include push-to-talk and toggle recording modes, multiple Whisper AI model sizes, automatic text injection, transcription history, and file transcription support.",
+    "longDescription": "Wavee is a powerful voice-to-text application that lets you dictate text anywhere on your computer using AI-powered speech recognition. Features include push-to-talk and toggle recording modes, multiple Whisper AI model sizes, automatic text injection, transcription history, and file transcription support.",
     "publisher": "Johuniq",
-    "copyright": "© 2024 Johuniq. All rights reserved.",
+    "copyright": "Copyright (c) 2026 Johuniq. All rights reserved.",
     "licenseFile": "../LICENSE",
     "linux": {
       "appimage": {
@@ -81,7 +85,7 @@
       }
     },
     "macOS": {
-      "entitlements": "WaveType.entitlements",
+      "entitlements": "Wavee.entitlements",
       "minimumSystemVersion": "13.0",
       "frameworks": [],
       "hardenedRuntime": true,
@@ -130,7 +134,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVGREUwNUUzM0ZDMkNEQjIKUldTeXpjSS80d1hlWDAzWEk2dDZDWkNndEg4aFUyb2JOU2taVTE1NDkwQ2JIV0kwVFlnQ29DdjYK",
       "endpoints": [
-        "https://github.com/Johuniq/wavetype/releases/latest/download/latest.json"
+        "https://github.com/Johuniq/wavee/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

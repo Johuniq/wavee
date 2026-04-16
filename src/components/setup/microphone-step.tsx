@@ -148,7 +148,7 @@ export function MicrophoneStep({ onNext, onBack }: MicrophoneStepProps) {
                     Permission denied
                   </p>
                   <p className="text-xs text-foreground/60">
-                    The browser test failed, but don't worry - WaveType uses
+                    The browser test failed, but don't worry - Wavee uses
                     native audio capture which may still work.
                   </p>
                 </div>
@@ -165,7 +165,7 @@ export function MicrophoneStep({ onNext, onBack }: MicrophoneStepProps) {
                     Native Audio Capture
                   </p>
                   <p className="text-xs text-foreground/60">
-                    WaveType uses native audio capture. You can test your
+                    Wavee uses native audio capture. You can test your
                     microphone here or skip if the browser blocks access.
                   </p>
                 </div>

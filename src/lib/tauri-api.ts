@@ -1,5 +1,5 @@
 /**
- * Tauri API wrappers for WaveType
+ * Tauri API wrappers for Wavee
  * These functions provide a clean interface to communicate with the Rust backend
  */
 

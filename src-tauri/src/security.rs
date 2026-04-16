@@ -78,7 +78,7 @@ mod tests {
     fn test_encryption_decryption_roundtrip() {
         let device_id = "test-device-456";
         let key = derive_encryption_key(device_id);
-        let original_data = b"Hello, WaveType Secure Data!";
+        let original_data = b"Hello, Wavee Secure Data!";
 
         let encrypted = encrypt_data(original_data, &key).unwrap();
         assert_ne!(encrypted, original_data);

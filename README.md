@@ -1,6 +1,6 @@
-# WaveType
+# Wavee
 
-WaveType is a desktop voice-to-text application that runs locally on Windows and macOS. It provides fast, private transcription using local AI models, keyboard shortcuts for quick capture, and tools for managing transcription history. The project focuses on privacy, offline processing, and a streamlined user experience.
+Wavee is a desktop voice-to-text application that runs locally on Windows and macOS. It provides fast, private transcription using local AI models, keyboard shortcuts for quick capture, and tools for managing transcription history. The project focuses on privacy, offline processing, and a streamlined user experience.
 
 License: Proprietary (All rights reserved)
 
@@ -18,8 +18,6 @@ License: Proprietary (All rights reserved)
 
 - Windows (NSIS, MSI)
 - macOS (DMG, .app)
-
-**Note:** See [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) for detailed installation instructions, including how to handle security warnings on macOS and Windows.
 
 ## Usage
 
@@ -39,26 +37,22 @@ Recording modes
 
 Settings and history are stored locally in an SQLite database in the platform's application data directory. Example locations:
 
-- Windows: `%APPDATA%/com.johuniq.WaveType/`
-- macOS: `~/Library/Application Support/com.johuniq.WaveType/`
+- Windows: `%APPDATA%/com.johuniq.wavee/`
+- macOS: `~/Library/Application Support/com.johuniq.wavee/`
 
 ## Security and privacy
 
 - All transcription is performed locally; audio is not uploaded to remote services by default.
 - The backend validates and sanitizes IPC inputs to reduce risk from malformed data.
-- Strong encryption (AES-256-GCM) for sensitive data storage.
-- Open-source code for transparency and security auditing.
+- Strong encryption (AES-256-GCM) for sensitive local license data.
 
 ## Installation
 
-⚠️ **First-time installation?** See [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) for detailed instructions, including how to handle security warnings on macOS and Windows.
-
-**Quick install:**
-1. Download the latest release for your platform from [Releases](https://github.com/your-repo/WaveType/releases)
-2. Follow the installation steps in the guide above
+1. Download the latest release for your platform from [Releases](https://github.com/Johuniq/wavee/releases)
+2. Run the installer for your platform.
 3. On first launch, you may need to bypass a security warning (one-time only)
 
-**Why security warnings?** As a solo developer project, we distribute without code signing certificates ($299-599/year) to keep the project sustainable. The code is open-source and auditable - see our [Security Policy](SECURITY.md) for details.
+Unsigned builds may show an operating-system security warning on first launch. Verify that the installer came from the official release page before bypassing any warning.
 
 ## License
 

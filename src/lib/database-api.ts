@@ -1,5 +1,5 @@
 /**
- * Database API wrappers for WaveType
+ * Database API wrappers for Wavee
  * These functions provide a clean interface to interact with SQLite database via Tauri backend
  */
 
@@ -137,10 +137,14 @@ export async function dbAddTranscription(
 }
 
 export async function dbGetTranscriptionHistory(
-  limit?: number
+  limit?: number,
+  offset?: number,
+  search?: string
 ): Promise<DbTranscriptionHistory[]> {
   return await invoke<DbTranscriptionHistory[]>("get_transcription_history", {
     limit: limit ?? null,
+    offset: offset ?? null,
+    search: search?.trim() || null,
   });
 }
 
@@ -216,7 +220,7 @@ export function dbModelToFrontend(db: DbWhisperModel): WhisperModel {
     description: db.description,
     languages,
     downloaded: db.downloaded,
-    recommended: ["base", "distil-medium.en", "parakeet-v3"].includes(db.id),
+    recommended: ["base", "parakeet-v3"].includes(db.id),
   };
 }
 

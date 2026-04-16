@@ -347,7 +347,7 @@ impl ErrorReporter {
         let txt_filepath = self.log_dir.join(txt_filename);
 
         let report = format!(
-            "=== WaveType Crash Report ===\n\
+            "=== Wavee Crash Report ===\n\
             Time: {}\n\
             Version: {}\n\
             OS: {}\n\
@@ -410,7 +410,7 @@ impl ErrorReporter {
     #[allow(dead_code)]
     pub fn export_logs(&self) -> Result<String, std::io::Error> {
         let mut output = String::new();
-        output.push_str("=== WaveType Error Export ===\n\n");
+        output.push_str("=== Wavee Error Export ===\n\n");
         output.push_str(&format!("Generated: {}\n", Utc::now()));
         output.push_str(&format!("Version: {}\n", env!("CARGO_PKG_VERSION")));
         output.push_str(&format!("OS: {}\n\n", get_os_info()));
@@ -479,7 +479,7 @@ impl ErrorReporter {
         let stats = self.get_error_stats();
 
         let mut md = String::new();
-        md.push_str("# WaveType Error Report\n\n");
+        md.push_str("# Wavee Error Report\n\n");
         md.push_str(&format!(
             "**Generated:** {}\n\n",
             Utc::now().format("%Y-%m-%d %H:%M:%S UTC")

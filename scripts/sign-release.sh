@@ -5,39 +5,41 @@
 set -e
 
 RELEASE_DIR="./release-signing"
-PRIVATE_KEY="$HOME/.tauri/wavetype.key"
+PRIVATE_KEY="$HOME/.tauri/wavee.key"
+VERSION="1.0.0"
+WINDOWS_SETUP="./src-tauri/target/release/bundle/nsis/Wavee_${VERSION}_x64-setup.exe"
+WINDOWS_MSI="./src-tauri/target/release/bundle/msi/Wavee_${VERSION}_x64_en-US.msi"
 
 # Check if private key exists
 if [ ! -f "$PRIVATE_KEY" ]; then
     echo "Error: Private key not found at $PRIVATE_KEY"
-    echo "Generate one with: pnpm tauri signer generate -w ~/.tauri/wavetype.key"
+    echo "Generate one with: pnpm tauri signer generate -w ~/.tauri/wavee.key"
+    exit 1
+fi
+
+# Check build artifacts exist
+if [ ! -f "$WINDOWS_SETUP" ]; then
+    echo "Error: Windows setup artifact not found at $WINDOWS_SETUP"
+    echo "Build it first with: pnpm tauri build"
+    exit 1
+fi
+
+if [ ! -f "$WINDOWS_MSI" ]; then
+    echo "Error: Windows MSI artifact not found at $WINDOWS_MSI"
+    echo "Build it first with: pnpm tauri build"
     exit 1
 fi
 
 # Create directory for signing
 mkdir -p "$RELEASE_DIR"
+cp "$WINDOWS_SETUP" "$RELEASE_DIR/"
+cp "$WINDOWS_MSI" "$RELEASE_DIR/"
 cd "$RELEASE_DIR"
 
-echo "=== WaveType Release Signing Script ==="
+echo "=== Wavee Release Signing Script ==="
 echo ""
 
-# Download release files
-echo "Downloading release files from GitHub..."
-
-# macOS x64
-curl -L -o "WaveType_x64.app.tar.gz" \
-    "https://github.com/Johuniq/wavetype/releases/download/v1.0.0/WaveType_x64.app.tar.gz"
-
-# macOS ARM64
-curl -L -o "WaveType_aarch64.app.tar.gz" \
-    "https://github.com/Johuniq/wavetype/releases/download/v1.0.0/WaveType_aarch64.app.tar.gz"
-
-# Windows x64
-curl -L -o "WaveType_1.0.0_x64-setup.exe" \
-    "https://github.com/Johuniq/wavetype/releases/download/v1.0.0/WaveType_1.0.0_x64-setup.exe"
-
-echo ""
-echo "Downloaded files:"
+echo "Release files:"
 ls -la
 
 echo ""
@@ -45,45 +47,28 @@ echo "=== Signing files ==="
 echo "You'll be prompted for your private key password for each file."
 echo ""
 
-# Sign macOS x64
-echo "Signing WaveType_x64.app.tar.gz..."
-pnpm tauri signer sign -k "$PRIVATE_KEY" "WaveType_x64.app.tar.gz"
-
-# Sign macOS ARM64
-echo "Signing WaveType_aarch64.app.tar.gz..."
-pnpm tauri signer sign -k "$PRIVATE_KEY" "WaveType_aarch64.app.tar.gz"
-
 # Sign Windows x64
-echo "Signing WaveType_1.0.0_x64-setup.exe..."
-pnpm tauri signer sign -k "$PRIVATE_KEY" "WaveType_1.0.0_x64-setup.exe"
+echo "Signing Wavee_${VERSION}_x64-setup.exe..."
+pnpm tauri signer sign -k "$PRIVATE_KEY" "Wavee_${VERSION}_x64-setup.exe"
 
 echo ""
 echo "=== Signatures generated ==="
 echo ""
 
 # Read signatures
-SIG_MACOS_X64=$(cat "WaveType_x64.app.tar.gz.sig")
-SIG_MACOS_ARM64=$(cat "WaveType_aarch64.app.tar.gz.sig")
-SIG_WINDOWS_X64=$(cat "WaveType_1.0.0_x64-setup.exe.sig")
+SIG_WINDOWS_X64=$(cat "Wavee_${VERSION}_x64-setup.exe.sig")
+PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 # Generate latest.json
 cat > latest.json << EOF
 {
-  "version": "1.0.0",
-  "notes": "WaveType v1.0.0 - Voice to Text Desktop Application\\n\\n- Whisper AI powered voice-to-text\\n- Push-to-talk and toggle modes\\n- Multiple model options\\n- Transcription history",
-  "pub_date": "2025-12-19T00:00:00Z",
+  "version": "$VERSION",
+  "notes": "Wavee v$VERSION - Voice to Text Desktop Application\\n\\n- Local AI voice-to-text\\n- Push-to-talk and toggle modes\\n- Multiple model options\\n- Transcription history search",
+  "pub_date": "$PUB_DATE",
   "platforms": {
-    "darwin-x86_64": {
-      "signature": "$SIG_MACOS_X64",
-      "url": "https://github.com/Johuniq/wavetype/releases/download/v1.0.0/WaveType_x64.app.tar.gz"
-    },
-    "darwin-aarch64": {
-      "signature": "$SIG_MACOS_ARM64",
-      "url": "https://github.com/Johuniq/wavetype/releases/download/v1.0.0/WaveType_aarch64.app.tar.gz"
-    },
     "windows-x86_64": {
       "signature": "$SIG_WINDOWS_X64",
-      "url": "https://github.com/Johuniq/wavetype/releases/download/v1.0.0/WaveType_1.0.0_x64-setup.exe"
+      "url": "https://github.com/Johuniq/wavee/releases/download/v$VERSION/Wavee_${VERSION}_x64-setup.exe"
     }
   }
 }
@@ -94,8 +79,8 @@ cat latest.json
 
 echo ""
 echo "=== Next Steps ==="
-echo "1. Upload 'latest.json' to your GitHub release v1.0.0"
-echo "2. Go to: https://github.com/Johuniq/wavetype/releases/edit/v1.0.0"
+echo "1. Upload 'latest.json' to your GitHub release v$VERSION"
+echo "2. Go to: https://github.com/Johuniq/wavee/releases/edit/v$VERSION"
 echo "3. Attach the file: $RELEASE_DIR/latest.json"
 echo ""
 echo "Files are in: $RELEASE_DIR/"

@@ -1,5 +1,5 @@
 /**
- * User-friendly error messages for WaveType
+ * User-friendly error messages for Wavee
  * Maps technical errors to actionable user messages
  */
 

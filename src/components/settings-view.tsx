@@ -100,7 +100,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
       setIsExporting(true);
       setExportError(null);
       const data = await exportAppData();
-      const filename = `WaveType-backup-${new Date()
+      const filename = `Wavee-backup-${new Date()
         .toISOString()
         .slice(0, 10)}.json`;
       const saved = await downloadFile(data, filename);
@@ -397,7 +397,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                     Start on Boot
                   </Label>
                   <p className="text-xs text-foreground/60">
-                    Launch WaveType when system starts
+                    Launch Wavee when system starts
                   </p>
                 </div>
               </div>

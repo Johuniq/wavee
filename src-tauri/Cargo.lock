@@ -6018,6 +6018,7 @@ dependencies = [
  "gtk",
  "heck 0.5.0",
  "http",
+ "image",
  "jni",
  "libc",
  "log",
@@ -7158,55 +7159,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
-name = "vox-ai"
-version = "1.0.0"
-dependencies = [
- "aes-gcm",
- "arboard",
- "byteorder",
- "chrono",
- "cpal",
- "dirs 5.0.1",
- "enigo",
- "env_logger 0.11.8",
- "futures-util",
- "getrandom 0.2.16",
- "hex",
- "hostname",
- "hound",
- "lazy_static",
- "log",
- "qwen3-asr",
- "regex",
- "reqwest",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2",
- "symphonia",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-clipboard-manager",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-global-shortcut",
- "tauri-plugin-notification",
- "tauri-plugin-opener",
- "tauri-plugin-os",
- "tauri-plugin-process",
- "tauri-plugin-shell",
- "tauri-plugin-store",
- "tauri-plugin-updater",
- "tempfile",
- "thiserror 2.0.17",
- "tokio",
- "transcribe-rs",
- "uuid",
- "whisper-rs",
-]
-
-[[package]]
 name = "vswhom"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7335,6 +7287,55 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "wavee"
+version = "1.0.0"
+dependencies = [
+ "aes-gcm",
+ "arboard",
+ "byteorder",
+ "chrono",
+ "cpal",
+ "dirs 5.0.1",
+ "enigo",
+ "env_logger 0.11.8",
+ "futures-util",
+ "getrandom 0.2.16",
+ "hex",
+ "hostname",
+ "hound",
+ "lazy_static",
+ "log",
+ "qwen3-asr",
+ "regex",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "symphonia",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-clipboard-manager",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-global-shortcut",
+ "tauri-plugin-notification",
+ "tauri-plugin-opener",
+ "tauri-plugin-os",
+ "tauri-plugin-process",
+ "tauri-plugin-shell",
+ "tauri-plugin-store",
+ "tauri-plugin-updater",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "transcribe-rs",
+ "uuid",
+ "whisper-rs",
 ]
 
 [[package]]

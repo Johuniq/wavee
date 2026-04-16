@@ -147,7 +147,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
               <Key className="h-8 w-8 text-foreground/60" />
             </div>
             <h2 className="text-2xl font-bold text-foreground">
-              Activate WaveType
+              Activate Wavee
             </h2>
             <p className="text-sm text-foreground/60 mt-2">
               {showActivationForm
@@ -269,7 +269,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
               {/* Purchase link */}
               <div className="pt-4 text-center">
                 <button
-                  onClick={() => openUrl("https://polar.sh/johuniq/wavetype")}
+                  onClick={() => openUrl("https://polar.sh/johuniq/wavee")}
                   className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground transition-colors"
                 >
                   <Sparkles className="h-4 w-4" />

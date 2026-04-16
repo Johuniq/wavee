@@ -1,6 +1,6 @@
-# WaveType - Complete Feature Documentation
+# Wavee - Complete Feature Documentation
 
-**WaveType** is a privacy-first desktop application for offline voice-to-text transcription. It enables users to record speech, transcribe it using local AI models, and inject the text directly into any application with advanced post-processing and keyboard automation.
+**Wavee** is a privacy-first desktop application for offline voice-to-text transcription. It enables users to record speech, transcribe it using local AI models, and inject the text directly into any application with advanced post-processing and keyboard automation.
 
 ---
 
@@ -230,9 +230,9 @@ Every transcribed text is automatically saved with metadata:
 
 ### Data Management
 - **Database Location**:
-  - Windows: `%APPDATA%/com.johuniq.WaveType/`
-  - macOS: `~/Library/Application Support/com.johuniq.WaveType/`
-  - Linux: `~/.config/com.johuniq.WaveType/`
+  - Windows: `%APPDATA%/com.johuniq.Wavee/`
+  - macOS: `~/Library/Application Support/com.johuniq.Wavee/`
+  - Linux: `~/.config/com.johuniq.Wavee/`
 - **SQLite Backend**: All data stored in local SQLite database
 - **Encryption**: Sensitive data encrypted with AES-256-GCM
 - **Backup**: Users can export/import settings and history
@@ -315,7 +315,7 @@ minimizeToTray: boolean;    // Hide to tray when window closes
 ## License Management
 
 ### License System
-WaveType uses a proprietary license management system:
+Wavee uses a proprietary license management system:
 
 **License Types**:
 - **Trial**: Limited-time evaluation access (default)

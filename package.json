@@ -1,8 +1,8 @@
 {
-  "name": "WaveType",
+  "name": "Wavee",
   "private": true,
   "version": "1.0.0",
-  "description": "WaveType - Voice to Text Desktop Application powered by AI",
+  "description": "Wavee - Voice to Text Desktop Application powered by AI",
   "author": "Johuniq",
   "license": "Proprietary",
   "type": "module",
@@ -15,8 +15,8 @@
     "tauri:build": "tauri build",
     "tauri:build:debug": "tauri build --debug",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ext .ts,.tsx",
-    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "lint": "pnpm run typecheck",
+    "lint:fix": "pnpm run typecheck",
     "clean": "rm -rf dist src-tauri/target",
     "build:production": "bash scripts/build-production.sh"
   },

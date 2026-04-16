@@ -447,6 +447,22 @@ export async function onTrayStopRecording(
   });
 }
 
+export type TrayNavigationTarget =
+  | "main"
+  | "transcribe"
+  | "history"
+  | "models"
+  | "settings"
+  | "help";
+
+export async function onTrayNavigate(
+  callback: (target: TrayNavigationTarget) => void
+): Promise<UnlistenFn> {
+  return await listen<TrayNavigationTarget>("tray-navigate", (event) => {
+    callback(event.payload);
+  });
+}
+
 // ============================================
 // History API
 // ============================================
@@ -462,16 +478,20 @@ export interface TranscriptionHistoryItem {
 
 export async function getTranscriptionHistory(
   limit?: number,
-  offset?: number
+  offset?: number,
+  search?: string
 ): Promise<TranscriptionHistoryItem[]> {
   return await invoke<TranscriptionHistoryItem[]>("get_transcription_history", {
     limit,
     offset,
+    search: search?.trim() || null,
   });
 }
 
-export async function getTranscriptionHistoryCount(): Promise<number> {
-  return await invoke<number>("get_transcription_history_count");
+export async function getTranscriptionHistoryCount(search?: string): Promise<number> {
+  return await invoke<number>("get_transcription_history_count", {
+    search: search?.trim() || null,
+  });
 }
 
 export async function addTranscription(

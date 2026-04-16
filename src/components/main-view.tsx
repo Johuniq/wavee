@@ -16,6 +16,7 @@ import {
   loadModel,
   onHotkeyPressed,
   onHotkeyReleased,
+  onTrayNavigate,
   onTrayStartRecording,
   onTrayStopRecording,
   registerHotkey,
@@ -32,6 +33,7 @@ import {
   Cpu,
   FileAudio,
   Heart,
+  HelpCircle,
   History,
   Key,
   Loader2,
@@ -53,6 +55,11 @@ import {
 // Lazy load heavy views to reduce initial bundle and memory
 const HistoryView = lazy(() =>
   import("@/components/history-view").then((m) => ({ default: m.HistoryView })),
+);
+const HelpSupportView = lazy(() =>
+  import("@/components/help-support-view").then((m) => ({
+    default: m.HelpSupportView,
+  })),
 );
 const LicenseView = lazy(() =>
   import("@/components/license-view").then((m) => ({ default: m.LicenseView })),
@@ -101,6 +108,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
   const [showHistory, setShowHistory] = useState(false);
   const [showTranscribe, setShowTranscribe] = useState(false);
   const [showLicense, setShowLicense] = useState(false);
+  const [showHelpSupport, setShowHelpSupport] = useState(false);
   const [isLinuxFree, setIsLinuxFree] = useState(false);
 
   // Refs to track recording state for hotkey handlers
@@ -393,6 +401,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
   useEffect(() => {
     let unlistenStart: (() => void) | null = null;
     let unlistenStop: (() => void) | null = null;
+    let unlistenNavigate: (() => void) | null = null;
 
     const setupTrayListeners = async () => {
       unlistenStart = await onTrayStartRecording(() => {
@@ -402,6 +411,21 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
       unlistenStop = await onTrayStopRecording(() => {
         handleStopRecording();
       });
+
+      unlistenNavigate = await onTrayNavigate((target) => {
+        setShowSettings(false);
+        setShowModels(false);
+        setShowHistory(false);
+        setShowTranscribe(false);
+        setShowLicense(false);
+        setShowHelpSupport(false);
+
+        if (target === "transcribe") setShowTranscribe(true);
+        if (target === "history") setShowHistory(true);
+        if (target === "models") setShowModels(true);
+        if (target === "settings") setShowSettings(true);
+        if (target === "help") setShowHelpSupport(true);
+      });
     };
 
     setupTrayListeners();
@@ -409,6 +433,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
     return () => {
       unlistenStart?.();
       unlistenStop?.();
+      unlistenNavigate?.();
     };
   }, [handleStartRecording, handleStopRecording]);
 
@@ -530,6 +555,15 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
     );
   }
 
+  // Show help and support view
+  if (showHelpSupport) {
+    return (
+      <Suspense fallback={ViewLoadingFallback}>
+        <HelpSupportView onClose={() => setShowHelpSupport(false)} />
+      </Suspense>
+    );
+  }
+
   // Show loading state while model is loading
   if (selectedModel?.downloaded && isLoadingModel) {
     return (
@@ -616,6 +650,13 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
             >
               <Settings className="h-4 w-4 text-foreground/70" />
               Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer rounded-lg"
+              onSelect={() => setShowHelpSupport(true)}
+            >
+              <HelpCircle className="h-4 w-4 text-foreground/70" />
+              Help & Support
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

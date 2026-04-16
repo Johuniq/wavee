@@ -47,9 +47,9 @@ export class ErrorBoundary extends Component<Props, State> {
   private handleReportIssue = async () => {
     try {
       const { openUrl } = await import("@tauri-apps/plugin-opener");
-      await openUrl("https://github.com/Johuniq/wavetype/issues");
+      await openUrl("https://github.com/Johuniq/wavee/issues");
     } catch (err) {
-      window.open("https://github.com/Johuniq/wavetype/issues", "_blank");
+      window.open("https://github.com/Johuniq/wavee/issues", "_blank");
     }
   };
 

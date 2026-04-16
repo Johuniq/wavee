@@ -24,7 +24,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{
-    menu::{Menu, MenuItem},
+    image::Image,
+    menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, State, WindowEvent,
 };
@@ -33,7 +34,8 @@ use transcription::Transcriber;
 
 // Application version from Cargo.toml
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
-const APP_NAME: &str = env!("CARGO_PKG_NAME");
+const APP_NAME: &str = "Wavee";
+const APP_ICON_BYTES: &[u8] = include_bytes!("../icons/icon.png");
 
 // Rate limiter for preventing abuse
 pub struct RateLimiter {
@@ -86,8 +88,8 @@ fn sanitize_path(path: &str) -> Result<String, String> {
     // Check for absolute paths outside expected directories
     // Handle Unix-like paths (starting with /)
     if normalized.starts_with('/') {
-        // Allow paths within WaveType app directories, temp, home, or Users
-        if !normalized.contains("/WaveType/")
+        // Allow paths within Wavee app directories, temp, home, or Users
+        if !normalized.contains("/Wavee/")
             && !normalized.starts_with("/tmp/")
             && !normalized.starts_with("/home/")
             && !normalized.starts_with("/Users/")
@@ -105,10 +107,10 @@ fn sanitize_path(path: &str) -> Result<String, String> {
             .unwrap_or(false)
         && normalized.chars().nth(1) == Some(':')
     {
-        // Windows absolute path - allow if it contains WaveType or is in user directories
+        // Windows absolute path - allow if it contains Wavee or is in user directories
         // Note: Windows paths are typically handled by Tauri's path helpers,
         // but we validate here as an extra safety measure
-        if !normalized.contains("WaveType")
+        if !normalized.contains("Wavee")
             && !normalized.contains("AppData")
             && !normalized.contains("Users")
         {
@@ -150,9 +152,6 @@ fn is_model_language_supported(model_id: &str, language: &str) -> bool {
         | "small.en"
         | "medium.en"
         | "distil-small.en"
-        | "distil-medium.en"
-        | "distil-large-v2"
-        | "distil-large-v3"
         | "parakeet-v2" => language == "en",
 
         // Parakeet v3 supported languages
@@ -328,7 +327,7 @@ fn has_active_trial(db: &Database) -> bool {
 
         let days_since_start =
             (chrono::Utc::now() - start_date.with_timezone(&chrono::Utc)).num_days();
-        days_since_start >= 0 && days_since_start < 7
+        (0..7).contains(&days_since_start)
     }
 }
 
@@ -1071,9 +1070,6 @@ fn is_model_downloaded(
         "small.en",
         "medium.en",
         "distil-small.en",
-        "distil-medium.en",
-        "distil-large-v2",
-        "distil-large-v3",
         "parakeet-v2",
         "parakeet-v3",
         "qwen3-asr-0.6b",
@@ -1107,9 +1103,6 @@ fn get_model_path(downloader: State<DownloaderState>, model_id: String) -> Comma
         "small.en",
         "medium.en",
         "distil-small.en",
-        "distil-medium.en",
-        "distil-large-v2",
-        "distil-large-v3",
         "parakeet-v2",
         "parakeet-v3",
         "qwen3-asr-0.6b",
@@ -1238,9 +1231,6 @@ fn add_transcription(
         "small.en",
         "medium.en",
         "distil-small.en",
-        "distil-medium.en",
-        "distil-large-v2",
-        "distil-large-v3",
         "parakeet-v2",
         "parakeet-v3",
         "qwen3-asr-0.6b",
@@ -1274,17 +1264,42 @@ fn get_transcription_history(
     db: State<DbState>,
     limit: Option<i32>,
     offset: Option<i32>,
+    search: Option<String>,
 ) -> CommandResult<Vec<TranscriptionHistory>> {
     // Validate and cap limit
     let safe_limit = limit.unwrap_or(50).clamp(1, 1000);
     let safe_offset = offset.unwrap_or(0).max(0);
-    db.0.get_transcription_history(safe_limit, safe_offset)
+    let safe_search = search
+        .as_deref()
+        .map(|value| sanitize_text(value.trim(), 500))
+        .transpose()
+        .map_err(|e| {
+            CommandError::Database(rusqlite::Error::InvalidParameterName(format!(
+                "Invalid search: {}",
+                e
+            )))
+        })?;
+    db.0.get_transcription_history(safe_limit, safe_offset, safe_search.as_deref())
         .map_err(Into::into)
 }
 
 #[tauri::command]
-fn get_transcription_history_count(db: State<DbState>) -> CommandResult<i64> {
-    db.0.get_transcription_history_count().map_err(Into::into)
+fn get_transcription_history_count(
+    db: State<DbState>,
+    search: Option<String>,
+) -> CommandResult<i64> {
+    let safe_search = search
+        .as_deref()
+        .map(|value| sanitize_text(value.trim(), 500))
+        .transpose()
+        .map_err(|e| {
+            CommandError::Database(rusqlite::Error::InvalidParameterName(format!(
+                "Invalid search: {}",
+                e
+            )))
+        })?;
+    db.0.get_transcription_history_count(safe_search.as_deref())
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -2154,6 +2169,8 @@ pub fn run() {
             app.manage(RecordingRateLimiter(Arc::new(RateLimiter::new(100, 60))));
             app.manage(TranscriptionRateLimiter(Arc::new(RateLimiter::new(50, 60))));
 
+            setup_window_icons(app)?;
+
             // Setup system tray
             setup_tray(app)?;
 
@@ -2165,23 +2182,11 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Handle window close - minimize to tray or actually close based on setting
             if let WindowEvent::CloseRequested { api, .. } = event {
-                // Get the minimize_to_tray setting from database
-                let should_minimize = window
-                    .app_handle()
-                    .try_state::<DbState>()
-                    .and_then(|db| db.0.get_settings().ok())
-                    .map(|settings| settings.minimize_to_tray)
-                    .unwrap_or(true); // Default to minimize if can't read setting
-
-                if should_minimize {
+                if window.label() == "main" {
                     debug!("Window close requested, hiding to tray");
                     let _ = window.hide();
                     api.prevent_close();
-                } else {
-                    debug!("Window close requested, exiting app");
-                    // Allow the close to proceed - app will exit
                 }
             }
         })
@@ -2270,9 +2275,29 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
+fn app_icon() -> tauri::Result<Image<'static>> {
+    Image::from_bytes(APP_ICON_BYTES)
+}
+
+fn setup_window_icons(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let icon = app_icon()?;
+
+    if let Some(window) = app.get_webview_window("main") {
+        window.set_icon(icon.clone())?;
+        window.set_skip_taskbar(true)?;
+    }
+
+    if let Some(window) = app.get_webview_window("recording-overlay") {
+        window.set_icon(icon)?;
+    }
+
+    Ok(())
+}
+
 fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Create tray menu items
-    let show_item = MenuItem::with_id(app, "show", "Show WaveType", true, None::<&str>)?;
+    let title_item = MenuItem::with_id(app, "title", "Wavee", false, None::<&str>)?;
+    let show_item = MenuItem::with_id(app, "show", "Open Wavee", true, None::<&str>)?;
     let start_recording_item = MenuItem::with_id(
         app,
         "start_recording",
@@ -2282,45 +2307,74 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let stop_recording_item =
         MenuItem::with_id(app, "stop_recording", "Stop Recording", true, None::<&str>)?;
-    let separator = MenuItem::with_id(app, "sep", "────────────", false, None::<&str>)?;
+    let transcribe_file_item =
+        MenuItem::with_id(app, "transcribe", "Transcribe File...", true, None::<&str>)?;
+    let history_item = MenuItem::with_id(app, "history", "History", true, None::<&str>)?;
+    let models_item = MenuItem::with_id(app, "models", "Models", true, None::<&str>)?;
+    let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+    let help_item = MenuItem::with_id(app, "help", "Help & Support", true, None::<&str>)?;
+    let separator = PredefinedMenuItem::separator(app)?;
+    let separator_2 = PredefinedMenuItem::separator(app)?;
+    let separator_3 = PredefinedMenuItem::separator(app)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
     // Build menu
     let menu = Menu::with_items(
         app,
         &[
-            &show_item,
+            &title_item,
             &separator,
+            &show_item,
+            &transcribe_file_item,
             &start_recording_item,
             &stop_recording_item,
-            &separator,
+            &separator_2,
+            &history_item,
+            &models_item,
+            &settings_item,
+            &help_item,
+            &separator_3,
             &quit_item,
         ],
     )?;
 
-    // Get the icon - use default window icon as fallback
-    let icon = app
-        .default_window_icon()
-        .cloned()
-        .ok_or("No default icon")?;
+    let icon = app_icon()?;
 
     // Build tray icon
     let _tray = TrayIconBuilder::new()
         .icon(icon)
         .menu(&menu)
-        .tooltip("WaveType - Voice to Text")
+        .tooltip("Wavee - Voice to Text")
         .on_menu_event(|app, event| match event.id().as_ref() {
             "show" => {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
+                show_main_window(app);
+                let _ = app.emit("tray-navigate", "main");
             }
             "start_recording" => {
                 let _ = app.emit("tray-start-recording", ());
             }
             "stop_recording" => {
                 let _ = app.emit("tray-stop-recording", ());
+            }
+            "transcribe" => {
+                show_main_window(app);
+                let _ = app.emit("tray-navigate", "transcribe");
+            }
+            "history" => {
+                show_main_window(app);
+                let _ = app.emit("tray-navigate", "history");
+            }
+            "models" => {
+                show_main_window(app);
+                let _ = app.emit("tray-navigate", "models");
+            }
+            "settings" => {
+                show_main_window(app);
+                let _ = app.emit("tray-navigate", "settings");
+            }
+            "help" => {
+                show_main_window(app);
+                let _ = app.emit("tray-navigate", "help");
             }
             "quit" => {
                 app.exit(0);
@@ -2335,13 +2389,19 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             } = event
             {
                 let app = tray.app_handle();
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
+                show_main_window(&app);
+                let _ = app.emit("tray-navigate", "main");
             }
         })
         .build(app)?;
 
     Ok(())
+}
+
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
 }

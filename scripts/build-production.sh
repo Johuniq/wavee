@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# WaveType Production Build Script
+# Wavee Production Build Script
 # This script builds the application for production release
 
 set -e
 
-echo "🚀 WaveType Production Build"
+echo "🚀 Wavee Production Build"
 echo "=========================="
 echo ""
 
