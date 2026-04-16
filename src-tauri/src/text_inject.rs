@@ -1,4 +1,5 @@
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 use std::time::Duration;
 
 pub struct TextInjector {
