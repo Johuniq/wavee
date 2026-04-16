@@ -19,7 +19,8 @@ pub fn encrypt_data(data: &[u8], key_bytes: &[u8]) -> Result<Vec<u8>, String> {
 
     // Generate a random 96-bit nonce
     let mut nonce_bytes = [0u8; 12];
-    getrandom::getrandom(&mut nonce_bytes).map_err(|e| format!("Failed to generate nonce: {}", e))?;
+    getrandom::getrandom(&mut nonce_bytes)
+        .map_err(|e| format!("Failed to generate nonce: {}", e))?;
     let nonce = Nonce::from_slice(&nonce_bytes);
 
     let ciphertext = cipher
@@ -78,11 +79,11 @@ mod tests {
         let device_id = "test-device-456";
         let key = derive_encryption_key(device_id);
         let original_data = b"Hello, WaveType Secure Data!";
-        
+
         let encrypted = encrypt_data(original_data, &key).unwrap();
         assert_ne!(encrypted, original_data);
         assert!(encrypted.len() > original_data.len());
-        
+
         let decrypted = decrypt_data(&encrypted, &key).unwrap();
         assert_eq!(decrypted, original_data);
     }
@@ -92,7 +93,7 @@ mod tests {
         let key1 = derive_encryption_key("device-1");
         let key2 = derive_encryption_key("device-2");
         let data = b"Secret message";
-        
+
         let encrypted = encrypt_data(data, &key1).unwrap();
         let result = decrypt_data(&encrypted, &key2);
         assert!(result.is_err());

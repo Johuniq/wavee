@@ -17,9 +17,47 @@ export interface DownloadProgress {
   percentage: number;
 }
 
+export interface AudioInputDevice {
+  name: string;
+  is_default: boolean;
+}
+
+export interface AudioOutputDevice {
+  name: string;
+  is_default: boolean;
+}
+
+export type AudioCaptureSource = "mic" | "system" | "both";
+
 // ============================================
 // Recording API
 // ============================================
+
+export async function getAudioInputDevices(): Promise<AudioInputDevice[]> {
+  return await invoke<AudioInputDevice[]>("get_audio_input_devices");
+}
+
+export async function getAudioOutputDevices(): Promise<AudioOutputDevice[]> {
+  return await invoke<AudioOutputDevice[]>("get_audio_output_devices");
+}
+
+export async function setAudioInputDevice(
+  deviceName: string | null
+): Promise<void> {
+  await invoke("set_audio_input_device", { deviceName });
+}
+
+export async function setAudioCaptureConfig(
+  captureSource: AudioCaptureSource,
+  inputDeviceName: string | null,
+  outputDeviceName: string | null
+): Promise<void> {
+  await invoke("set_audio_capture_config", {
+    captureSource,
+    inputDeviceName,
+    outputDeviceName,
+  });
+}
 
 export async function startRecording(): Promise<void> {
   await invoke("start_recording");
@@ -89,6 +127,10 @@ export async function transcribeFile(
 
 export async function downloadModel(modelId: string): Promise<string> {
   return await invoke<string>("download_model", { modelId });
+}
+
+export async function cancelModelDownload(modelId: string): Promise<boolean> {
+  return await invoke<boolean>("cancel_model_download", { modelId });
 }
 
 export async function deleteModel(modelId: string): Promise<void> {

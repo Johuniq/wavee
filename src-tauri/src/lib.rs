@@ -10,7 +10,7 @@ mod security;
 mod text_inject;
 mod transcription;
 
-use audio::AudioRecorder;
+use audio::{AudioCaptureSource, AudioInputDevice, AudioOutputDevice, AudioRecorder};
 use database::{AppSettings, AppState, Database, LicenseData, TranscriptionHistory, WhisperModel};
 use downloader::{DownloadProgress, ModelDownloader};
 use error_reporting::{ErrorCategory, ErrorReport, ErrorReporter, ErrorSeverity, ErrorStats};
@@ -19,6 +19,7 @@ use license::{
 };
 use log::{debug, error, info, warn};
 use post_process::PostProcessor;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -136,6 +137,96 @@ fn sanitize_text(text: &str, max_len: usize) -> Result<String, String> {
     Ok(sanitized)
 }
 
+fn is_valid_language_code(language: &str) -> bool {
+    language == "auto"
+        || ((2..=4).contains(&language.len()) && language.chars().all(|c| c.is_ascii_lowercase()))
+}
+
+fn is_model_language_supported(model_id: &str, language: &str) -> bool {
+    match model_id {
+        // English-only models
+        "tiny.en"
+        | "base.en"
+        | "small.en"
+        | "medium.en"
+        | "distil-small.en"
+        | "distil-medium.en"
+        | "distil-large-v2"
+        | "distil-large-v3"
+        | "parakeet-v2" => language == "en",
+
+        // Parakeet v3 supported languages
+        "parakeet-v3" => matches!(
+            language,
+            "auto"
+                | "bg"
+                | "hr"
+                | "cs"
+                | "da"
+                | "nl"
+                | "en"
+                | "et"
+                | "fi"
+                | "fr"
+                | "de"
+                | "el"
+                | "hu"
+                | "it"
+                | "lv"
+                | "lt"
+                | "mt"
+                | "pl"
+                | "pt"
+                | "ro"
+                | "sk"
+                | "sl"
+                | "es"
+                | "sv"
+                | "ru"
+                | "uk"
+        ),
+
+        // Qwen3-ASR supported languages
+        "qwen3-asr-0.6b" => matches!(
+            language,
+            "auto"
+                | "zh"
+                | "en"
+                | "yue"
+                | "ar"
+                | "de"
+                | "fr"
+                | "es"
+                | "pt"
+                | "id"
+                | "it"
+                | "ko"
+                | "ru"
+                | "th"
+                | "vi"
+                | "ja"
+                | "tr"
+                | "hi"
+                | "ms"
+                | "nl"
+                | "sv"
+                | "da"
+                | "fi"
+                | "pl"
+                | "cs"
+                | "fil"
+                | "fa"
+                | "el"
+                | "hu"
+                | "mk"
+                | "ro"
+        ),
+
+        // Multilingual Whisper models
+        _ => language == "auto" || is_valid_language_code(language),
+    }
+}
+
 // State wrappers
 pub struct DbState(pub Arc<Database>);
 pub struct RecorderState(pub Arc<Mutex<Option<AudioRecorder>>>);
@@ -179,6 +270,86 @@ impl serde::Serialize for CommandError {
 
 type CommandResult<T> = Result<T, CommandError>;
 
+fn license_status_to_response(status: &LicenseStatus) -> String {
+    match status {
+        LicenseStatus::Granted | LicenseStatus::Offline => "active".to_string(),
+        LicenseStatus::Revoked => "revoked".to_string(),
+        LicenseStatus::Disabled => "disabled".to_string(),
+        LicenseStatus::Expired => "expired".to_string(),
+        LicenseStatus::Invalid => "invalid".to_string(),
+        LicenseStatus::ActivationLimitReached => "activation_limit".to_string(),
+        LicenseStatus::NotActivated => "not_activated".to_string(),
+    }
+}
+
+#[allow(unused_variables)]
+fn has_valid_license(license_manager: &LicenseManager) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        true
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        license_manager.is_valid()
+    }
+}
+
+#[allow(unused_variables)]
+fn has_active_trial(db: &Database) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        true
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let Ok(license) = db.get_license() else {
+            return false;
+        };
+
+        if license.status != "trial" {
+            return false;
+        }
+
+        let Some(trial_started) = license.trial_started_at else {
+            return false;
+        };
+
+        let expected_hash = calculate_trial_integrity_hash(&trial_started);
+        if license.trial_integrity_hash.as_deref() != Some(expected_hash.as_str()) {
+            warn!("Trial integrity check failed");
+            return false;
+        }
+
+        let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(&trial_started) else {
+            return false;
+        };
+
+        let days_since_start =
+            (chrono::Utc::now() - start_date.with_timezone(&chrono::Utc)).num_days();
+        days_since_start >= 0 && days_since_start < 7
+    }
+}
+
+fn calculate_trial_integrity_hash(trial_started_at: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(trial_started_at.as_bytes());
+    hasher.update(get_device_id().as_bytes());
+    hasher.update(b"wavetype-trial-integrity-v1");
+    hex::encode(hasher.finalize())
+}
+
+fn ensure_app_access(db: &Database, license_manager: &LicenseManager) -> CommandResult<()> {
+    if has_valid_license(license_manager) || has_active_trial(db) {
+        Ok(())
+    } else {
+        Err(CommandError::License(
+            "A valid license or active trial is required.".to_string(),
+        ))
+    }
+}
+
 // ==================== Settings Commands ====================
 
 #[tauri::command]
@@ -221,13 +392,68 @@ fn set_current_setup_step(db: State<DbState>, step: i32) -> CommandResult<()> {
 // ==================== Model Commands ====================
 
 #[tauri::command]
-fn get_models(db: State<DbState>) -> CommandResult<Vec<WhisperModel>> {
-    db.0.get_models().map_err(Into::into)
+fn get_models(
+    db: State<DbState>,
+    downloader: State<DownloaderState>,
+) -> CommandResult<Vec<WhisperModel>> {
+    let mut models = db.0.get_models().map_err(CommandError::Database)?;
+
+    for model in models.iter_mut() {
+        let exists_on_disk = downloader.0.is_model_downloaded(&model.id);
+        if model.downloaded != exists_on_disk {
+            let path = if exists_on_disk {
+                Some(
+                    downloader
+                        .0
+                        .get_model_path(&model.id)
+                        .to_string_lossy()
+                        .to_string(),
+                )
+            } else {
+                None
+            };
+
+            db.0.set_model_downloaded(&model.id, exists_on_disk, path.as_deref())
+                .map_err(CommandError::Database)?;
+            model.downloaded = exists_on_disk;
+            model.download_path = path;
+        }
+    }
+
+    Ok(models)
 }
 
 #[tauri::command]
-fn get_model(db: State<DbState>, id: String) -> CommandResult<Option<WhisperModel>> {
-    db.0.get_model(&id).map_err(Into::into)
+fn get_model(
+    db: State<DbState>,
+    downloader: State<DownloaderState>,
+    id: String,
+) -> CommandResult<Option<WhisperModel>> {
+    let mut model = db.0.get_model(&id).map_err(CommandError::Database)?;
+
+    if let Some(ref mut model) = model {
+        let exists_on_disk = downloader.0.is_model_downloaded(&model.id);
+        if model.downloaded != exists_on_disk {
+            let path = if exists_on_disk {
+                Some(
+                    downloader
+                        .0
+                        .get_model_path(&model.id)
+                        .to_string_lossy()
+                        .to_string(),
+                )
+            } else {
+                None
+            };
+
+            db.0.set_model_downloaded(&model.id, exists_on_disk, path.as_deref())
+                .map_err(CommandError::Database)?;
+            model.downloaded = exists_on_disk;
+            model.download_path = path;
+        }
+    }
+
+    Ok(model)
 }
 
 #[tauri::command]
@@ -250,10 +476,64 @@ fn set_selected_model(db: State<DbState>, model_id: Option<String>) -> CommandRe
 // ==================== Recording Commands ====================
 
 #[tauri::command]
+fn get_audio_input_devices() -> CommandResult<Vec<AudioInputDevice>> {
+    AudioRecorder::list_input_devices().map_err(CommandError::Recording)
+}
+
+#[tauri::command]
+fn get_audio_output_devices() -> CommandResult<Vec<AudioOutputDevice>> {
+    AudioRecorder::list_output_devices().map_err(CommandError::Recording)
+}
+
+#[tauri::command]
+fn set_audio_input_device(
+    recorder: State<RecorderState>,
+    device_name: Option<String>,
+) -> CommandResult<()> {
+    let mut recorder_guard = recorder.0.lock().unwrap();
+
+    if recorder_guard.is_none() {
+        *recorder_guard = Some(AudioRecorder::new().map_err(CommandError::Recording)?);
+    }
+
+    if let Some(ref mut rec) = *recorder_guard {
+        rec.set_input_device(device_name)
+            .map_err(CommandError::Recording)?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn set_audio_capture_config(
+    recorder: State<RecorderState>,
+    capture_source: AudioCaptureSource,
+    input_device_name: Option<String>,
+    output_device_name: Option<String>,
+) -> CommandResult<()> {
+    let mut recorder_guard = recorder.0.lock().unwrap();
+
+    if recorder_guard.is_none() {
+        *recorder_guard = Some(AudioRecorder::new().map_err(CommandError::Recording)?);
+    }
+
+    if let Some(ref mut rec) = *recorder_guard {
+        rec.set_capture_config(capture_source, input_device_name, output_device_name)
+            .map_err(CommandError::Recording)?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 fn start_recording(
+    db: State<DbState>,
+    license_manager: State<LicenseManagerState>,
     recorder: State<RecorderState>,
     rate_limiter: State<RecordingRateLimiter>,
 ) -> CommandResult<()> {
+    ensure_app_access(&db.0, &license_manager.0)?;
+
     // Rate limiting check
     if !rate_limiter.0.check("start_recording") {
         return Err(CommandError::Recording(
@@ -301,7 +581,14 @@ fn stop_recording(recorder: State<RecorderState>) -> CommandResult<Vec<f32>> {
 }
 
 #[tauri::command]
-fn save_temp_audio(app: tauri::AppHandle, samples: Vec<f32>) -> CommandResult<String> {
+fn save_temp_audio(
+    app: tauri::AppHandle,
+    db: State<DbState>,
+    license_manager: State<LicenseManagerState>,
+    samples: Vec<f32>,
+) -> CommandResult<String> {
+    ensure_app_access(&db.0, &license_manager.0)?;
+
     let temp_dir = app
         .path()
         .app_cache_dir()
@@ -391,11 +678,28 @@ async fn hide_recording_overlay(app: tauri::AppHandle) -> CommandResult<()> {
 
 #[tauri::command]
 fn load_model(
+    db: State<DbState>,
+    license_manager: State<LicenseManagerState>,
     transcriber: State<TranscriberState>,
     downloader: State<DownloaderState>,
     model_id: String,
     language: String,
 ) -> CommandResult<()> {
+    ensure_app_access(&db.0, &license_manager.0)?;
+
+    if !is_valid_language_code(&language) {
+        return Err(CommandError::Transcription(format!(
+            "Invalid language code: {}",
+            language
+        )));
+    }
+    if !is_model_language_supported(&model_id, &language) {
+        return Err(CommandError::Transcription(format!(
+            "Language '{}' is not supported by model '{}'",
+            language, model_id
+        )));
+    }
+
     let model_path = downloader.0.get_model_path(&model_id);
 
     if !model_path.exists() {
@@ -435,9 +739,13 @@ fn unload_model(transcriber: State<TranscriberState>) -> CommandResult<()> {
 
 #[tauri::command]
 fn transcribe_audio(
+    db: State<DbState>,
+    license_manager: State<LicenseManagerState>,
     transcriber: State<TranscriberState>,
     audio_samples: Vec<f32>,
 ) -> CommandResult<String> {
+    ensure_app_access(&db.0, &license_manager.0)?;
+
     let mut transcriber_guard = transcriber.0.lock().unwrap();
 
     if let Some(ref mut t) = *transcriber_guard {
@@ -452,9 +760,13 @@ fn transcribe_audio(
 
 #[tauri::command]
 async fn record_and_transcribe(
+    db: State<'_, DbState>,
+    license_manager: State<'_, LicenseManagerState>,
     recorder: State<'_, RecorderState>,
     transcriber: State<'_, TranscriberState>,
 ) -> CommandResult<String> {
+    ensure_app_access(&db.0, &license_manager.0)?;
+
     // Stop recording first
     let samples = {
         let mut recorder_guard = recorder.0.lock().unwrap();
@@ -481,11 +793,15 @@ async fn record_and_transcribe(
 
 #[tauri::command]
 async fn transcribe_file(
+    db: State<'_, DbState>,
+    license_manager: State<'_, LicenseManagerState>,
     transcriber: State<'_, TranscriberState>,
     rate_limiter: State<'_, TranscriptionRateLimiter>,
     file_path: String,
 ) -> CommandResult<String> {
     use std::path::Path;
+
+    ensure_app_access(&db.0, &license_manager.0)?;
 
     // Rate limiting check
     if !rate_limiter.0.check("transcribe_file") {
@@ -689,8 +1005,11 @@ async fn download_model(
     app: tauri::AppHandle,
     downloader: State<'_, DownloaderState>,
     db: State<'_, DbState>,
+    license_manager: State<'_, LicenseManagerState>,
     model_id: String,
 ) -> CommandResult<String> {
+    ensure_app_access(&db.0, &license_manager.0)?;
+
     let app_clone = app.clone();
     let model_id_clone = model_id.clone();
 
@@ -725,6 +1044,11 @@ async fn delete_model(
     db.0.set_model_downloaded(&model_id, false, None)
         .map_err(CommandError::Database)?;
     Ok(())
+}
+
+#[tauri::command]
+fn cancel_model_download(downloader: State<'_, DownloaderState>, model_id: String) -> bool {
+    downloader.0.cancel_download(&model_id)
 }
 
 #[tauri::command]
@@ -927,8 +1251,8 @@ fn add_transcription(
         ));
     }
 
-    // Validate language against allowed values
-    if !["en", "bn", "auto"].contains(&language.as_str()) {
+    // Validate language code shape. The UI restricts this to the selected model's languages.
+    if !is_valid_language_code(&language) {
         return Err(CommandError::Database(
             rusqlite::Error::InvalidParameterName("Invalid language".to_string()),
         ));
@@ -1000,19 +1324,10 @@ struct LicenseResponse {
 impl From<LicenseInfo> for LicenseResponse {
     fn from(info: LicenseInfo) -> Self {
         Self {
-            license_key: Some(info.license_key),
+            license_key: Some(security::mask_license_key(&info.license_key)),
             display_key: Some(info.display_key),
             activation_id: info.activation_id,
-            status: match info.status {
-                LicenseStatus::Granted => "active".to_string(),
-                LicenseStatus::Revoked => "revoked".to_string(),
-                LicenseStatus::Disabled => "disabled".to_string(),
-                LicenseStatus::Expired => "expired".to_string(),
-                LicenseStatus::Invalid => "invalid".to_string(),
-                LicenseStatus::ActivationLimitReached => "activation_limit".to_string(),
-                LicenseStatus::Offline => "active".to_string(), // Offline but valid
-                LicenseStatus::NotActivated => "not_activated".to_string(),
-            },
+            status: license_status_to_response(&info.status),
             customer_email: info.customer_email,
             customer_name: info.customer_name,
             benefit_id: info.benefit_id,
@@ -1045,7 +1360,7 @@ impl From<LicenseData> for LicenseResponse {
         };
 
         Self {
-            license_key: data.license_key,
+            license_key: data.license_key.as_deref().map(security::mask_license_key),
             display_key: None,
             activation_id: data.activation_id,
             status: data.status,
@@ -1077,7 +1392,14 @@ fn get_license(
     }
 
     // Fall back to database
-    let license = db.0.get_license().map_err(CommandError::Database)?;
+    let mut license = db.0.get_license().map_err(CommandError::Database)?;
+    if license.is_activated || license.status == "active" {
+        license.license_key = None;
+        license.activation_id = None;
+        license.status = "not_activated".to_string();
+        license.is_activated = false;
+        license.last_validated_at = None;
+    }
     Ok(LicenseResponse::from(license))
 }
 
@@ -1096,17 +1418,27 @@ async fn activate_license(
         .await
         .map_err(CommandError::License)?;
 
+    if !license_info.status.allows_usage() {
+        let _ = clear_cache();
+        return Err(CommandError::License(format!(
+            "License activation did not grant access: {}",
+            license_status_to_response(&license_info.status)
+        )));
+    }
+
     // Also save to database as backup
+    let is_activated = license_info.status.allows_usage();
     let license_data = LicenseData {
         license_key: Some(license_key),
         activation_id: license_info.activation_id.clone(),
-        status: "active".to_string(),
+        status: license_status_to_response(&license_info.status),
         customer_email: license_info.customer_email.clone(),
         customer_name: license_info.customer_name.clone(),
         expires_at: license_info.expires_at.clone(),
-        is_activated: true,
+        is_activated,
         last_validated_at: Some(chrono::Utc::now().to_rfc3339()),
         trial_started_at: None,
+        trial_integrity_hash: None,
         usage: license_info.usage,
         validations: license_info.validations,
     };
@@ -1136,19 +1468,14 @@ async fn validate_license(
     let license_data = LicenseData {
         license_key: Some(license_info.license_key.clone()),
         activation_id: license_info.activation_id.clone(),
-        status: match license_info.status {
-            LicenseStatus::Granted | LicenseStatus::Offline => "active".to_string(),
-            LicenseStatus::Expired => "expired".to_string(),
-            LicenseStatus::Revoked => "revoked".to_string(),
-            LicenseStatus::Disabled => "disabled".to_string(),
-            _ => "inactive".to_string(),
-        },
+        status: license_status_to_response(&license_info.status),
         customer_email: license_info.customer_email.clone(),
         customer_name: license_info.customer_name.clone(),
         expires_at: license_info.expires_at.clone(),
         is_activated: license_info.status.allows_usage(),
         last_validated_at: license_info.last_validated_at.clone(),
         trial_started_at: None,
+        trial_integrity_hash: None,
         usage: license_info.usage,
         validations: license_info.validations,
     };
@@ -1198,26 +1525,11 @@ fn is_license_valid(db: State<DbState>, license_manager: State<LicenseManagerSta
     #[cfg(not(target_os = "linux"))]
     {
         // First check with license manager (secure cache)
-        if license_manager.0.is_valid() {
+        if has_valid_license(&license_manager.0) {
             return true;
         }
 
-        // Fall back to database for trial check
-        if let Ok(license) = db.0.get_license() {
-            // Check trial status
-            if license.status == "trial" {
-                if let Some(trial_started) = &license.trial_started_at {
-                    if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
-                        let now = chrono::Utc::now();
-                        let days_since_start =
-                            (now - start_date.with_timezone(&chrono::Utc)).num_days();
-                        return days_since_start < 7;
-                    }
-                }
-            }
-        }
-
-        false
+        has_active_trial(&db.0)
     }
 }
 
@@ -1236,9 +1548,30 @@ fn start_trial(db: State<DbState>) -> CommandResult<LicenseResponse> {
     if license.trial_started_at.is_some() {
         // Check if trial is still valid
         if let Some(ref trial_started) = license.trial_started_at {
+            let expected_hash = calculate_trial_integrity_hash(trial_started);
+            if license.trial_integrity_hash.as_deref() != Some(expected_hash.as_str()) {
+                warn!("Trial integrity check failed during start_trial");
+                license.status = "trial_expired".to_string();
+                db.0.save_license(&license)
+                    .map_err(CommandError::Database)?;
+                return Err(CommandError::License(
+                    "Trial state is invalid. Please activate a license.".to_string(),
+                ));
+            }
+
             if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
                 let now = chrono::Utc::now();
                 let days_since_start = (now - start_date.with_timezone(&chrono::Utc)).num_days();
+                if days_since_start < 0 {
+                    warn!("Invalid future trial start detected");
+                    license.status = "trial_expired".to_string();
+                    db.0.save_license(&license)
+                        .map_err(CommandError::Database)?;
+                    return Err(CommandError::License(
+                        "Trial state is invalid. Please activate a license.".to_string(),
+                    ));
+                }
+
                 if days_since_start >= 7 {
                     license.status = "trial_expired".to_string();
                     db.0.save_license(&license)
@@ -1254,8 +1587,10 @@ fn start_trial(db: State<DbState>) -> CommandResult<LicenseResponse> {
     }
 
     // Start new trial
+    let trial_started_at = chrono::Utc::now().to_rfc3339();
     license.status = "trial".to_string();
-    license.trial_started_at = Some(chrono::Utc::now().to_rfc3339());
+    license.trial_started_at = Some(trial_started_at.clone());
+    license.trial_integrity_hash = Some(calculate_trial_integrity_hash(&trial_started_at));
     license.is_activated = false;
 
     db.0.save_license(&license)
@@ -1285,7 +1620,10 @@ fn is_platform_free() -> bool {
 
 #[tauri::command]
 #[allow(unused_variables)]
-fn get_trial_status(db: State<DbState>) -> CommandResult<serde_json::Value> {
+fn get_trial_status(
+    db: State<DbState>,
+    license_manager: State<LicenseManagerState>,
+) -> CommandResult<serde_json::Value> {
     // Linux users are always free
     #[cfg(target_os = "linux")]
     {
@@ -1300,10 +1638,8 @@ fn get_trial_status(db: State<DbState>) -> CommandResult<serde_json::Value> {
 
     #[cfg(not(target_os = "linux"))]
     {
-        let license = db.0.get_license().map_err(CommandError::Database)?;
-
-        // Check for active license first
-        if license.is_activated && license.status == "active" {
+        // Check for active license first, using the secure device-bound cache.
+        if has_valid_license(&license_manager.0) {
             return Ok(serde_json::json!({
                 "isInTrial": false,
                 "daysRemaining": 0,
@@ -1311,12 +1647,29 @@ fn get_trial_status(db: State<DbState>) -> CommandResult<serde_json::Value> {
                 "hasLicense": true
             }));
         }
+
+        let license = db.0.get_license().map_err(CommandError::Database)?;
         // Check trial status
         if let Some(trial_started) = &license.trial_started_at {
+            let expected_hash = calculate_trial_integrity_hash(trial_started);
+            if license.trial_integrity_hash.as_deref() != Some(expected_hash.as_str()) {
+                warn!("Trial integrity check failed in get_trial_status");
+                return Ok(serde_json::json!({
+                    "isInTrial": false,
+                    "daysRemaining": 0,
+                    "trialExpired": true,
+                    "hasLicense": false
+                }));
+            }
+
             if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
                 let now = chrono::Utc::now();
                 let days_since_start = (now - start_date.with_timezone(&chrono::Utc)).num_days();
-                let days_remaining = (7 - days_since_start).max(0);
+                let days_remaining = if days_since_start < 0 {
+                    0
+                } else {
+                    (7 - days_since_start).max(0)
+                };
 
                 return Ok(serde_json::json!({
                     "isInTrial": days_remaining > 0,
@@ -1339,7 +1692,10 @@ fn get_trial_status(db: State<DbState>) -> CommandResult<serde_json::Value> {
 
 #[tauri::command]
 #[allow(unused_variables)]
-fn can_use_app(db: State<DbState>) -> CommandResult<serde_json::Value> {
+fn can_use_app(
+    db: State<DbState>,
+    license_manager: State<LicenseManagerState>,
+) -> CommandResult<serde_json::Value> {
     // Linux users get free access forever - no license required
     #[cfg(target_os = "linux")]
     {
@@ -1353,10 +1709,8 @@ fn can_use_app(db: State<DbState>) -> CommandResult<serde_json::Value> {
 
     #[cfg(not(target_os = "linux"))]
     {
-        let license = db.0.get_license().map_err(CommandError::Database)?;
-
-        // Check for active license
-        if license.is_activated && license.status == "active" {
+        // Check for active license using the encrypted, device-bound cache.
+        if has_valid_license(&license_manager.0) {
             return Ok(serde_json::json!({
                 "canUse": true,
                 "reason": "licensed",
@@ -1364,12 +1718,28 @@ fn can_use_app(db: State<DbState>) -> CommandResult<serde_json::Value> {
             }));
         }
 
+        let license = db.0.get_license().map_err(CommandError::Database)?;
+
         // Check trial status
         if let Some(trial_started) = &license.trial_started_at {
+            let expected_hash = calculate_trial_integrity_hash(trial_started);
+            if license.trial_integrity_hash.as_deref() != Some(expected_hash.as_str()) {
+                warn!("Trial integrity check failed in can_use_app");
+                return Ok(serde_json::json!({
+                    "canUse": false,
+                    "reason": "trial_expired",
+                    "daysRemaining": 0
+                }));
+            }
+
             if let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) {
                 let now = chrono::Utc::now();
                 let days_since_start = (now - start_date.with_timezone(&chrono::Utc)).num_days();
-                let days_remaining = (7 - days_since_start).max(0);
+                let days_remaining = if days_since_start < 0 {
+                    0
+                } else {
+                    (7 - days_since_start).max(0)
+                };
 
                 if days_remaining > 0 {
                     return Ok(serde_json::json!({
@@ -1831,6 +2201,10 @@ pub fn run() {
             set_model_downloaded,
             set_selected_model,
             // Recording
+            get_audio_input_devices,
+            get_audio_output_devices,
+            set_audio_input_device,
+            set_audio_capture_config,
             start_recording,
             stop_recording,
             save_temp_audio,
@@ -1847,6 +2221,7 @@ pub fn run() {
             transcribe_file,
             // Download
             download_model,
+            cancel_model_download,
             delete_model,
             is_model_downloaded,
             get_downloaded_models,

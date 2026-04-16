@@ -14,15 +14,18 @@ import {
   deleteTranscriptionItem,
   getTranscriptionHistory,
   getTranscriptionHistoryCount,
+  reportError,
   type TranscriptionHistoryItem,
 } from "@/lib/voice-api";
 import {
+  AlertCircle,
   ArrowLeft,
   Check,
   Clock,
   Copy,
   History,
   Loader2,
+  RefreshCcw,
   Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -40,25 +43,37 @@ export function HistoryView({ onClose }: HistoryViewProps) {
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  const getErrorMessage = (error: unknown) =>
+    error instanceof Error ? error.message : String(error || "Something went wrong");
 
   const loadHistory = async (reset: boolean = false) => {
     if (reset) {
       setIsLoading(true);
       setHistory([]);
+      setLoadError(null);
+      setActionError(null);
     }
     try {
-      console.log("Loading transcription history...");
       const [items, count] = await Promise.all([
         getTranscriptionHistory(PAGE_SIZE, 0),
         getTranscriptionHistoryCount(),
       ]);
-      console.log("Loaded history items:", items, "Total count:", count);
       setHistory(items);
       setTotalCount(count);
       setHasMore(items.length < count);
     } catch (error) {
+      const message = getErrorMessage(error);
       console.error("Failed to load history:", error);
+      setLoadError(message);
+      await reportError("database", message, "error", {
+        userAction: "Load transcription history",
+      }).catch(console.error);
     } finally {
       setIsLoading(false);
     }
@@ -68,11 +83,10 @@ export function HistoryView({ onClose }: HistoryViewProps) {
     if (isLoadingMore || !hasMore) return;
 
     setIsLoadingMore(true);
+    setActionError(null);
     try {
       const offset = history.length;
-      console.log("Loading more history from offset:", offset);
       const items = await getTranscriptionHistory(PAGE_SIZE, offset);
-      console.log("Loaded more items:", items.length);
 
       if (items.length === 0) {
         setHasMore(false);
@@ -81,7 +95,12 @@ export function HistoryView({ onClose }: HistoryViewProps) {
         setHasMore(history.length + items.length < totalCount);
       }
     } catch (error) {
+      const message = getErrorMessage(error);
       console.error("Failed to load more history:", error);
+      setActionError("Could not load more history.");
+      await reportError("database", message, "error", {
+        userAction: "Load more transcription history",
+      }).catch(console.error);
     } finally {
       setIsLoadingMore(false);
     }
@@ -125,28 +144,52 @@ export function HistoryView({ onClose }: HistoryViewProps) {
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2000);
     } catch (error) {
+      const message = getErrorMessage(error);
       console.error("Failed to copy:", error);
+      setActionError("Could not copy transcription.");
+      await reportError("ui", message, "error", {
+        userAction: "Copy transcription history item",
+      }).catch(console.error);
     }
   };
 
   const handleDelete = async (id: number) => {
     try {
+      setDeletingId(id);
+      setActionError(null);
       await deleteTranscriptionItem(id);
       setHistory((prev) => prev.filter((item) => item.id !== id));
       setTotalCount((prev) => prev - 1);
     } catch (error) {
+      const message = getErrorMessage(error);
       console.error("Failed to delete:", error);
+      setActionError("Could not delete transcription.");
+      await reportError("database", message, "error", {
+        userAction: "Delete transcription history item",
+        context: { id: String(id) },
+      }).catch(console.error);
+    } finally {
+      setDeletingId(null);
     }
   };
 
   const handleClearAll = async () => {
     try {
+      setIsClearing(true);
+      setActionError(null);
       await clearTranscriptionHistory();
       setHistory([]);
       setTotalCount(0);
       setHasMore(false);
     } catch (error) {
+      const message = getErrorMessage(error);
       console.error("Failed to clear history:", error);
+      setActionError("Could not clear history.");
+      await reportError("database", message, "error", {
+        userAction: "Clear transcription history",
+      }).catch(console.error);
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -194,9 +237,16 @@ export function HistoryView({ onClose }: HistoryViewProps) {
         {history.length > 0 && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <button className="glass-button px-3 py-1.5 rounded-xl text-xs font-medium text-red-500 hover:text-red-600 flex items-center gap-1.5">
-                <Trash2 className="h-3.5 w-3.5" />
-                Clear All
+              <button
+                className="glass-button px-3 py-1.5 rounded-xl text-xs font-medium text-red-500 hover:text-red-600 flex items-center gap-1.5"
+                disabled={isClearing}
+              >
+                {isClearing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+                {isClearing ? "Clearing..." : "Clear All"}
               </button>
             </AlertDialogTrigger>
             <AlertDialogContent className="glass-card border-0">
@@ -235,19 +285,39 @@ export function HistoryView({ onClose }: HistoryViewProps) {
         <div className="flex-1 flex flex-col items-center justify-center p-6">
           <div className="glass-card p-8 rounded-2xl flex flex-col items-center text-center">
             <div className="p-4 rounded-2xl bg-white/30 dark:bg-white/10 mb-4">
-              <History className="h-10 w-10 text-foreground/60" />
+              {loadError ? (
+                <AlertCircle className="h-10 w-10 text-red-500" />
+              ) : (
+                <History className="h-10 w-10 text-foreground/60" />
+              )}
             </div>
             <h3 className="font-semibold text-foreground mb-1">
-              No transcriptions yet
+              {loadError ? "History unavailable" : "No transcriptions yet"}
             </h3>
             <p className="text-sm text-foreground/60">
-              Your transcription history will appear here
+              {loadError || "Your transcription history will appear here"}
             </p>
+            {loadError && (
+              <button
+                className="glass-button px-4 py-2 rounded-xl text-sm font-medium mt-4 flex items-center gap-2"
+                onClick={() => loadHistory(true)}
+                disabled={isLoading}
+              >
+                <RefreshCcw className="h-4 w-4" />
+                Retry
+              </button>
+            )}
           </div>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
           <div className="p-4 space-y-3">
+            {actionError && (
+              <div className="glass-card p-3 rounded-2xl border-red-500/30 bg-red-500/10 flex items-center gap-2 text-red-600 dark:text-red-400">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span className="text-sm">{actionError}</span>
+              </div>
+            )}
             {history.map((item) => (
               <div key={item.id} className="glass-card p-4 rounded-2xl">
                 <div className="flex items-start justify-between gap-3">
@@ -268,8 +338,13 @@ export function HistoryView({ onClose }: HistoryViewProps) {
                     <button
                       className="glass-icon-button p-2 rounded-lg transition-all hover:scale-105 hover:bg-red-500/10"
                       onClick={() => handleDelete(item.id)}
+                      disabled={deletingId === item.id}
                     >
-                      <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                      {deletingId === item.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-red-500" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                      )}
                     </button>
                   </div>
                 </div>

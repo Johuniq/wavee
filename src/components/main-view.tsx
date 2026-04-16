@@ -1,62 +1,74 @@
 import { Logo } from "@/components/logo";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { isPlatformFree } from "@/lib/license-api";
 import { playFeedbackSound } from "@/lib/preferences-api";
 import { cn } from "@/lib/utils";
 import {
-    addTranscription,
-    hideRecordingOverlay,
-    loadModel,
-    onHotkeyPressed,
-    onHotkeyReleased,
-    onTrayStartRecording,
-    onTrayStopRecording,
-    registerHotkey,
-    showRecordingOverlay,
-    startRecording,
-    stopTranscribeAndInject,
-    unregisterHotkeys,
+  addTranscription,
+  setAudioCaptureConfig,
+  hideRecordingOverlay,
+  loadModel,
+  onHotkeyPressed,
+  onHotkeyReleased,
+  onTrayStartRecording,
+  onTrayStopRecording,
+  registerHotkey,
+  showRecordingOverlay,
+  startRecording,
+  stopTranscribeAndInject,
+  unregisterHotkeys,
 } from "@/lib/voice-api";
 import { useAppStore } from "@/store";
 import type { RecordingStatus } from "@/types";
 import {
-    AlertCircle,
-    Clock,
-    FileAudio,
-    Heart,
-    History,
-    Key,
-    Loader2,
-    Mic,
-    Settings,
-    ShieldCheck,
+  AlertCircle,
+  Clock,
+  Cpu,
+  FileAudio,
+  Heart,
+  History,
+  Key,
+  Loader2,
+  Menu,
+  Mic,
+  Settings,
+  ShieldCheck,
 } from "lucide-react";
 import {
-    lazy,
-    Suspense,
-    useCallback,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
 
 // Lazy load heavy views to reduce initial bundle and memory
 const HistoryView = lazy(() =>
-  import("@/components/history-view").then((m) => ({ default: m.HistoryView }))
+  import("@/components/history-view").then((m) => ({ default: m.HistoryView })),
 );
 const LicenseView = lazy(() =>
-  import("@/components/license-view").then((m) => ({ default: m.LicenseView }))
+  import("@/components/license-view").then((m) => ({ default: m.LicenseView })),
+);
+const ModelsView = lazy(() =>
+  import("@/components/models-view").then((m) => ({ default: m.ModelsView })),
 );
 const SettingsView = lazy(() =>
   import("@/components/settings-view").then((m) => ({
     default: m.SettingsView,
-  }))
+  })),
 );
 const TranscribeView = lazy(() =>
   import("@/components/transcribe-view").then((m) => ({
     default: m.TranscribeView,
-  }))
+  })),
 );
 
 // Global flags to prevent duplicate listeners and calls
@@ -85,6 +97,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [isLoadingModel, setIsLoadingModel] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showModels, setShowModels] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showTranscribe, setShowTranscribe] = useState(false);
   const [showLicense, setShowLicense] = useState(false);
@@ -113,6 +126,10 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
     settingsRef.current = settings;
   }, [settings]);
 
+  useEffect(() => {
+    setIsModelLoaded(false);
+  }, [selectedModel?.id, selectedModel?.downloaded, settings.language]);
+
   // Check if user is on Linux (free tier)
   useEffect(() => {
     isPlatformFree().then(setIsLinuxFree).catch(console.error);
@@ -123,10 +140,21 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
       ? settings.pushToTalkKey
       : settings.toggleKey;
 
+  const getErrorMessage = (error: unknown) => {
+    if (error instanceof Error) return error.message;
+    if (typeof error === "string") return error;
+    return "Something went wrong. Please try again.";
+  };
+
   // Load the model on mount
   useEffect(() => {
-    if (selectedModel && !isModelLoaded && !isLoadingModel) {
+    if (
+      selectedModel?.downloaded &&
+      !isModelLoaded &&
+      !isLoadingModel
+    ) {
       setIsLoadingModel(true);
+      setErrorMessage(null);
       loadModel(selectedModel.id, settings.language)
         .then(() => {
           setIsModelLoaded(true);
@@ -135,8 +163,15 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
         })
         .catch((error) => {
           console.error("Failed to load model:", error);
+          const message = getErrorMessage(error);
           setIsLoadingModel(false);
-          setErrorMessage("Failed to load AI model");
+          setIsModelLoaded(false);
+          setErrorMessage(
+            message.toLowerCase().includes("not downloaded") ||
+              message.toLowerCase().includes("not found")
+              ? "Model files are missing. Download the model again."
+              : "Failed to load AI model"
+          );
         });
     }
   }, [
@@ -165,6 +200,9 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
 
     try {
       setErrorMessage(null);
+
+      // Main hotkey dictation should always use microphone capture.
+      await setAudioCaptureConfig("mic", null, null);
 
       // Play audio feedback if enabled
       if (settingsRef.current.playAudioFeedback) {
@@ -214,28 +252,28 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
       const text = await stopTranscribeAndInject(
         currentSettings.postProcessingEnabled,
         currentSettings.clipboardMode,
-        selectedModel?.id
+        selectedModel?.id,
       );
       const durationMs = Date.now() - startTime;
-      
+
       // Update UI immediately
       recordingStatusRef.current = "idle";
       setRecordingStatus("idle");
-      
+
       if (text) {
         setLastTranscription(text);
         const actionText = currentSettings.clipboardMode
           ? "Copied to clipboard"
           : "Transcribed and injected";
         toastSuccess(actionText);
-        
+
         // Save to history in background (non-blocking)
         // Don't await - let it happen asynchronously so it doesn't slow down the response
         addTranscription(
           text,
           selectedModel?.id || "base",
           currentSettings.language,
-          durationMs
+          durationMs,
         )
           .then((insertedId) => {
             console.log("Saved transcription id:", insertedId);
@@ -428,7 +466,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
         label: "Error",
       },
     }),
-    []
+    [],
   );
 
   const config = statusConfig[recordingStatus];
@@ -444,7 +482,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
         </div>
       </div>
     ),
-    []
+    [],
   );
 
   // Show settings view
@@ -452,6 +490,15 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
     return (
       <Suspense fallback={ViewLoadingFallback}>
         <SettingsView onClose={() => setShowSettings(false)} />
+      </Suspense>
+    );
+  }
+
+  // Show models view
+  if (showModels) {
+    return (
+      <Suspense fallback={ViewLoadingFallback}>
+        <ModelsView onClose={() => setShowModels(false)} />
       </Suspense>
     );
   }
@@ -484,7 +531,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
   }
 
   // Show loading state while model is loading
-  if (isLoadingModel) {
+  if (selectedModel?.downloaded && isLoadingModel) {
     return (
       <div className="relative flex flex-col h-full items-center justify-center overflow-hidden">
         {/* Background mesh gradient */}
@@ -520,38 +567,58 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
       {/* Header */}
       <div className="relative z-10 flex items-center justify-between px-6 pt-6">
         <Logo size="sm" showText={false} />
-        <div className="flex items-center gap-2">
-          <button
-            className="glass-button h-9 w-9 flex items-center justify-center"
-            onClick={() => setShowTranscribe(true)}
-            title="Transcribe Audio File"
-          >
-            <FileAudio className="h-4 w-4 text-foreground/70" />
-          </button>
-          <button
-            className="glass-button h-9 w-9 flex items-center justify-center"
-            onClick={() => setShowHistory(true)}
-            title="History"
-          >
-            <History className="h-4 w-4 text-foreground/70" />
-          </button>
-          {!isLinuxFree && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <button
-              className="glass-button h-9 w-9 flex items-center justify-center"
-              onClick={() => setShowLicense(true)}
-              title="License"
+              className="glass-button h-9 px-3 flex items-center gap-2 text-xs font-medium"
+              title="Open menu"
             >
-              <Key className="h-4 w-4 text-foreground/70" />
+              <Menu className="h-4 w-4 text-foreground/70" />
             </button>
-          )}
-          <button
-            className="glass-button h-9 w-9 flex items-center justify-center"
-            onClick={() => setShowSettings(true)}
-            title="Settings"
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="glass-card border-0 min-w-52 p-1.5"
           >
-            <Settings className="h-4 w-4 text-foreground/70" />
-          </button>
-        </div>
+            <DropdownMenuItem
+              className="cursor-pointer rounded-lg"
+              onSelect={() => setShowTranscribe(true)}
+            >
+              <FileAudio className="h-4 w-4 text-foreground/70" />
+              Transcribe File
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer rounded-lg"
+              onSelect={() => setShowHistory(true)}
+            >
+              <History className="h-4 w-4 text-foreground/70" />
+              History
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer rounded-lg"
+              onSelect={() => setShowModels(true)}
+            >
+              <Cpu className="h-4 w-4 text-foreground/70" />
+              Models
+            </DropdownMenuItem>
+            {!isLinuxFree && (
+              <DropdownMenuItem
+                className="cursor-pointer rounded-lg"
+                onSelect={() => setShowLicense(true)}
+              >
+                <Key className="h-4 w-4 text-foreground/70" />
+                License
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem
+              className="cursor-pointer rounded-lg"
+              onSelect={() => setShowSettings(true)}
+            >
+              <Settings className="h-4 w-4 text-foreground/70" />
+              Settings
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Linux Free Tier Banner */}
@@ -570,84 +637,124 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
       )}
 
       {/* Trial banner */}
-      {!isLinuxFree && trialDaysRemaining !== undefined && trialDaysRemaining > 0 && (
-        <div className="relative z-10 mx-6 mt-4">
-          <div className="glass-trial-banner px-4 py-2.5 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                Trial: {trialDaysRemaining} day
-                {trialDaysRemaining !== 1 ? "s" : ""} remaining
-              </span>
+      {!isLinuxFree &&
+        trialDaysRemaining !== undefined &&
+        trialDaysRemaining > 0 && (
+          <div className="relative z-10 mx-6 mt-4">
+            <div className="glass-trial-banner px-4 py-2.5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                  Trial: {trialDaysRemaining} day
+                  {trialDaysRemaining !== 1 ? "s" : ""} remaining
+                </span>
+              </div>
+              <button
+                className="glass-button px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
+                onClick={() => setShowLicense(true)}
+              >
+                Upgrade
+              </button>
             </div>
-            <button
-              className="glass-button px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
-              onClick={() => setShowLicense(true)}
-            >
-              Upgrade
-            </button>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Main content */}
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6">
-        {/* Recording orb */}
-        <button
-          onClick={toggleRecording}
-          disabled={!isModelLoaded || recordingStatus === "processing"}
-          className={cn(
-            "glass-orb h-32 w-32 flex items-center justify-center transition-all duration-300",
-            recordingStatus === "recording" && "glass-orb-recording",
-            recordingStatus === "processing" && "glass-orb-processing",
-            !isModelLoaded && "opacity-50 cursor-not-allowed"
-          )}
-        >
-          {recordingStatus === "processing" ? (
-            <Loader2 className="h-12 w-12 animate-spin text-white" />
-          ) : (
-            <Mic
+        {!selectedModel || !selectedModel.downloaded ? (
+          <div className="glass-card p-6 rounded-2xl flex flex-col items-center text-center max-w-xs">
+            <div className="p-4 rounded-2xl bg-white/30 dark:bg-white/10 mb-4">
+              <Cpu className="h-10 w-10 text-foreground/60" />
+            </div>
+            <h2 className="font-semibold text-foreground">
+              {selectedModel ? "Download the active model" : "Choose a model"}
+            </h2>
+            <p className="text-sm text-foreground/60 mt-1">
+              {selectedModel
+                ? `${selectedModel.name} is selected, but its local files are not installed.`
+                : "Download and activate a transcription model before recording."}
+            </p>
+            <button
+              className="glass-button px-4 py-2 rounded-xl text-sm font-medium mt-4"
+              onClick={() => setShowModels(true)}
+            >
+              Open Models
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Recording orb */}
+            <button
+              onClick={toggleRecording}
+              disabled={!isModelLoaded || recordingStatus === "processing"}
               className={cn(
-                "h-12 w-12 transition-colors",
-                recordingStatus === "recording"
-                  ? "text-white"
-                  : "text-foreground/60"
+                "glass-orb h-32 w-32 flex items-center justify-center transition-all duration-300",
+                recordingStatus === "recording" && "glass-orb-recording",
+                recordingStatus === "processing" && "glass-orb-processing",
+                !isModelLoaded && "opacity-50 cursor-not-allowed",
               )}
-            />
-          )}
-        </button>
+            >
+              {recordingStatus === "processing" ? (
+                <Loader2 className="h-12 w-12 animate-spin text-white" />
+              ) : (
+                <Mic
+                  className={cn(
+                    "h-12 w-12 transition-colors",
+                    recordingStatus === "recording"
+                      ? "text-white"
+                      : "text-foreground/60",
+                  )}
+                />
+              )}
+            </button>
 
-        {/* Status label */}
-        <p
-          className={cn(
-            "mt-5 text-sm font-medium tracking-wide",
-            recordingStatus === "recording"
-              ? "text-red-500 dark:text-red-400"
-              : recordingStatus === "processing"
-              ? "text-blue-500 dark:text-blue-400"
-              : "text-foreground/60"
-          )}
-        >
-          {config.label}
-        </p>
+            {/* Status label */}
+            <p
+              className={cn(
+                "mt-5 text-sm font-medium tracking-wide",
+                recordingStatus === "recording"
+                  ? "text-red-500 dark:text-red-400"
+                  : recordingStatus === "processing"
+                    ? "text-blue-500 dark:text-blue-400"
+                    : "text-foreground/60",
+              )}
+            >
+              {config.label}
+            </p>
+          </>
+        )}
 
         {/* Error message */}
-        {errorMessage && (
+        {errorMessage && selectedModel?.downloaded && (
           <div className="mt-4 glass-card px-4 py-2.5 flex items-center gap-2.5 border-red-200 dark:border-red-800/50">
-            <AlertCircle className="h-4 w-4 text-red-500" />
-            <p className="text-xs text-red-600 dark:text-red-400">
-              {errorMessage}
-            </p>
+            <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-red-600 dark:text-red-400">
+                {errorMessage}
+              </p>
+            </div>
+            {errorMessage.toLowerCase().includes("model") && (
+              <button
+                className="glass-button px-2 py-1 rounded-lg text-xs font-medium"
+                onClick={() => setShowModels(true)}
+              >
+                Models
+              </button>
+            )}
           </div>
         )}
 
         {/* Hotkey hint */}
-        <p className="mt-4 text-xs text-foreground/60 flex items-center gap-2">
-          Press
-          <span className="glass-kbd">{currentHotkey}</span>
-          to{" "}
-          {settings.hotkeyMode === "push-to-talk" ? "hold and speak" : "toggle"}
-        </p>
+        {selectedModel?.downloaded && (
+          <p className="mt-4 text-xs text-foreground/60 flex items-center gap-2">
+            Press
+            <span className="glass-kbd">{currentHotkey}</span>
+            to{" "}
+            {settings.hotkeyMode === "push-to-talk"
+              ? "hold and speak"
+              : "toggle"}
+          </p>
+        )}
 
         {/* Last transcription */}
         {lastTranscription && (
@@ -670,11 +777,11 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
             <span
               className={cn(
                 "status-dot",
-                isModelLoaded ? "status-dot-active" : "status-dot-warning"
+                isModelLoaded ? "status-dot-active" : "status-dot-warning",
               )}
             />
             <span className="text-foreground/70 font-medium">
-              {selectedModel?.name || "Base"}
+              {selectedModel?.name || "No model"}
             </span>
           </div>
           <div className="glass-badge text-foreground/60">

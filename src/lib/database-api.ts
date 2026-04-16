@@ -171,7 +171,7 @@ export function dbSettingsToFrontend(db: DbAppSettings): AppSettings {
     pushToTalkKey: db.push_to_talk_key,
     toggleKey: db.toggle_key,
     hotkeyMode: db.hotkey_mode as "push-to-talk" | "toggle",
-    language: db.language as "en" | "bn",
+    language: db.language,
     selectedModelId: db.selected_model_id,
     showRecordingIndicator: db.show_recording_indicator,
     showRecordingOverlay: db.show_recording_overlay ?? true,
@@ -216,7 +216,7 @@ export function dbModelToFrontend(db: DbWhisperModel): WhisperModel {
     description: db.description,
     languages,
     downloaded: db.downloaded,
-    recommended: db.id === "base",
+    recommended: ["base", "distil-medium.en", "parakeet-v3"].includes(db.id),
   };
 }
 

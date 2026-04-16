@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { reportError } from "@/lib/voice-api";
 import {
     activateLicense,
     deactivateLicense,
@@ -34,6 +35,7 @@ import {
     Heart,
     Key,
     Loader2,
+    RefreshCcw,
     RefreshCw,
     Shield,
     ShieldCheck,
@@ -58,6 +60,7 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
   const [licenseKey, setLicenseKey] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const { success: toastSuccess, error: toastError } = useToast();
 
@@ -121,6 +124,7 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
   const loadLicense = async () => {
     setIsLoading(true);
     setError(null);
+    setLoadError(null);
     try {
       // Check if Linux free tier
       const deviceInfo = await getDeviceInfo();
@@ -136,9 +140,12 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
         onLicenseChange?.(data.is_activated && data.status === "active");
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to load license";
+      const msg = extractErrorMessage(err) || "Failed to load license";
       toastError("Failed to load license", msg);
-      setError("Failed to load license information");
+      setLoadError(msg);
+      await reportError("license", msg, "error", {
+        userAction: "Load license information",
+      }).catch(console.error);
     } finally {
       setIsLoading(false);
     }
@@ -165,6 +172,9 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
       const msg = extractErrorMessage(err) || "Failed to activate license";
       toastError("Activation failed", msg);
       setError(msg);
+      await reportError("license", msg, "error", {
+        userAction: "Activate license",
+      }).catch(console.error);
     } finally {
       setIsActivating(false);
     }
@@ -189,6 +199,9 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
       console.error("Failed to validate license:", err);
       toastError("Validation failed", msg);
       setError(msg);
+      await reportError("license", msg, "error", {
+        userAction: "Validate license",
+      }).catch(console.error);
     } finally {
       setIsValidating(false);
     }
@@ -217,6 +230,9 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
       console.error("Failed to deactivate license:", err);
       toastError("Deactivate failed", msg);
       setError(msg);
+      await reportError("license", msg, "error", {
+        userAction: "Deactivate license",
+      }).catch(console.error);
     } finally {
       setIsDeactivating(false);
     }
@@ -255,6 +271,26 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
               <p className="text-sm text-foreground/60">
                 Loading license info...
               </p>
+            </div>
+          </div>
+        ) : loadError ? (
+          <div className="flex-1 flex items-center justify-center py-12">
+            <div className="glass-card p-8 rounded-2xl flex flex-col items-center text-center">
+              <div className="p-4 rounded-2xl bg-white/30 dark:bg-white/10 mb-4">
+                <AlertCircle className="h-10 w-10 text-red-500" />
+              </div>
+              <h3 className="font-semibold text-foreground mb-1">
+                License unavailable
+              </h3>
+              <p className="text-sm text-foreground/60">{loadError}</p>
+              <button
+                className="glass-button px-4 py-2 rounded-xl text-sm font-medium mt-4 flex items-center gap-2"
+                onClick={loadLicense}
+                disabled={isLoading}
+              >
+                <RefreshCcw className="h-4 w-4" />
+                Retry
+              </button>
             </div>
           </div>
         ) : (
@@ -473,7 +509,12 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
                   <button
                     className="w-full py-2.5 rounded-xl flex items-center glass-button justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={handleActivate}
-                    disabled={isActivating || !licenseKey.trim()}
+                    disabled={
+                      isActivating ||
+                      isValidating ||
+                      isDeactivating ||
+                      !licenseKey.trim()
+                    }
                   >
                     {isActivating ? (
                       <>
@@ -508,6 +549,7 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
                     className="glass-button w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium"
                     onClick={handleValidate}
                     disabled={isValidating}
+                    title={isDeactivating ? "Wait for deactivation to finish" : undefined}
                   >
                     {isValidating ? (
                       <>
@@ -556,6 +598,7 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
                         </AlertDialogCancel>
                         <AlertDialogAction
                           onClick={handleDeactivate}
+                          disabled={isDeactivating}
                           className="bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600"
                         >
                           Deactivate

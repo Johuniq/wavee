@@ -38,8 +38,7 @@ function AppContent() {
         setAccessState(status);
       } catch (err) {
         console.error("Failed to check app access:", err);
-        // Default to allowing usage if check fails (offline scenario)
-        setAccessState({ canUse: true, reason: "trial", daysRemaining: 7 });
+        setAccessState({ canUse: false, reason: "no_license" });
       } finally {
         setCheckingAccess(false);
       }
@@ -53,8 +52,7 @@ function AppContent() {
       const status = await canUseApp();
       setAccessState(status);
     } catch {
-      // Refresh access state
-      setAccessState({ canUse: true, reason: "licensed" });
+      setAccessState({ canUse: false, reason: "no_license" });
     }
   };
 
@@ -91,12 +89,8 @@ function AppContent() {
     );
   }
 
-  // Show trial expired view if trial has expired
-  if (
-    accessState &&
-    !accessState.canUse &&
-    accessState.reason === "trial_expired"
-  ) {
+  // Block app usage whenever backend access verification denies access.
+  if (accessState && !accessState.canUse) {
     return (
       <div className="h-full w-full max-w-md mx-auto">
         <TrialExpiredView onLicenseActivated={handleLicenseActivated} />

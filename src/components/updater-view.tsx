@@ -1,4 +1,5 @@
 import { useToast } from "@/hooks/use-toast";
+import { reportError } from "@/lib/voice-api";
 import {
   checkForUpdates,
   downloadAndInstallUpdate,
@@ -23,23 +24,47 @@ export function UpdaterView() {
   const [status, setStatus] = useState<UpdateStatus>({ status: "idle" });
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
   const [currentVersion, setCurrentVersion] = useState<string>("");
+  const [versionError, setVersionError] = useState<string | null>(null);
   const { success: toastSuccess, error: toastError } = useToast();
 
   useEffect(() => {
-    getCurrentVersion().then(setCurrentVersion);
+    getCurrentVersion()
+      .then(setCurrentVersion)
+      .catch((error) => {
+        const message =
+          error instanceof Error ? error.message : "Could not read app version";
+        setVersionError(message);
+        reportError("system", message, "warning", {
+          userAction: "Read app version",
+        }).catch(console.error);
+      });
   }, []);
 
   const handleCheckForUpdates = useCallback(async () => {
     setStatus({ status: "checking" });
-    const result = await checkForUpdates();
-    setStatus(result);
+    setProgress(null);
+    try {
+      const result = await checkForUpdates();
+      setStatus(result);
 
-    if (result.status === "available") {
-      toastSuccess(`Update ${result.info.version} available!`);
-    } else if (result.status === "not-available") {
-      toastSuccess("You're running the latest version");
-    } else if (result.status === "error") {
-      toastError(result.message);
+      if (result.status === "available") {
+        toastSuccess(`Update ${result.info.version} available!`);
+      } else if (result.status === "not-available") {
+        toastSuccess("You're running the latest version");
+      } else if (result.status === "error") {
+        toastError(result.message);
+        await reportError("network", result.message, "error", {
+          userAction: "Check for updates",
+        }).catch(console.error);
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to check for updates";
+      setStatus({ status: "error", message });
+      toastError(message);
+      await reportError("network", message, "error", {
+        userAction: "Check for updates",
+      }).catch(console.error);
     }
   }, [toastSuccess, toastError]);
 
@@ -50,17 +75,30 @@ export function UpdaterView() {
     });
     setProgress({ downloaded: 0, total: null });
 
-    const result = await downloadAndInstallUpdate((p) => {
-      setProgress(p);
-      setStatus({ status: "downloading", progress: p });
-    });
+    try {
+      const result = await downloadAndInstallUpdate((p) => {
+        setProgress(p);
+        setStatus({ status: "downloading", progress: p });
+      });
 
-    setStatus(result);
+      setStatus(result);
 
-    if (result.status === "ready") {
-      toastSuccess("Update downloaded! Click 'Restart' to apply.");
-    } else if (result.status === "error") {
-      toastError(result.message);
+      if (result.status === "ready") {
+        toastSuccess("Update downloaded! Click 'Restart' to apply.");
+      } else if (result.status === "error") {
+        toastError(result.message);
+        await reportError("network", result.message, "error", {
+          userAction: "Download and install update",
+        }).catch(console.error);
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to download update";
+      setStatus({ status: "error", message });
+      toastError(message);
+      await reportError("network", message, "error", {
+        userAction: "Download and install update",
+      }).catch(console.error);
     }
   }, [toastSuccess, toastError]);
 
@@ -68,7 +106,12 @@ export function UpdaterView() {
     try {
       await relaunchApp();
     } catch (error) {
-      toastError("Failed to restart application");
+      const message =
+        error instanceof Error ? error.message : "Failed to restart application";
+      toastError(message);
+      await reportError("system", message, "error", {
+        userAction: "Restart to apply update",
+      }).catch(console.error);
     }
   }, [toastError]);
 
@@ -126,7 +169,7 @@ export function UpdaterView() {
           </div>
         </div>
         <span className="px-2 py-1 rounded-lg bg-white/50 dark:bg-white/10 border border-white/30 dark:border-white/10 font-mono text-xs text-foreground/60">
-          v{currentVersion}
+          {currentVersion ? `v${currentVersion}` : versionError ? "v?" : "..."}
         </span>
       </div>
 
@@ -143,6 +186,16 @@ export function UpdaterView() {
               }}
             />
           </div>
+          <p className="text-xs text-foreground/60 mt-2">
+            Keep WaveType open while the update downloads.
+          </p>
+        </div>
+      )}
+
+      {status.status === "error" && (
+        <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3 mb-3 flex items-start gap-2 text-red-600 dark:text-red-400">
+          <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <p className="text-xs">{status.message}</p>
         </div>
       )}
 

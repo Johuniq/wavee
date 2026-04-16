@@ -17,26 +17,19 @@ import {
 } from "@/lib/data-management";
 import { setAutoStart } from "@/lib/preferences-api";
 import { cn } from "@/lib/utils";
+import { reportError } from "@/lib/voice-api";
+import { useAppStore } from "@/store";
 import {
-    deleteModel,
-    downloadModel,
-    onDownloadProgress,
-} from "@/lib/voice-api";
-import { useAppStore, useAvailableModels } from "@/store";
-import type { WhisperModel } from "@/types";
-import {
+    AlertCircle,
     ArrowLeft,
-    Check,
     ChevronRight,
-    Cpu,
     Database,
-    Download,
     FileDown,
     Keyboard,
     Loader2,
+    RefreshCcw,
     RotateCcw,
     Sparkles,
-    Trash2,
     Volume2,
     Waves,
 } from "lucide-react";
@@ -63,91 +56,49 @@ export function SettingsView({ onClose }: SettingsViewProps) {
     settings,
     updateSettings,
     resetSettings,
-    selectedModel,
-    setSelectedModel,
-    markModelDownloaded,
   } = useAppStore();
-  const availableModels = useAvailableModels();
   const { success: toastSuccess, error: toastError } = useToast();
 
-  const [downloadingModelId, setDownloadingModelId] = useState<string | null>(
-    null
-  );
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
   const [storageStats, setStorageStats] = useState<{
     historyCount: number;
   } | null>(null);
   const [recordingPushToTalk, setRecordingPushToTalk] = useState(false);
   const [recordingToggle, setRecordingToggle] = useState(false);
+
+  const getErrorMessage = (error: unknown) =>
+    error instanceof Error ? error.message : String(error || "Something went wrong");
+
   // Load storage stats
-  useEffect(() => {
-    getStorageStats().then(setStorageStats).catch(console.error);
-  }, []);
-
-  // Listen for download progress
-  useEffect(() => {
-    const unsubscribe = onDownloadProgress((progress) => {
-      setDownloadProgress(progress.percentage);
-    });
-
-    return () => {
-      unsubscribe.then((fn) => fn());
-    };
-  }, []);
-
-  const handleDownloadModel = async (model: WhisperModel) => {
+  const loadStorageStats = async () => {
     try {
-      setDownloadingModelId(model.id);
-      setDownloadProgress(0);
-
-      await downloadModel(model.id);
-      markModelDownloaded(model.id);
-      toastSuccess("Model downloaded", `${model.name} is ready to use`);
-
-      setDownloadingModelId(null);
-    } catch (err) {
-      console.error("Download failed:", err);
-      toastError("Download failed", `Failed to download ${model.name} model`);
-      setDownloadingModelId(null);
+      setIsLoadingStats(true);
+      setStatsError(null);
+      const stats = await getStorageStats();
+      setStorageStats(stats);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setStatsError(message);
+      await reportError("database", message, "warning", {
+        userAction: "Load storage stats",
+      }).catch(console.error);
+    } finally {
+      setIsLoadingStats(false);
     }
   };
 
-  const handleDeleteModel = async (model: WhisperModel) => {
-    if (!model.downloaded) return;
-
-    try {
-      setDeletingModelId(model.id);
-
-      await deleteModel(model.id);
-
-      // If deleting selected model, clear selection
-      if (selectedModel?.id === model.id) {
-        setSelectedModel(null);
-      }
-
-      toastSuccess("Model deleted", `${model.name} has been removed`);
-      // Reload to get updated model state
-      window.location.reload();
-
-      setDeletingModelId(null);
-    } catch (err) {
-      console.error("Delete failed:", err);
-      toastError("Delete failed", `Failed to delete ${model.name} model`);
-      setDeletingModelId(null);
-    }
-  };
-
-  const handleSelectModel = (model: WhisperModel) => {
-    if (model.downloaded) {
-      setSelectedModel(model);
-    }
-  };
+  useEffect(() => {
+    loadStorageStats();
+  }, []);
 
   const handleExport = async () => {
     try {
       setIsExporting(true);
+      setExportError(null);
       const data = await exportAppData();
       const filename = `WaveType-backup-${new Date()
         .toISOString()
@@ -157,8 +108,13 @@ export function SettingsView({ onClose }: SettingsViewProps) {
         toastSuccess("Export complete", "Data exported successfully");
       }
     } catch (err) {
+      const message = getErrorMessage(err);
       console.error("Export failed:", err);
+      setExportError(message);
       toastError("Export failed", "Failed to export data");
+      await reportError("filesystem", message, "error", {
+        userAction: "Export app data",
+      }).catch(console.error);
     } finally {
       setIsExporting(false);
     }
@@ -204,9 +160,11 @@ export function SettingsView({ onClose }: SettingsViewProps) {
 
       if (type === "pushToTalk") {
         updateSettings({ pushToTalkKey: hotkey });
+        setSettingsError(null);
         setRecordingPushToTalk(false);
       } else {
         updateSettings({ toggleKey: hotkey });
+        setSettingsError(null);
         setRecordingToggle(false);
       }
 
@@ -240,6 +198,12 @@ export function SettingsView({ onClose }: SettingsViewProps) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {settingsError && (
+          <div className="glass-card p-3 rounded-2xl border-red-500/30 bg-red-500/10 flex items-center gap-2 text-red-600 dark:text-red-400">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <span className="text-sm">{settingsError}</span>
+          </div>
+        )}
         {/* Hotkey Settings */}
         <div className="glass-card p-4 rounded-2xl">
           <div className="flex items-center gap-3 mb-4">
@@ -333,130 +297,6 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Model Management */}
-        <div className="glass-card p-4 rounded-2xl">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
-              <Cpu className="h-4 w-4 text-foreground/60" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-sm text-foreground">
-                Transcription Model
-              </h2>
-              <p className="text-xs text-foreground/60">
-                Select and manage transcription quality
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {availableModels.map((model) => (
-              <div
-                key={model.id}
-                className={cn(
-                  "p-3 rounded-xl border transition-all cursor-pointer",
-                  "bg-white/30 dark:bg-white/5 border-white/30 dark:border-white/10",
-                  "hover:bg-white/50 dark:hover:bg-white/10",
-                  selectedModel?.id === model.id &&
-                    "ring-2 ring-foreground/30 border-foreground/20 bg-foreground/5"
-                )}
-                onClick={() => model.downloaded && handleSelectModel(model)}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm text-foreground">
-                        {model.name}
-                      </span>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-white/50 dark:bg-white/10 text-foreground/60">
-                        {model.size}
-                      </span>
-                      {model.downloaded && (
-                        <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                          <Check className="h-3 w-3" />
-                          Ready
-                        </span>
-                      )}
-                      {selectedModel?.id === model.id && (
-                        <span className="glass-status text-xs bg-foreground/90 text-white px-2 py-0.5 rounded-full font-medium">
-                          Active
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-foreground/60 mt-1">
-                      {model.description}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-1 ml-2">
-                    {model.downloaded ? (
-                      <>
-                        {selectedModel?.id !== model.id && (
-                          <button
-                            className="glass-button px-2 py-1 text-xs font-medium rounded-lg"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSelectModel(model);
-                            }}
-                          >
-                            Use
-                          </button>
-                        )}
-                        <button
-                          className="glass-icon-button p-1.5 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteModel(model);
-                          }}
-                          disabled={deletingModelId === model.id}
-                        >
-                          {deletingModelId === model.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-3.5 w-3.5" />
-                          )}
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        className="glass-button px-2 py-1 text-xs font-medium rounded-lg flex items-center gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDownloadModel(model);
-                        }}
-                        disabled={downloadingModelId !== null}
-                      >
-                        {downloadingModelId === model.id ? (
-                          <>
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            {Math.floor(downloadProgress)}%
-                          </>
-                        ) : (
-                          <>
-                            <Download className="h-3 w-3" />
-                            Download
-                          </>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {downloadingModelId === model.id && (
-                  <div className="mt-2">
-                    <div className="h-1.5 bg-white/30 dark:bg-white/10 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-foreground/80 transition-all duration-300 rounded-full"
-                        style={{ width: `${downloadProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
           </div>
         </div>
 
@@ -565,14 +405,20 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                 checked={settings.autoStartOnBoot}
                 onCheckedChange={async (checked) => {
                   try {
+                    setSettingsError(null);
                     await setAutoStart(checked);
                     updateSettings({ autoStartOnBoot: checked });
                   } catch (err) {
+                    const message = getErrorMessage(err);
                     console.error("Failed to set autostart:", err);
+                    setSettingsError("Could not change Start on Boot.");
                     toastError(
                       "Settings error",
                       "Failed to change autostart setting"
                     );
+                    await reportError("configuration", message, "error", {
+                      userAction: "Change autostart setting",
+                    }).catch(console.error);
                   }
                 }}
               />
@@ -677,7 +523,28 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             </div>
           </div>
 
-          {storageStats && (
+          {isLoadingStats ? (
+            <div className="p-3 rounded-xl bg-white/30 dark:bg-white/10 border border-white/30 dark:border-white/10 mb-3 flex items-center gap-2 text-foreground/60">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Loading storage stats...</span>
+            </div>
+          ) : statsError ? (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 mb-3">
+              <div className="flex items-start gap-2 text-red-600 dark:text-red-400">
+                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm">Could not load storage stats.</p>
+                  <button
+                    className="glass-button px-3 py-1.5 rounded-xl text-xs font-medium mt-2 flex items-center gap-1.5"
+                    onClick={loadStorageStats}
+                  >
+                    <RefreshCcw className="h-3.5 w-3.5" />
+                    Retry
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : storageStats && (
             <div className="p-3 rounded-xl bg-white/30 dark:bg-white/10 border border-white/30 dark:border-white/10 mb-3">
               <p className="text-sm">
                 <span className="font-semibold text-foreground">
@@ -707,6 +574,12 @@ export function SettingsView({ onClose }: SettingsViewProps) {
           <p className="text-xs text-foreground/60 mt-2 text-center">
             Export your settings and history to a JSON file
           </p>
+          {exportError && (
+            <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <span>{exportError}</span>
+            </div>
+          )}
         </div>
 
         {/* Software Updates */}
@@ -750,9 +623,15 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                   onClick={() => {
                     try {
                       resetSettings();
+                      setSettingsError(null);
                       toastSuccess?.("Settings reset to defaults");
                     } catch (e) {
+                      const message = getErrorMessage(e);
+                      setSettingsError("Could not reset settings.");
                       toastError?.("Failed to reset settings");
+                      reportError("configuration", message, "error", {
+                        userAction: "Reset settings",
+                      }).catch(console.error);
                     }
                   }}
                   className="bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600"

@@ -27,10 +27,10 @@ impl TextInjector {
             release_keys_when_dropped: true,
             ..Settings::default()
         };
-        
-        let enigo = Enigo::new(&settings)
-            .map_err(|e| format!("Failed to initialize Enigo: {}", e))?;
-        
+
+        let enigo =
+            Enigo::new(&settings).map_err(|e| format!("Failed to initialize Enigo: {}", e))?;
+
         // Initialize clipboard - critical for fast text injection
         let clipboard = arboard::Clipboard::new().ok();
 
@@ -48,25 +48,25 @@ impl TextInjector {
         if let Some(ref mut cb) = self.clipboard {
             // Save current clipboard content to restore later (optional, for user convenience)
             let _previous = cb.get_text().ok();
-            
+
             if cb.set_text(text).is_ok() {
                 // Small delay to ensure clipboard is ready (platform-specific)
                 #[cfg(target_os = "linux")]
                 std::thread::sleep(Duration::from_micros(500)); // X11/Wayland sync
-                
+
                 #[cfg(target_os = "windows")]
                 std::thread::sleep(Duration::from_micros(100)); // Windows is faster
-                
+
                 // Execute Paste shortcut
                 self.execute_paste()?;
-                
+
                 // Optional: Restore previous clipboard after a brief delay
                 // This is commented out as it may interfere with user workflow
                 // if let Some(prev) = _previous {
                 //     std::thread::sleep(Duration::from_millis(50));
                 //     let _ = cb.set_text(&prev);
                 // }
-                
+
                 return Ok(());
             }
         }
@@ -84,30 +84,48 @@ impl TextInjector {
         #[cfg(target_os = "macos")]
         {
             // macOS: Cmd+V
-            self.enigo.key(Key::Meta, Direction::Press).map_err(|e| e.to_string())?;
-            self.enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| e.to_string())?;
-            self.enigo.key(Key::Meta, Direction::Release).map_err(|e| e.to_string())?;
+            self.enigo
+                .key(Key::Meta, Direction::Press)
+                .map_err(|e| e.to_string())?;
+            self.enigo
+                .key(Key::Unicode('v'), Direction::Click)
+                .map_err(|e| e.to_string())?;
+            self.enigo
+                .key(Key::Meta, Direction::Release)
+                .map_err(|e| e.to_string())?;
         }
-        
+
         #[cfg(target_os = "windows")]
         {
             // Windows: Ctrl+V with minimal delay
-            self.enigo.key(Key::Control, Direction::Press).map_err(|e| e.to_string())?;
-            self.enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| e.to_string())?;
-            self.enigo.key(Key::Control, Direction::Release).map_err(|e| e.to_string())?;
+            self.enigo
+                .key(Key::Control, Direction::Press)
+                .map_err(|e| e.to_string())?;
+            self.enigo
+                .key(Key::Unicode('v'), Direction::Click)
+                .map_err(|e| e.to_string())?;
+            self.enigo
+                .key(Key::Control, Direction::Release)
+                .map_err(|e| e.to_string())?;
         }
-        
+
         #[cfg(target_os = "linux")]
         {
             // Linux: Ctrl+V - works on X11 and most Wayland compositors
-            self.enigo.key(Key::Control, Direction::Press).map_err(|e| e.to_string())?;
-            self.enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| e.to_string())?;
-            self.enigo.key(Key::Control, Direction::Release).map_err(|e| e.to_string())?;
-            
+            self.enigo
+                .key(Key::Control, Direction::Press)
+                .map_err(|e| e.to_string())?;
+            self.enigo
+                .key(Key::Unicode('v'), Direction::Click)
+                .map_err(|e| e.to_string())?;
+            self.enigo
+                .key(Key::Control, Direction::Release)
+                .map_err(|e| e.to_string())?;
+
             // Additional sync delay for X11/Wayland
             std::thread::sleep(Duration::from_micros(200));
         }
-        
+
         Ok(())
     }
 

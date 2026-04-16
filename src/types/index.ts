@@ -21,7 +21,7 @@ export interface AppSettings {
   hotkeyMode: "push-to-talk" | "toggle";
 
   // Language settings
-  language: "en" | "bn"; // English or Bangla
+  language: string;
 
   // Model settings
   selectedModelId: string;
@@ -117,6 +117,368 @@ export const DEFAULT_SETTINGS: AppSettings = {
 // Model categories for UI grouping
 export type ModelCategory = "standard" | "english" | "distil" | "large";
 
+export const PARAKEET_V3_LANGUAGES = [
+  "bg",
+  "hr",
+  "cs",
+  "da",
+  "nl",
+  "en",
+  "et",
+  "fi",
+  "fr",
+  "de",
+  "el",
+  "hu",
+  "it",
+  "lv",
+  "lt",
+  "mt",
+  "pl",
+  "pt",
+  "ro",
+  "sk",
+  "sl",
+  "es",
+  "sv",
+  "ru",
+  "uk",
+];
+
+export const WHISPER_MULTILINGUAL_LANGUAGES = [
+  "en",
+  "zh",
+  "de",
+  "es",
+  "ru",
+  "ko",
+  "fr",
+  "ja",
+  "pt",
+  "tr",
+  "pl",
+  "ca",
+  "nl",
+  "ar",
+  "sv",
+  "it",
+  "id",
+  "hi",
+  "fi",
+  "vi",
+  "he",
+  "uk",
+  "el",
+  "ms",
+  "cs",
+  "ro",
+  "da",
+  "hu",
+  "ta",
+  "no",
+  "th",
+  "ur",
+  "hr",
+  "bg",
+  "lt",
+  "la",
+  "mi",
+  "ml",
+  "cy",
+  "sk",
+  "te",
+  "fa",
+  "lv",
+  "bn",
+  "sr",
+  "az",
+  "sl",
+  "kn",
+  "et",
+  "mk",
+  "br",
+  "eu",
+  "is",
+  "hy",
+  "ne",
+  "mn",
+  "bs",
+  "kk",
+  "sq",
+  "sw",
+  "gl",
+  "mr",
+  "pa",
+  "si",
+  "km",
+  "sn",
+  "yo",
+  "so",
+  "af",
+  "oc",
+  "ka",
+  "be",
+  "tg",
+  "sd",
+  "gu",
+  "am",
+  "yi",
+  "lo",
+  "uz",
+  "fo",
+  "ht",
+  "ps",
+  "tk",
+  "nn",
+  "mt",
+  "sa",
+  "lb",
+  "my",
+  "bo",
+  "tl",
+  "mg",
+  "as",
+  "tt",
+  "haw",
+  "ln",
+  "ha",
+  "ba",
+  "jw",
+];
+
+export const QWEN3_ASR_LANGUAGES = [
+  "zh",
+  "en",
+  "yue",
+  "ar",
+  "de",
+  "fr",
+  "es",
+  "pt",
+  "id",
+  "it",
+  "ko",
+  "ru",
+  "th",
+  "vi",
+  "ja",
+  "tr",
+  "hi",
+  "ms",
+  "nl",
+  "sv",
+  "da",
+  "fi",
+  "pl",
+  "cs",
+  "fil",
+  "fa",
+  "el",
+  "hu",
+  "mk",
+  "ro",
+];
+
+export const LANGUAGE_NAMES: Record<string, string> = {
+  auto: "Auto detect",
+  af: "Afrikaans",
+  am: "Amharic",
+  ar: "Arabic",
+  as: "Assamese",
+  az: "Azerbaijani",
+  ba: "Bashkir",
+  be: "Belarusian",
+  bg: "Bulgarian",
+  bn: "Bengali",
+  bo: "Tibetan",
+  br: "Breton",
+  bs: "Bosnian",
+  ca: "Catalan",
+  cs: "Czech",
+  cy: "Welsh",
+  da: "Danish",
+  de: "German",
+  el: "Greek",
+  en: "English",
+  es: "Spanish",
+  et: "Estonian",
+  eu: "Basque",
+  fa: "Persian",
+  fi: "Finnish",
+  fil: "Filipino",
+  fo: "Faroese",
+  fr: "French",
+  gl: "Galician",
+  gu: "Gujarati",
+  ha: "Hausa",
+  haw: "Hawaiian",
+  he: "Hebrew",
+  hi: "Hindi",
+  hr: "Croatian",
+  ht: "Haitian Creole",
+  hu: "Hungarian",
+  hy: "Armenian",
+  id: "Indonesian",
+  is: "Icelandic",
+  it: "Italian",
+  ja: "Japanese",
+  jw: "Javanese",
+  ka: "Georgian",
+  kk: "Kazakh",
+  km: "Khmer",
+  kn: "Kannada",
+  ko: "Korean",
+  la: "Latin",
+  lb: "Luxembourgish",
+  ln: "Lingala",
+  lo: "Lao",
+  lt: "Lithuanian",
+  lv: "Latvian",
+  mg: "Malagasy",
+  mi: "Maori",
+  mk: "Macedonian",
+  ml: "Malayalam",
+  mn: "Mongolian",
+  mr: "Marathi",
+  ms: "Malay",
+  mt: "Maltese",
+  my: "Myanmar",
+  ne: "Nepali",
+  nl: "Dutch",
+  nn: "Nynorsk",
+  no: "Norwegian",
+  oc: "Occitan",
+  pa: "Punjabi",
+  pl: "Polish",
+  ps: "Pashto",
+  pt: "Portuguese",
+  ro: "Romanian",
+  ru: "Russian",
+  sa: "Sanskrit",
+  sd: "Sindhi",
+  si: "Sinhala",
+  sk: "Slovak",
+  sl: "Slovenian",
+  sn: "Shona",
+  so: "Somali",
+  sq: "Albanian",
+  sr: "Serbian",
+  su: "Sundanese",
+  sv: "Swedish",
+  sw: "Swahili",
+  ta: "Tamil",
+  te: "Telugu",
+  tg: "Tajik",
+  th: "Thai",
+  tk: "Turkmen",
+  tl: "Tagalog",
+  tr: "Turkish",
+  tt: "Tatar",
+  uk: "Ukrainian",
+  ur: "Urdu",
+  uz: "Uzbek",
+  vi: "Vietnamese",
+  yue: "Cantonese",
+  yi: "Yiddish",
+  yo: "Yoruba",
+  zh: "Chinese",
+};
+
+export interface LanguageOption {
+  code: string;
+  name: string;
+}
+
+export function getModelLanguageLabel(model: Pick<WhisperModel, "languages">) {
+  if (model.languages.includes("multilingual")) {
+    return "Multilingual";
+  }
+
+  if (model.languages.length === 1 && model.languages[0] === "en") {
+    return "English";
+  }
+
+  if (model.languages.length === PARAKEET_V3_LANGUAGES.length) {
+    return "25 languages";
+  }
+
+  if (model.languages.length === QWEN3_ASR_LANGUAGES.length) {
+    return "30 languages";
+  }
+
+  return model.languages.map((language) => language.toUpperCase()).join(", ");
+}
+
+export function getModelLanguageOptions(
+  model: Pick<WhisperModel, "id" | "languages">
+): LanguageOption[] {
+  const languageCodes = model.languages.includes("multilingual")
+    ? WHISPER_MULTILINGUAL_LANGUAGES
+    : model.languages;
+  const options = languageCodes.map((code) => ({
+    code,
+    name: LANGUAGE_NAMES[code] ?? code.toUpperCase(),
+  }));
+
+  if (
+    model.languages.includes("multilingual") ||
+    model.id === "parakeet-v3" ||
+    model.id.startsWith("qwen3-asr-")
+  ) {
+    return [{ code: "auto", name: "Auto detect" }, ...options];
+  }
+
+  return options;
+}
+
+export function isLanguageSupportedByModel(
+  model: Pick<WhisperModel, "id" | "languages">,
+  language: string
+) {
+  return getModelLanguageOptions(model).some((option) => option.code === language);
+}
+
+export function getDefaultLanguageForModel(
+  model: Pick<WhisperModel, "id" | "languages">
+) {
+  const options = getModelLanguageOptions(model);
+  return options[0]?.code ?? "en";
+}
+
+export type ModelBadgeCategory = "recommended" | "accurate" | "fast" | "compact";
+
+export function getModelCategories(model: WhisperModel): ModelBadgeCategory[] {
+  const categories: ModelBadgeCategory[] = [];
+
+  if (model.recommended) {
+    categories.push("recommended");
+  }
+
+  if (
+    model.id.startsWith("qwen3-asr-") ||
+    model.id.includes("large") ||
+    model.id === "medium" ||
+    model.id === "medium.en"
+  ) {
+    categories.push("accurate");
+  }
+
+  if (
+    model.id.includes("distil") ||
+    model.id.includes("tiny") ||
+    model.id.includes("base") ||
+    model.id.startsWith("parakeet-")
+  ) {
+    categories.push("fast");
+  }
+
+  if (model.sizeBytes <= 200 * 1024 * 1024) {
+    categories.push("compact");
+  }
+
+  return categories;
+}
+
 // Available transcription models
 export const WHISPER_MODELS: WhisperModel[] = [
   // ========== RECOMMENDED ==========
@@ -138,7 +500,7 @@ export const WHISPER_MODELS: WhisperModel[] = [
     sizeBytes: 75 * 1024 * 1024,
     description:
       "Fastest Whisper model. Best for quick notes and low-resource devices.",
-    languages: ["en", "bn"],
+    languages: ["multilingual"],
   },
   {
     id: "base",
@@ -146,7 +508,7 @@ export const WHISPER_MODELS: WhisperModel[] = [
     size: "142 MB",
     sizeBytes: 142 * 1024 * 1024,
     description: "Balanced Whisper model for everyday transcription.",
-    languages: ["en", "bn"],
+    languages: ["multilingual"],
   },
   {
     id: "small",
@@ -155,7 +517,7 @@ export const WHISPER_MODELS: WhisperModel[] = [
     sizeBytes: 466 * 1024 * 1024,
     description:
       "Improved accuracy for longer dictation, meetings, and focused writing.",
-    languages: ["en", "bn"],
+    languages: ["multilingual"],
   },
   {
     id: "medium",
@@ -163,7 +525,7 @@ export const WHISPER_MODELS: WhisperModel[] = [
     size: "1.5 GB",
     sizeBytes: 1.5 * 1024 * 1024 * 1024,
     description: "High-accuracy multilingual transcription for demanding audio.",
-    languages: ["en", "bn"],
+    languages: ["multilingual"],
   },
 
   // ========== ENGLISH-ONLY (Faster) ==========
@@ -234,7 +596,7 @@ export const WHISPER_MODELS: WhisperModel[] = [
     size: "2.9 GB",
     sizeBytes: 2.9 * 1024 * 1024 * 1024,
     description: "Highest-accuracy Whisper model for professional workflows.",
-    languages: ["en", "bn"],
+    languages: ["multilingual"],
   },
   {
     id: "large-v3-turbo",
@@ -243,7 +605,7 @@ export const WHISPER_MODELS: WhisperModel[] = [
     sizeBytes: 1.6 * 1024 * 1024 * 1024,
     description:
       "Fast large Whisper model with a strong speed and accuracy balance.",
-    languages: ["en", "bn"],
+    languages: ["multilingual"],
   },
 ];
 
@@ -253,8 +615,9 @@ export const PARAKEET_MODELS: WhisperModel[] = [
     name: "Parakeet v3",
     size: "670 MB",
     sizeBytes: 670 * 1024 * 1024,
-    description: "Fast Parakeet English model with excellent responsiveness.",
-    languages: ["en"],
+    description:
+      "Fast multilingual Parakeet model with automatic language detection.",
+    languages: PARAKEET_V3_LANGUAGES,
     recommended: true,
   },
   {
@@ -275,7 +638,7 @@ export const QWEN3_ASR_MODELS: WhisperModel[] = [
     sizeBytes: 1880 * 1024 * 1024,
     description:
       "Qwen3-ASR speech recognition model for accurate multilingual transcription.",
-    languages: ["en", "zh"],
+    languages: QWEN3_ASR_LANGUAGES,
   },
 ];
 

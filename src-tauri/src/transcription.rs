@@ -2,8 +2,8 @@ use qwen3_asr::{best_device, AsrInference, TranscribeOptions};
 use std::path::Path;
 use transcribe_rs::onnx::parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity};
 use transcribe_rs::onnx::Quantization;
-use transcribe_rs::{set_ort_accelerator, OrtAccelerator};
 use transcribe_rs::TranscriptionResult;
+use transcribe_rs::{set_ort_accelerator, OrtAccelerator};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 pub enum Transcriber {
@@ -15,9 +15,13 @@ pub enum Transcriber {
 impl Transcriber {
     pub fn new(model_id: &str, model_path: &str, language: &str) -> Result<Self, String> {
         if model_id.starts_with("qwen3-asr-") {
-            Ok(Self::Qwen3Asr(Qwen3AsrTranscriber::new(model_path)?))
+            Ok(Self::Qwen3Asr(Qwen3AsrTranscriber::new(
+                model_path, language,
+            )?))
         } else if model_id.starts_with("parakeet-") {
-            Ok(Self::Parakeet(ParakeetTranscriber::new(model_path)?))
+            Ok(Self::Parakeet(ParakeetTranscriber::new(
+                model_path, language,
+            )?))
         } else {
             Ok(Self::Whisper(WhisperTranscriber::new(
                 model_path, language,
@@ -34,18 +38,21 @@ impl Transcriber {
     }
 
     pub fn set_language(&mut self, language: &str) {
-        if let Self::Whisper(transcriber) = self {
-            transcriber.set_language(language);
+        match self {
+            Self::Whisper(transcriber) => transcriber.set_language(language),
+            Self::Parakeet(transcriber) => transcriber.set_language(language),
+            Self::Qwen3Asr(transcriber) => transcriber.set_language(language),
         }
     }
 }
 
 pub struct Qwen3AsrTranscriber {
     engine: AsrInference,
+    language: String,
 }
 
 impl Qwen3AsrTranscriber {
-    pub fn new(model_path: &str) -> Result<Self, String> {
+    pub fn new(model_path: &str, language: &str) -> Result<Self, String> {
         let model_dir = Path::new(model_path);
         if !model_dir.is_dir() {
             return Err(format!(
@@ -58,7 +65,10 @@ impl Qwen3AsrTranscriber {
         let engine = AsrInference::load(model_dir, device)
             .map_err(|e| format!("Failed to load Qwen3-ASR model: {}", e))?;
 
-        Ok(Self { engine })
+        Ok(Self {
+            engine,
+            language: language.to_string(),
+        })
     }
 
     pub fn transcribe(&self, audio_samples: &[f32]) -> Result<String, String> {
@@ -66,12 +76,21 @@ impl Qwen3AsrTranscriber {
             return Err("No audio samples to transcribe".to_string());
         }
 
+        let mut options = TranscribeOptions::default();
+        if !self.language.is_empty() && self.language != "auto" {
+            options = options.with_language(qwen3_language_name(&self.language));
+        }
+
         let result = self
             .engine
-            .transcribe_samples(audio_samples, TranscribeOptions::default())
+            .transcribe_samples(audio_samples, options)
             .map_err(|e| format!("Qwen3-ASR transcription failed: {}", e))?;
 
         Ok(result.text)
+    }
+
+    pub fn set_language(&mut self, language: &str) {
+        self.language = language.to_string();
     }
 }
 
@@ -209,10 +228,11 @@ impl WhisperTranscriber {
 
 pub struct ParakeetTranscriber {
     model: ParakeetModel,
+    language: String,
 }
 
 impl ParakeetTranscriber {
-    pub fn new(model_path: &str) -> Result<Self, String> {
+    pub fn new(model_path: &str, language: &str) -> Result<Self, String> {
         configure_ort_acceleration();
 
         let model_dir = Path::new(model_path);
@@ -226,7 +246,10 @@ impl ParakeetTranscriber {
         let model = ParakeetModel::load(model_dir, &Quantization::Int8)
             .map_err(|e| format!("Failed to load Parakeet transcription model: {}", e))?;
 
-        Ok(Self { model })
+        Ok(Self {
+            model,
+            language: language.to_string(),
+        })
     }
 
     pub fn transcribe(&mut self, audio_samples: &[f32]) -> Result<String, String> {
@@ -239,7 +262,11 @@ impl ParakeetTranscriber {
             .transcribe_with(
                 audio_samples,
                 &ParakeetParams {
-                    language: Some("en".to_string()),
+                    language: if self.language == "auto" {
+                        None
+                    } else {
+                        Some(self.language.clone())
+                    },
                     timestamp_granularity: Some(TimestampGranularity::Segment),
                 },
             )
@@ -247,17 +274,17 @@ impl ParakeetTranscriber {
 
         Ok(result.text)
     }
+
+    pub fn set_language(&mut self, language: &str) {
+        self.language = language.to_string();
+    }
 }
 
 fn configure_ort_acceleration() {
-    #[cfg(target_os = "windows")]
-    let accelerator = OrtAccelerator::DirectMl;
-
-    #[cfg(target_os = "macos")]
-    let accelerator = OrtAccelerator::CoreMl;
-
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    let accelerator = OrtAccelerator::Auto;
+    let accelerator = std::env::var("WAVETYPE_ORT_ACCELERATOR")
+        .ok()
+        .and_then(|value| value.parse::<OrtAccelerator>().ok())
+        .unwrap_or_else(default_ort_accelerator);
 
     set_ort_accelerator(accelerator);
     log::info!(
@@ -265,6 +292,63 @@ fn configure_ort_acceleration() {
         accelerator,
         OrtAccelerator::available()
     );
+}
+
+fn default_ort_accelerator() -> OrtAccelerator {
+    #[cfg(target_os = "windows")]
+    {
+        // DirectML is fast when it works, but on some Windows GPU/driver
+        // combinations it can hard-fail during ONNX MemcpyToHost nodes. CPU is
+        // the safer production default; advanced users can opt into DirectML
+        // with WAVETYPE_ORT_ACCELERATOR=directml.
+        OrtAccelerator::CpuOnly
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        OrtAccelerator::CoreMl
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        OrtAccelerator::Auto
+    }
+}
+
+fn qwen3_language_name(code: &str) -> &'static str {
+    match code {
+        "zh" => "chinese",
+        "en" => "english",
+        "yue" => "cantonese",
+        "ar" => "arabic",
+        "de" => "german",
+        "fr" => "french",
+        "es" => "spanish",
+        "pt" => "portuguese",
+        "id" => "indonesian",
+        "it" => "italian",
+        "ko" => "korean",
+        "ru" => "russian",
+        "th" => "thai",
+        "vi" => "vietnamese",
+        "ja" => "japanese",
+        "tr" => "turkish",
+        "hi" => "hindi",
+        "ms" => "malay",
+        "nl" => "dutch",
+        "sv" => "swedish",
+        "da" => "danish",
+        "fi" => "finnish",
+        "pl" => "polish",
+        "cs" => "czech",
+        "fil" => "filipino",
+        "fa" => "persian",
+        "el" => "greek",
+        "hu" => "hungarian",
+        "mk" => "macedonian",
+        "ro" => "romanian",
+        _ => "english",
+    }
 }
 
 // Model download URLs (Hugging Face)

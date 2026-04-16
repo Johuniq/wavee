@@ -62,6 +62,7 @@ pub struct LicenseData {
     pub is_activated: bool,
     pub last_validated_at: Option<String>,
     pub trial_started_at: Option<String>,
+    pub trial_integrity_hash: Option<String>,
     pub usage: i32,
     pub validations: i32,
 }
@@ -78,6 +79,7 @@ impl Default for LicenseData {
             is_activated: false,
             last_validated_at: None,
             trial_started_at: None,
+            trial_integrity_hash: None,
             usage: 0,
             validations: 0,
         }
@@ -231,6 +233,7 @@ impl Database {
                 is_activated INTEGER NOT NULL DEFAULT 0,
                 last_validated_at TEXT,
                 trial_started_at TEXT,
+                trial_integrity_hash TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )",
@@ -239,6 +242,10 @@ impl Database {
 
         // Migration: add trial_started_at column if it doesn't exist
         let _ = conn.execute("ALTER TABLE license ADD COLUMN trial_started_at TEXT", []);
+        let _ = conn.execute(
+            "ALTER TABLE license ADD COLUMN trial_integrity_hash TEXT",
+            [],
+        );
 
         // Migration: add usage and validations columns if they don't exist
         let _ = conn.execute(
@@ -273,7 +280,7 @@ impl Database {
                 "75 MB",
                 75_i64 * 1024 * 1024,
                 "Fastest Whisper model. Best for quick notes and low-resource devices.",
-                "[\"en\"]",
+                "[\"multilingual\"]",
             ),
             (
                 "base",
@@ -281,7 +288,7 @@ impl Database {
                 "142 MB",
                 142_i64 * 1024 * 1024,
                 "Balanced Whisper model for everyday transcription.",
-                "[\"en\"]",
+                "[\"multilingual\"]",
             ),
             (
                 "small",
@@ -289,7 +296,7 @@ impl Database {
                 "466 MB",
                 466_i64 * 1024 * 1024,
                 "Improved accuracy for longer dictation, meetings, and focused writing.",
-                "[\"en\", \"bn\"]",
+                "[\"multilingual\"]",
             ),
             (
                 "medium",
@@ -297,7 +304,7 @@ impl Database {
                 "1.5 GB",
                 1536_i64 * 1024 * 1024,
                 "High-accuracy multilingual transcription for demanding audio.",
-                "[\"en\", \"bn\"]",
+                "[\"multilingual\"]",
             ),
             (
                 "large-v3",
@@ -305,7 +312,7 @@ impl Database {
                 "2.9 GB",
                 2969_i64 * 1024 * 1024,
                 "Highest-accuracy Whisper model for professional workflows.",
-                "[\"en\", \"bn\"]",
+                "[\"multilingual\"]",
             ),
             (
                 "large-v3-turbo",
@@ -313,7 +320,7 @@ impl Database {
                 "1.6 GB",
                 1600_i64 * 1024 * 1024,
                 "Fast large Whisper model with a strong speed and accuracy balance.",
-                "[\"en\", \"bn\"]",
+                "[\"multilingual\"]",
             ),
             // English-only models (faster)
             (
@@ -386,8 +393,8 @@ impl Database {
                 "Parakeet v3",
                 "670 MB",
                 670_i64 * 1024 * 1024,
-                "Fast Parakeet English model with excellent responsiveness.",
-                "[\"en\"]",
+                "Fast multilingual Parakeet model with automatic language detection.",
+                "[\"bg\", \"hr\", \"cs\", \"da\", \"nl\", \"en\", \"et\", \"fi\", \"fr\", \"de\", \"el\", \"hu\", \"it\", \"lv\", \"lt\", \"mt\", \"pl\", \"pt\", \"ro\", \"sk\", \"sl\", \"es\", \"sv\", \"ru\", \"uk\"]",
             ),
             (
                 "parakeet-v2",
@@ -403,7 +410,7 @@ impl Database {
                 "1.9 GB",
                 1880_i64 * 1024 * 1024,
                 "Qwen3-ASR speech recognition model for accurate multilingual transcription.",
-                "[\"en\", \"zh\"]",
+                "[\"zh\", \"en\", \"yue\", \"ar\", \"de\", \"fr\", \"es\", \"pt\", \"id\", \"it\", \"ko\", \"ru\", \"th\", \"vi\", \"ja\", \"tr\", \"hi\", \"ms\", \"nl\", \"sv\", \"da\", \"fi\", \"pl\", \"cs\", \"fil\", \"fa\", \"el\", \"hu\", \"mk\", \"ro\"]",
             ),
         ];
 
@@ -734,7 +741,7 @@ impl Database {
         conn.query_row(
             "SELECT license_key, activation_id, status, customer_email, customer_name, 
                     expires_at, is_activated, last_validated_at, trial_started_at,
-                    usage, validations
+                    trial_integrity_hash, usage, validations
              FROM license WHERE id = 1",
             [],
             |row| {
@@ -748,8 +755,9 @@ impl Database {
                     is_activated: row.get::<_, i32>(6)? != 0,
                     last_validated_at: row.get(7)?,
                     trial_started_at: row.get(8)?,
-                    usage: row.get(9)?,
-                    validations: row.get(10)?,
+                    trial_integrity_hash: row.get(9)?,
+                    usage: row.get(10)?,
+                    validations: row.get(11)?,
                 })
             },
         )
@@ -768,8 +776,9 @@ impl Database {
                 is_activated = ?7,
                 last_validated_at = ?8,
                 trial_started_at = ?9,
-                usage = ?10,
-                validations = ?11,
+                trial_integrity_hash = ?10,
+                usage = ?11,
+                validations = ?12,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = 1",
             params![
@@ -782,6 +791,7 @@ impl Database {
                 license.is_activated as i32,
                 license.last_validated_at,
                 license.trial_started_at,
+                license.trial_integrity_hash,
                 license.usage,
                 license.validations,
             ],
@@ -808,7 +818,7 @@ impl Database {
                 last_validated_at = NULL,
                 usage = 0,
                 validations = 0,
-                -- trial_started_at is preserved intentionally
+                -- trial_started_at and trial_integrity_hash are preserved intentionally
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = 1",
             [],

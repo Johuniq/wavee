@@ -156,12 +156,17 @@ export async function downloadFile(
     const { writeTextFile } = await import("@tauri-apps/plugin-fs");
 
     // Open save dialog
+    const isMarkdown =
+      _mimeType === "text/markdown" ||
+      filename.toLowerCase().endsWith(".md") ||
+      filename.toLowerCase().endsWith(".markdown");
+
     const filePath = await save({
       defaultPath: filename,
       filters: [
         {
-          name: "JSON",
-          extensions: ["json"],
+          name: isMarkdown ? "Markdown" : "JSON",
+          extensions: isMarkdown ? ["md", "markdown"] : ["json"],
         },
       ],
     });
@@ -175,7 +180,7 @@ export async function downloadFile(
   } catch (error) {
     console.error("Failed to save file:", error);
     // Fallback to browser download
-    const blob = new Blob([content], { type: "application/json" });
+    const blob = new Blob([content], { type: _mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

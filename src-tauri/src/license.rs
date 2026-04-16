@@ -139,6 +139,8 @@ struct ValidateRequest {
     benefit_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     increment_usage: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    conditions: Option<serde_json::Value>,
 }
 
 /// Request body for /deactivate endpoint
@@ -371,6 +373,12 @@ fn get_device_meta() -> serde_json::Value {
     })
 }
 
+fn get_device_conditions(device_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "device_id": device_id,
+    })
+}
+
 // =============================================================================
 // Secure Storage
 // =============================================================================
@@ -425,8 +433,8 @@ pub fn store_cache(cache: &CachedLicense) -> Result<(), String> {
     let json = serde_json::to_string(&cache_with_hash)
         .map_err(|e| format!("Failed to serialize cache: {}", e))?;
 
-    let encrypted = encrypt_data(json.as_bytes())
-        .map_err(|e| format!("Failed to encrypt cache: {}", e))?;
+    let encrypted =
+        encrypt_data(json.as_bytes()).map_err(|e| format!("Failed to encrypt cache: {}", e))?;
 
     std::fs::write(&cache_path, encrypted).map_err(|e| format!("Failed to write cache: {}", e))?;
 
@@ -523,7 +531,7 @@ impl LicenseManager {
             key: license_key.to_string(),
             organization_id: self.org_id.clone(),
             label: device_label.clone(),
-            conditions: None,
+            conditions: Some(get_device_conditions(&device_id)),
             meta: Some(get_device_meta()),
         };
 
@@ -590,7 +598,12 @@ impl LicenseManager {
             // immediately. We set increment_usage to Some(1) so that both
             // activation and validation counts are incremented.
             match self
-                .perform_validate(&cache.license_key, &cache.activation_id, Some(cache.benefit_id.clone()), Some(1))
+                .perform_validate(
+                    &cache.license_key,
+                    &cache.activation_id,
+                    Some(cache.benefit_id.clone()),
+                    Some(1),
+                )
                 .await
             {
                 Ok(validate_resp) => {
@@ -607,7 +620,11 @@ impl LicenseManager {
                         license_key: cache.license_key.clone(),
                         display_key: validate_resp.display_key,
                         status: license_status,
-                        activation_id: validate_resp.activation.as_ref().map(|a| a.id.clone()),
+                        activation_id: validate_resp
+                            .activation
+                            .as_ref()
+                            .map(|a| a.id.clone())
+                            .or_else(|| Some(cache.activation_id.clone())),
                         customer_email: validate_resp.customer.as_ref().map(|c| c.email.clone()),
                         customer_name: validate_resp.customer.as_ref().and_then(|c| c.name.clone()),
                         benefit_id: Some(validate_resp.benefit_id),
@@ -723,7 +740,11 @@ impl LicenseManager {
                         license_key: cached.license_key.clone(),
                         display_key: data.display_key,
                         status: license_status,
-                        activation_id: data.activation.as_ref().map(|a| a.id.clone()),
+                        activation_id: data
+                            .activation
+                            .as_ref()
+                            .map(|a| a.id.clone())
+                            .or_else(|| Some(cached.activation_id.clone())),
                         customer_email: data.customer.as_ref().map(|c| c.email.clone()),
                         customer_name: data.customer.as_ref().and_then(|c| c.name.clone()),
                         benefit_id: Some(data.benefit_id),
@@ -738,11 +759,12 @@ impl LicenseManager {
                     });
                 }
                 Err(e) => {
-                    if e.contains("HTTP 404") {
-                        // License or activation not found - clear cache
-                        warn!("License not found on server - clearing cache");
+                    if is_authoritative_validate_error(&e) {
+                        warn!("License rejected by Polar - clearing cache: {}", e);
                         let _ = clear_cache();
-                        return Err("License not found. Please activate again.".to_string());
+                        return Err(
+                            "License validation was rejected. Please activate again.".to_string()
+                        );
                     }
                     warn!("Validation failed: {}", e);
                     // Fall through to offline validation
@@ -964,6 +986,7 @@ impl LicenseManager {
             activation_id: Some(activation_id.to_string()),
             benefit_id,
             increment_usage,
+            conditions: Some(get_device_conditions(&get_device_id())),
         };
 
         let url = format!("{}/validate", POLAR_API_BASE);
@@ -981,8 +1004,9 @@ impl LicenseManager {
         let body = response.text().await.unwrap_or_default();
 
         if status.is_success() {
-            let data: ValidateResponse = serde_json::from_str(&body)
-                .map_err(|e| format!("Failed to parse validate response: {} - Body: {}", e, body))?;
+            let data: ValidateResponse = serde_json::from_str(&body).map_err(|e| {
+                format!("Failed to parse validate response: {} - Body: {}", e, body)
+            })?;
             Ok(data)
         } else {
             Err(format!("Validate failed: HTTP {} - {}", status, body))
@@ -1012,6 +1036,14 @@ fn mask_key(key: &str) -> String {
     } else {
         format!("****{}", &key[key.len().saturating_sub(6)..])
     }
+}
+
+fn is_authoritative_validate_error(error: &str) -> bool {
+    error.contains("HTTP 400")
+        || error.contains("HTTP 401")
+        || error.contains("HTTP 403")
+        || error.contains("HTTP 404")
+        || error.contains("HTTP 422")
 }
 
 // =============================================================================

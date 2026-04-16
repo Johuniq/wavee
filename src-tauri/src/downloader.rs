@@ -1,12 +1,18 @@
 use futures_util::StreamExt;
 use reqwest::Client;
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 
 pub struct ModelDownloader {
     client: Client,
     models_dir: PathBuf,
+    cancel_tokens: Mutex<HashMap<String, Arc<AtomicBool>>>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -22,6 +28,33 @@ impl ModelDownloader {
         Self {
             client: Client::new(),
             models_dir,
+            cancel_tokens: Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn create_cancel_token(&self, model_id: &str) -> Arc<AtomicBool> {
+        let token = Arc::new(AtomicBool::new(false));
+        self.cancel_tokens
+            .lock()
+            .unwrap()
+            .insert(model_id.to_string(), token.clone());
+        token
+    }
+
+    fn clear_cancel_token(&self, model_id: &str) {
+        self.cancel_tokens.lock().unwrap().remove(model_id);
+    }
+
+    fn is_cancelled(cancel_token: &AtomicBool) -> bool {
+        cancel_token.load(Ordering::SeqCst)
+    }
+
+    pub fn cancel_download(&self, model_id: &str) -> bool {
+        if let Some(token) = self.cancel_tokens.lock().unwrap().get(model_id) {
+            token.store(true, Ordering::SeqCst);
+            true
+        } else {
+            false
         }
     }
 
@@ -64,15 +97,32 @@ impl ModelDownloader {
     where
         F: Fn(DownloadProgress) + Send + 'static,
     {
+        let cancel_token = self.create_cancel_token(model_id);
+        let result = self
+            .download_model_inner(model_id, progress_callback, cancel_token)
+            .await;
+        self.clear_cancel_token(model_id);
+        result
+    }
+
+    async fn download_model_inner<F>(
+        &self,
+        model_id: &str,
+        progress_callback: F,
+        cancel_token: Arc<AtomicBool>,
+    ) -> Result<PathBuf, String>
+    where
+        F: Fn(DownloadProgress) + Send + 'static,
+    {
         if crate::transcription::get_parakeet_files(model_id).is_some() {
             return self
-                .download_directory_model(model_id, "Parakeet", progress_callback)
+                .download_directory_model(model_id, "Parakeet", progress_callback, cancel_token)
                 .await;
         }
 
         if crate::transcription::get_qwen3_asr_files(model_id).is_some() {
             return self
-                .download_directory_model(model_id, "Qwen3-ASR", progress_callback)
+                .download_directory_model(model_id, "Qwen3-ASR", progress_callback, cancel_token)
                 .await;
         }
 
@@ -117,6 +167,12 @@ impl ModelDownloader {
         let mut stream = response.bytes_stream();
 
         while let Some(chunk) = stream.next().await {
+            if Self::is_cancelled(&cancel_token) {
+                drop(file);
+                let _ = tokio::fs::remove_file(&temp_path).await;
+                return Err("Download cancelled".to_string());
+            }
+
             let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
 
             file.write_all(&chunk)
@@ -156,6 +212,7 @@ impl ModelDownloader {
         model_id: &str,
         model_name: &str,
         progress_callback: F,
+        cancel_token: Arc<AtomicBool>,
     ) -> Result<PathBuf, String>
     where
         F: Fn(DownloadProgress) + Send + 'static,
@@ -194,6 +251,11 @@ impl ModelDownloader {
         let mut total_downloaded = 0u64;
 
         for file in files {
+            if Self::is_cancelled(&cancel_token) {
+                let _ = tokio::fs::remove_dir_all(&model_dir).await;
+                return Err("Download cancelled".to_string());
+            }
+
             let final_path = model_dir.join(file.filename);
             let temp_path = final_path.with_extension("tmp");
 
@@ -221,6 +283,13 @@ impl ModelDownloader {
 
             let mut stream = response.bytes_stream();
             while let Some(chunk) = stream.next().await {
+                if Self::is_cancelled(&cancel_token) {
+                    drop(output);
+                    let _ = tokio::fs::remove_file(&temp_path).await;
+                    let _ = tokio::fs::remove_dir_all(&model_dir).await;
+                    return Err("Download cancelled".to_string());
+                }
+
                 let chunk =
                     chunk.map_err(|e| format!("Download error for {}: {}", file.filename, e))?;
 

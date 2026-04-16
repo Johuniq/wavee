@@ -8,7 +8,13 @@ import {
     type DownloadProgress,
 } from "@/lib/voice-api";
 import { useAppStore, useAvailableModels } from "@/store";
-import { ALL_MODELS, type WhisperModel } from "@/types";
+import {
+  ALL_MODELS,
+  getDefaultLanguageForModel,
+  getModelLanguageLabel,
+  isLanguageSupportedByModel,
+  type WhisperModel,
+} from "@/types";
 import { Check, Download, HardDrive, Loader2, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -21,6 +27,8 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
   const {
     selectedModel,
     setSelectedModel,
+    settings,
+    updateSettings,
     downloadProgress,
     setDownloadProgress,
     modelStatus,
@@ -72,6 +80,9 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
     const model = models.find((m: WhisperModel) => m.id === modelId);
     if (model) {
       setSelectedModel(model);
+      if (!isLanguageSupportedByModel(model, settings.language)) {
+        updateSettings({ language: getDefaultLanguageForModel(model) });
+      }
       setDownloadError(null);
       // Check if already downloaded
       isModelDownloaded(modelId)
@@ -184,9 +195,7 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
                           {model.size}
                         </span>
                         <span className="px-2 py-1 rounded-lg bg-white/30 dark:bg-white/10">
-                          {model.languages
-                            .map((l: string) => l.toUpperCase())
-                            .join(", ")}
+                          {getModelLanguageLabel(model)}
                         </span>
                       </div>
 
