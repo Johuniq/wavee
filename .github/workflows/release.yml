@@ -66,7 +66,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libssl-dev libxdo-dev libclang-dev clang cmake
-          LIBCLANG_PATH="$(llvm-config --libdir)"
+          LIBCLANG_PATH="$(dirname "$(find /usr/lib -name 'libclang.so*' -print -quit)")"
+          test -n "${LIBCLANG_PATH}"
           echo "LIBCLANG_PATH=${LIBCLANG_PATH}" >> "$GITHUB_ENV"
           echo "LD_LIBRARY_PATH=${LIBCLANG_PATH}:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
           echo "CMAKE=$(command -v cmake)" >> "$GITHUB_ENV"
