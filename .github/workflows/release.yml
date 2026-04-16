@@ -52,25 +52,12 @@ jobs:
             args: "--target aarch64-apple-darwin"
           - platform: "macos-latest"
             args: "--target x86_64-apple-darwin"
-          - platform: "ubuntu-22.04"
-            args: ""
           - platform: "windows-latest"
             args: ""
 
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libssl-dev libxdo-dev libclang-dev clang cmake
-          LIBCLANG_PATH="$(dirname "$(find /usr/lib -name 'libclang.so*' -print -quit)")"
-          test -n "${LIBCLANG_PATH}"
-          echo "LIBCLANG_PATH=${LIBCLANG_PATH}" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=${LIBCLANG_PATH}:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
-          echo "CMAKE=$(command -v cmake)" >> "$GITHUB_ENV"
 
       - name: Setup Node
         uses: actions/setup-node@v4
