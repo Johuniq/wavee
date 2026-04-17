@@ -588,7 +588,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
   }
 
   return (
-    <div className="relative flex flex-col h-full overflow-hidden">
+    <div className="relative flex flex-col h-full min-h-0 overflow-hidden">
       {/* Background mesh gradient */}
       <div className="glass-mesh-bg" />
 
@@ -600,7 +600,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
       /> */}
 
       {/* Header */}
-      <div className="relative z-10 flex items-center justify-between px-6 pt-6">
+      <div className="relative z-10 flex shrink-0 items-center justify-between px-6 pt-6">
         <Logo size="sm" showText={false} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -665,7 +665,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
 
       {/* Linux Free Tier Banner */}
       {isLinuxFree && (
-        <div className="relative z-10 mx-6 mt-4">
+        <div className="relative z-10 mx-6 mt-4 shrink-0">
           <div className="glass-card px-4 py-2.5 flex items-center justify-between bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-xl">
             <div className="flex items-center gap-2.5">
               <Heart className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -682,7 +682,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
       {!isLinuxFree &&
         trialDaysRemaining !== undefined &&
         trialDaysRemaining > 0 && (
-          <div className="relative z-10 mx-6 mt-4">
+          <div className="relative z-10 mx-6 mt-4 shrink-0">
             <div className="glass-trial-banner px-4 py-2.5 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
@@ -702,131 +702,133 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
         )}
 
       {/* Main content */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6">
-        {!selectedModel || !selectedModel.downloaded ? (
-          <div className="glass-card p-6 rounded-2xl flex flex-col items-center text-center max-w-xs">
-            <div className="p-4 rounded-2xl bg-white/30 dark:bg-white/10 mb-4">
-              <Cpu className="h-10 w-10 text-foreground/60" />
-            </div>
-            <h2 className="font-semibold text-foreground">
-              {selectedModel ? "Download the active model" : "Choose a model"}
-            </h2>
-            <p className="text-sm text-foreground/60 mt-1">
-              {selectedModel
-                ? `${selectedModel.name} is selected, but its local files are not installed.`
-                : "Download and activate a transcription model before recording."}
-            </p>
-            <button
-              className="glass-button px-4 py-2 rounded-xl text-sm font-medium mt-4"
-              onClick={() => setShowModels(true)}
-            >
-              Open Models
-            </button>
-          </div>
-        ) : (
-          <>
-            {/* Recording orb */}
-            <button
-              onClick={toggleRecording}
-              disabled={!isModelLoaded || recordingStatus === "processing"}
-              className={cn(
-                "glass-orb h-32 w-32 flex items-center justify-center transition-all duration-300",
-                recordingStatus === "recording" && "glass-orb-recording",
-                recordingStatus === "processing" && "glass-orb-processing",
-                !isModelLoaded && "opacity-50 cursor-not-allowed",
-              )}
-            >
-              {recordingStatus === "processing" ? (
-                <Loader2 className="h-12 w-12 animate-spin text-white" />
-              ) : (
-                <Mic
-                  className={cn(
-                    "h-12 w-12 transition-colors",
-                    recordingStatus === "recording"
-                      ? "text-white"
-                      : "text-foreground/60",
-                  )}
-                />
-              )}
-            </button>
-
-            {/* Status label */}
-            <p
-              className={cn(
-                "mt-5 text-sm font-medium tracking-wide",
-                recordingStatus === "recording"
-                  ? "text-red-500 dark:text-red-400"
-                  : recordingStatus === "processing"
-                    ? "text-blue-500 dark:text-blue-400"
-                    : "text-foreground/60",
-              )}
-            >
-              {config.label}
-            </p>
-          </>
-        )}
-
-        {/* Error message */}
-        {errorMessage && selectedModel?.downloaded && (
-          <div className="mt-4 glass-card px-4 py-2.5 flex items-center gap-2.5 border-red-200 dark:border-red-800/50">
-            <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="text-xs text-red-600 dark:text-red-400">
-                {errorMessage}
+      <div className="relative z-10 flex-1 min-h-0 overflow-y-auto px-6 py-6 scrollable">
+        <div className="min-h-full flex flex-col items-center justify-center">
+          {!selectedModel || !selectedModel.downloaded ? (
+            <div className="glass-card p-6 rounded-2xl flex flex-col items-center text-center max-w-xs">
+              <div className="p-4 rounded-2xl bg-white/30 dark:bg-white/10 mb-4">
+                <Cpu className="h-10 w-10 text-foreground/60" />
+              </div>
+              <h2 className="font-semibold text-foreground">
+                {selectedModel ? "Download the active model" : "Choose a model"}
+              </h2>
+              <p className="text-sm text-foreground/60 mt-1">
+                {selectedModel
+                  ? `${selectedModel.name} is selected, but its local files are not installed.`
+                  : "Download and activate a transcription model before recording."}
               </p>
-            </div>
-            {errorMessage.toLowerCase().includes("model") && (
               <button
-                className="glass-button px-2 py-1 rounded-lg text-xs font-medium"
+                className="glass-button px-4 py-2 rounded-xl text-sm font-medium mt-4"
                 onClick={() => setShowModels(true)}
               >
-                Models
+                Open Models
               </button>
-            )}
-          </div>
-        )}
+            </div>
+          ) : (
+            <>
+              {/* Recording orb */}
+              <button
+                onClick={toggleRecording}
+                disabled={!isModelLoaded || recordingStatus === "processing"}
+                className={cn(
+                  "glass-orb h-32 w-32 flex items-center justify-center transition-all duration-300",
+                  recordingStatus === "recording" && "glass-orb-recording",
+                  recordingStatus === "processing" && "glass-orb-processing",
+                  !isModelLoaded && "opacity-50 cursor-not-allowed",
+                )}
+              >
+                {recordingStatus === "processing" ? (
+                  <Loader2 className="h-12 w-12 animate-spin text-white" />
+                ) : (
+                  <Mic
+                    className={cn(
+                      "h-12 w-12 transition-colors",
+                      recordingStatus === "recording"
+                        ? "text-white"
+                        : "text-foreground/60",
+                    )}
+                  />
+                )}
+              </button>
 
-        {/* Hotkey hint */}
-        {selectedModel?.downloaded && (
-          <p className="mt-4 text-xs text-foreground/60 flex items-center gap-2">
-            Press
-            <span className="glass-kbd">{currentHotkey}</span>
-            to{" "}
-            {settings.hotkeyMode === "push-to-talk"
-              ? "hold and speak"
-              : "toggle"}
-          </p>
-        )}
+              {/* Status label */}
+              <p
+                className={cn(
+                  "mt-5 text-sm font-medium tracking-wide",
+                  recordingStatus === "recording"
+                    ? "text-red-500 dark:text-red-400"
+                    : recordingStatus === "processing"
+                      ? "text-blue-500 dark:text-blue-400"
+                      : "text-foreground/60",
+                )}
+              >
+                {config.label}
+              </p>
+            </>
+          )}
 
-        {/* Last transcription */}
-        {lastTranscription && (
-          <div className="glass-transcription w-full max-w-xs mt-8 p-4">
-            <p className="text-[10px] uppercase tracking-wider text-foreground/50 mb-2 font-medium">
-              Last transcription
+          {/* Error message */}
+          {errorMessage && selectedModel?.downloaded && (
+            <div className="mt-4 glass-card w-full max-w-xs px-4 py-2.5 flex items-center gap-2.5 border-red-200 dark:border-red-800/50">
+              <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-red-600 dark:text-red-400">
+                  {errorMessage}
+                </p>
+              </div>
+              {errorMessage.toLowerCase().includes("model") && (
+                <button
+                  className="glass-button px-2 py-1 rounded-lg text-xs font-medium"
+                  onClick={() => setShowModels(true)}
+                >
+                  Models
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Hotkey hint */}
+          {selectedModel?.downloaded && (
+            <p className="mt-4 text-xs text-foreground/60 flex flex-wrap items-center justify-center gap-2 text-center">
+              Press
+              <span className="glass-kbd">{currentHotkey}</span>
+              to{" "}
+              {settings.hotkeyMode === "push-to-talk"
+                ? "hold and speak"
+                : "toggle"}
             </p>
-            <p className="text-sm text-foreground/90 leading-relaxed">
-              {lastTranscription}
-            </p>
-          </div>
-        )}
+          )}
+
+          {/* Last transcription */}
+          {lastTranscription && (
+            <div className="glass-transcription w-full max-w-xs mt-8 p-4">
+              <p className="text-[10px] uppercase tracking-wider text-foreground/50 mb-2 font-medium">
+                Last transcription
+              </p>
+              <p className="text-sm text-foreground/90 leading-relaxed break-words">
+                {lastTranscription}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Footer status bar */}
-      <div className="relative z-10 px-6 pb-6">
+      <div className="relative z-10 shrink-0 px-6 pb-6">
         <div className="glass-divider mb-4" />
-        <div className="flex items-center justify-between">
-          <div className="glass-status">
+        <div className="flex items-center justify-between gap-3">
+          <div className="glass-status min-w-0">
             <span
               className={cn(
                 "status-dot",
                 isModelLoaded ? "status-dot-active" : "status-dot-warning",
               )}
             />
-            <span className="text-foreground/70 font-medium">
+            <span className="text-foreground/70 font-medium truncate">
               {selectedModel?.name || "No model"}
             </span>
           </div>
-          <div className="glass-badge text-foreground/60">
+          <div className="glass-badge shrink-0 text-foreground/60">
             {settings.hotkeyMode === "push-to-talk"
               ? "Push to Talk"
               : "Toggle Mode"}

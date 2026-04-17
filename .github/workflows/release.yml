@@ -173,6 +173,24 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate release checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          gh release download "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir release-assets \
+            --clobber
+          cd release-assets
+          sha256sum * | sort -k2 > SHA256SUMS.txt
+          gh release upload "$GITHUB_REF_NAME" SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
       - name: Publish Release
         uses: actions/github-script@v7
         env:
@@ -183,5 +201,11 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               release_id: process.env.release_id,
+              body: [
+                'See the assets section below to download the installer for your platform.',
+                '',
+                'Windows builds are expected to be Authenticode signed in production.',
+                'Verify downloaded assets against `SHA256SUMS.txt` before running them.'
+              ].join('\n'),
               draft: false,
             })
