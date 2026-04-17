@@ -33,6 +33,7 @@ export interface AppSettings {
 
   // Post-processing
   postProcessingEnabled: boolean;
+  voiceCommandsEnabled: boolean;
 
   // Output mode
   clipboardMode: boolean; // true = copy to clipboard, false = inject text
@@ -109,6 +110,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   playAudioFeedback: true,
   showRecordingOverlay: true,
   postProcessingEnabled: true,
+  voiceCommandsEnabled: false,
   clipboardMode: false,
   autoStartOnBoot: false,
   minimizeToTray: true,

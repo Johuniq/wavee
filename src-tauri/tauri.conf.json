@@ -114,7 +114,7 @@
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
       },
-      "allowDowngrades": true,
+      "allowDowngrades": false,
       "nsis": {
         "template": null,
         "installerIcon": "icons/icon.ico",

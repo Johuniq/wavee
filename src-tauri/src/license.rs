@@ -474,6 +474,38 @@ pub fn load_cache() -> Option<CachedLicense> {
     Some(cache)
 }
 
+fn cached_license_allows_offline(cache: &CachedLicense) -> bool {
+    if cache.status != "granted" {
+        return false;
+    }
+
+    if let Some(ref expires_at) = cache.expires_at {
+        let Ok(expiry) = chrono::DateTime::parse_from_rfc3339(expires_at) else {
+            warn!("License cache has invalid expiration timestamp");
+            return false;
+        };
+
+        if expiry < chrono::Utc::now() {
+            return false;
+        }
+    }
+
+    let Ok(last_validated) = chrono::DateTime::parse_from_rfc3339(&cache.last_validated_at) else {
+        warn!("License cache has invalid validation timestamp");
+        return false;
+    };
+
+    let now = chrono::Utc::now();
+    let last_validated = last_validated.with_timezone(&chrono::Utc);
+    if last_validated > now {
+        warn!("License cache validation timestamp is in the future");
+        return false;
+    }
+
+    let hours_since = (now - last_validated).num_hours();
+    hours_since < OFFLINE_GRACE_HOURS
+}
+
 /// Clear license cache
 pub fn clear_cache() -> Result<(), String> {
     if let Some(path) = get_cache_path() {
@@ -785,51 +817,29 @@ impl LicenseManager {
         device_id: &str,
         device_label: &str,
     ) -> Result<LicenseInfo, String> {
-        // Check last validation time
-        if let Ok(last_validated) = chrono::DateTime::parse_from_rfc3339(&cache.last_validated_at) {
-            let hours_since =
-                (chrono::Utc::now() - last_validated.with_timezone(&chrono::Utc)).num_hours();
+        if cached_license_allows_offline(cache) {
+            info!("Using offline license within grace period");
 
-            if hours_since < OFFLINE_GRACE_HOURS && cache.status == "granted" {
-                info!(
-                    "Using offline license (validated {} hours ago)",
-                    hours_since
-                );
-
-                // Check expiration even offline
-                if let Some(ref expires_at) = cache.expires_at {
-                    if let Ok(expiry) = chrono::DateTime::parse_from_rfc3339(expires_at) {
-                        if expiry < chrono::Utc::now() {
-                            return Err("License has expired.".to_string());
-                        }
-                    }
-                }
-
-                return Ok(LicenseInfo {
-                    license_key: cache.license_key.clone(),
-                    display_key: mask_key(&cache.license_key),
-                    status: LicenseStatus::Offline,
-                    activation_id: Some(cache.activation_id.clone()),
-                    customer_email: cache.customer_email.clone(),
-                    customer_name: cache.customer_name.clone(),
-                    benefit_id: Some(cache.benefit_id.clone()),
-                    expires_at: cache.expires_at.clone(),
-                    limit_activations: None,
-                    usage: 0,
-                    limit_usage: None,
-                    validations: 0,
-                    last_validated_at: Some(cache.last_validated_at.clone()),
-                    device_id: device_id.to_string(),
-                    device_label: device_label.to_string(),
-                });
-            }
-
-            error!(
-                "Offline grace period expired ({} hours since last validation)",
-                hours_since
-            );
+            return Ok(LicenseInfo {
+                license_key: cache.license_key.clone(),
+                display_key: mask_key(&cache.license_key),
+                status: LicenseStatus::Offline,
+                activation_id: Some(cache.activation_id.clone()),
+                customer_email: cache.customer_email.clone(),
+                customer_name: cache.customer_name.clone(),
+                benefit_id: Some(cache.benefit_id.clone()),
+                expires_at: cache.expires_at.clone(),
+                limit_activations: None,
+                usage: cache.usage,
+                limit_usage: None,
+                validations: cache.validations,
+                last_validated_at: Some(cache.last_validated_at.clone()),
+                device_id: device_id.to_string(),
+                device_label: device_label.to_string(),
+            });
         }
 
+        error!("Offline grace period expired or cache is invalid");
         Err("License validation failed and offline grace period expired. Please connect to the internet.".to_string())
     }
 
@@ -878,28 +888,7 @@ impl LicenseManager {
     /// Check if license is currently valid (quick local check)
     pub fn is_valid(&self) -> bool {
         if let Some(cache) = load_cache() {
-            // Check status
-            if cache.status != "granted" {
-                return false;
-            }
-
-            // Check expiration
-            if let Some(ref expires_at) = cache.expires_at {
-                if let Ok(expiry) = chrono::DateTime::parse_from_rfc3339(expires_at) {
-                    if expiry < chrono::Utc::now() {
-                        return false;
-                    }
-                }
-            }
-
-            // Check offline grace period
-            if let Ok(last_validated) =
-                chrono::DateTime::parse_from_rfc3339(&cache.last_validated_at)
-            {
-                let hours_since =
-                    (chrono::Utc::now() - last_validated.with_timezone(&chrono::Utc)).num_hours();
-                return hours_since < OFFLINE_GRACE_HOURS;
-            }
+            return cached_license_allows_offline(&cache);
         }
 
         false
@@ -908,6 +897,10 @@ impl LicenseManager {
     /// Get cached license info without validation
     pub fn get_cached_info(&self) -> Option<LicenseInfo> {
         let cache = load_cache()?;
+        if !cached_license_allows_offline(&cache) {
+            return None;
+        }
+
         let device_id = get_device_id();
         let device_label = get_device_label();
 
@@ -1082,5 +1075,27 @@ mod tests {
         assert!(LicenseStatus::Offline.allows_usage());
         assert!(!LicenseStatus::Revoked.allows_usage());
         assert!(!LicenseStatus::Expired.allows_usage());
+    }
+
+    #[test]
+    fn test_cached_license_rejects_future_validation_time() {
+        let cache = CachedLicense {
+            license_key: "test-license".to_string(),
+            activation_id: "test-activation".to_string(),
+            device_id: get_device_id(),
+            device_label: get_device_label(),
+            customer_email: None,
+            customer_name: None,
+            benefit_id: "test-benefit".to_string(),
+            expires_at: None,
+            last_validated_at: (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
+            status: "granted".to_string(),
+            usage: 0,
+            validations: 0,
+            integrity_hash: String::new(),
+            cache_version: CACHE_VERSION,
+        };
+
+        assert!(!cached_license_allows_offline(&cache));
     }
 }

@@ -36,6 +36,10 @@ use transcription::Transcriber;
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const APP_NAME: &str = "Wavee";
 const APP_ICON_BYTES: &[u8] = include_bytes!("../icons/icon.png");
+const AUDIO_TARGET_SAMPLE_RATE: u32 = 16_000;
+const MAX_FILE_TRANSCRIPTION_SECONDS: usize = 30 * 60;
+const MAX_FILE_AUDIO_SAMPLES: usize =
+    AUDIO_TARGET_SAMPLE_RATE as usize * MAX_FILE_TRANSCRIPTION_SECONDS;
 
 // Rate limiter for preventing abuse
 pub struct RateLimiter {
@@ -74,55 +78,67 @@ impl RateLimiter {
 
 pub struct RateLimiterState(pub Arc<RateLimiter>);
 
+const AUDIO_FILE_EXTENSIONS: &[&str] = &["wav", "mp3", "m4a", "ogg", "flac", "aac", "webm", "mkv"];
+const EXPORT_FILE_EXTENSIONS: &[&str] = &["json", "md", "markdown"];
+const MAX_EXPORT_BYTES: usize = 10 * 1024 * 1024;
+
 // Input sanitization utilities
-fn sanitize_path(path: &str) -> Result<String, String> {
-    // Prevent path traversal attacks
-    if path.contains("..") || path.contains("//") {
-        warn!("Path traversal attempt detected: {}", path);
-        return Err("Invalid path: contains forbidden characters".to_string());
+fn canonicalize_existing_file_path(path: &str) -> Result<std::path::PathBuf, String> {
+    if path.trim().is_empty() || path.contains('\0') {
+        return Err("Invalid path".to_string());
     }
 
-    // Normalize path separators
-    let normalized = path.replace('\\', "/");
+    let path = std::path::Path::new(path);
+    let canonical = path
+        .canonicalize()
+        .map_err(|e| format!("Cannot access selected file: {}", e))?;
+    let metadata = std::fs::metadata(&canonical)
+        .map_err(|e| format!("Cannot read selected file: {}", e))?;
 
-    // Check for absolute paths outside expected directories
-    // Handle Unix-like paths (starting with /)
-    if normalized.starts_with('/') {
-        // Allow paths within Wavee app directories, temp, home, or Users
-        if !normalized.contains("/Wavee/")
-            && !normalized.starts_with("/tmp/")
-            && !normalized.starts_with("/home/")
-            && !normalized.starts_with("/Users/")
-        {
-            warn!("Access to restricted path attempted: {}", normalized);
-            return Err("Invalid path: outside allowed directories".to_string());
-        }
-    }
-    // Handle Windows paths (drive letters like C:, D:, etc.)
-    else if normalized.len() >= 2
-        && normalized
-            .chars()
-            .next()
-            .map(|c| c.is_ascii_alphabetic())
-            .unwrap_or(false)
-        && normalized.chars().nth(1) == Some(':')
-    {
-        // Windows absolute path - allow if it contains Wavee or is in user directories
-        // Note: Windows paths are typically handled by Tauri's path helpers,
-        // but we validate here as an extra safety measure
-        if !normalized.contains("Wavee")
-            && !normalized.contains("AppData")
-            && !normalized.contains("Users")
-        {
-            warn!(
-                "Access to restricted Windows path attempted: {}",
-                normalized
-            );
-            return Err("Invalid path: outside allowed directories".to_string());
-        }
+    if !metadata.is_file() {
+        return Err("Selected path is not a file".to_string());
     }
 
-    Ok(normalized)
+    Ok(canonical)
+}
+
+fn path_has_extension(path: &std::path::Path, allowed: &[&str]) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|extension| {
+            allowed
+                .iter()
+                .any(|allowed| extension.eq_ignore_ascii_case(allowed))
+        })
+        .unwrap_or(false)
+}
+
+fn validate_export_path(path: &str) -> Result<std::path::PathBuf, String> {
+    if path.trim().is_empty() || path.contains('\0') {
+        return Err("Invalid export path".to_string());
+    }
+
+    let path = std::path::Path::new(path);
+    if !path_has_extension(path, EXPORT_FILE_EXTENSIONS) {
+        return Err("Export path must end in .json, .md, or .markdown".to_string());
+    }
+
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Export path must include a parent directory".to_string())?;
+    let parent = parent
+        .canonicalize()
+        .map_err(|e| format!("Cannot access export directory: {}", e))?;
+
+    if !parent.is_dir() {
+        return Err("Export directory is not a directory".to_string());
+    }
+
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| "Export path must include a file name".to_string())?;
+
+    Ok(parent.join(file_name))
 }
 
 fn sanitize_text(text: &str, max_len: usize) -> Result<String, String> {
@@ -282,7 +298,7 @@ fn license_status_to_response(status: &LicenseStatus) -> String {
 }
 
 #[allow(unused_variables)]
-fn has_valid_license(license_manager: &LicenseManager) -> bool {
+async fn has_valid_license_verified(license_manager: &LicenseManager) -> bool {
     #[cfg(target_os = "linux")]
     {
         true
@@ -290,7 +306,13 @@ fn has_valid_license(license_manager: &LicenseManager) -> bool {
 
     #[cfg(not(target_os = "linux"))]
     {
-        license_manager.is_valid()
+        match license_manager.validate().await {
+            Ok(info) => info.status.allows_usage(),
+            Err(error) => {
+                warn!("Verified license check failed: {}", error);
+                false
+            }
+        }
     }
 }
 
@@ -337,16 +359,6 @@ fn calculate_trial_integrity_hash(trial_started_at: &str) -> String {
     hasher.update(get_device_id().as_bytes());
     hasher.update(b"wavetype-trial-integrity-v1");
     hex::encode(hasher.finalize())
-}
-
-fn ensure_app_access(db: &Database, license_manager: &LicenseManager) -> CommandResult<()> {
-    if has_valid_license(license_manager) || has_active_trial(db) {
-        Ok(())
-    } else {
-        Err(CommandError::License(
-            "A valid license or active trial is required.".to_string(),
-        ))
-    }
 }
 
 // ==================== Settings Commands ====================
@@ -525,23 +537,28 @@ fn set_audio_capture_config(
 }
 
 #[tauri::command]
-fn start_recording(
-    db: State<DbState>,
-    license_manager: State<LicenseManagerState>,
-    recorder: State<RecorderState>,
-    rate_limiter: State<RecordingRateLimiter>,
+async fn start_recording(
+    db: State<'_, DbState>,
+    license_manager: State<'_, LicenseManagerState>,
+    recorder: State<'_, RecorderState>,
+    rate_limiter: State<'_, RecordingRateLimiter>,
 ) -> CommandResult<()> {
-    ensure_app_access(&db.0, &license_manager.0)?;
+    let db = db.0.clone();
+    let license_manager = license_manager.0.clone();
+    let recorder = recorder.0.clone();
+    let rate_limiter = rate_limiter.0.clone();
+
+    ensure_app_access_verified(&db, &license_manager).await?;
 
     // Rate limiting check
-    if !rate_limiter.0.check("start_recording") {
+    if !rate_limiter.check("start_recording") {
         return Err(CommandError::Recording(
             "Rate limit exceeded. Please wait before starting another recording.".to_string(),
         ));
     }
 
     debug!("start_recording called");
-    let mut recorder_guard = recorder.0.lock().unwrap();
+    let mut recorder_guard = recorder.lock().unwrap();
 
     if recorder_guard.is_none() {
         debug!("Creating new AudioRecorder");
@@ -580,13 +597,16 @@ fn stop_recording(recorder: State<RecorderState>) -> CommandResult<Vec<f32>> {
 }
 
 #[tauri::command]
-fn save_temp_audio(
+async fn save_temp_audio(
     app: tauri::AppHandle,
-    db: State<DbState>,
-    license_manager: State<LicenseManagerState>,
+    db: State<'_, DbState>,
+    license_manager: State<'_, LicenseManagerState>,
     samples: Vec<f32>,
 ) -> CommandResult<String> {
-    ensure_app_access(&db.0, &license_manager.0)?;
+    let db = db.0.clone();
+    let license_manager = license_manager.0.clone();
+
+    ensure_app_access_verified(&db, &license_manager).await?;
 
     let temp_dir = app
         .path()
@@ -676,15 +696,20 @@ async fn hide_recording_overlay(app: tauri::AppHandle) -> CommandResult<()> {
 // ==================== Transcription Commands ====================
 
 #[tauri::command]
-fn load_model(
-    db: State<DbState>,
-    license_manager: State<LicenseManagerState>,
-    transcriber: State<TranscriberState>,
-    downloader: State<DownloaderState>,
+async fn load_model(
+    db: State<'_, DbState>,
+    license_manager: State<'_, LicenseManagerState>,
+    transcriber: State<'_, TranscriberState>,
+    downloader: State<'_, DownloaderState>,
     model_id: String,
     language: String,
 ) -> CommandResult<()> {
-    ensure_app_access(&db.0, &license_manager.0)?;
+    let db = db.0.clone();
+    let license_manager = license_manager.0.clone();
+    let transcriber = transcriber.0.clone();
+    let downloader = downloader.0.clone();
+
+    ensure_app_access_verified(&db, &license_manager).await?;
 
     if !is_valid_language_code(&language) {
         return Err(CommandError::Transcription(format!(
@@ -699,7 +724,7 @@ fn load_model(
         )));
     }
 
-    let model_path = downloader.0.get_model_path(&model_id);
+    let model_path = downloader.get_model_path(&model_id);
 
     if !model_path.exists() {
         return Err(CommandError::Transcription(format!(
@@ -710,7 +735,7 @@ fn load_model(
 
     // Drop existing model first to free memory before loading new one
     {
-        let mut transcriber_guard = transcriber.0.lock().unwrap();
+        let mut transcriber_guard = transcriber.lock().unwrap();
         *transcriber_guard = None;
         // Force memory release by dropping the guard
         drop(transcriber_guard);
@@ -720,7 +745,7 @@ fn load_model(
     let new_transcriber = Transcriber::new(&model_id, model_path.to_str().unwrap(), &language)
         .map_err(CommandError::Transcription)?;
 
-    let mut transcriber_guard = transcriber.0.lock().unwrap();
+    let mut transcriber_guard = transcriber.lock().unwrap();
     *transcriber_guard = Some(new_transcriber);
 
     info!("Model loaded: {} (language: {})", model_id, language);
@@ -737,15 +762,19 @@ fn unload_model(transcriber: State<TranscriberState>) -> CommandResult<()> {
 }
 
 #[tauri::command]
-fn transcribe_audio(
-    db: State<DbState>,
-    license_manager: State<LicenseManagerState>,
-    transcriber: State<TranscriberState>,
+async fn transcribe_audio(
+    db: State<'_, DbState>,
+    license_manager: State<'_, LicenseManagerState>,
+    transcriber: State<'_, TranscriberState>,
     audio_samples: Vec<f32>,
 ) -> CommandResult<String> {
-    ensure_app_access(&db.0, &license_manager.0)?;
+    let db = db.0.clone();
+    let license_manager = license_manager.0.clone();
+    let transcriber = transcriber.0.clone();
 
-    let mut transcriber_guard = transcriber.0.lock().unwrap();
+    ensure_app_access_verified(&db, &license_manager).await?;
+
+    let mut transcriber_guard = transcriber.lock().unwrap();
 
     if let Some(ref mut t) = *transcriber_guard {
         let text = t
@@ -764,11 +793,16 @@ async fn record_and_transcribe(
     recorder: State<'_, RecorderState>,
     transcriber: State<'_, TranscriberState>,
 ) -> CommandResult<String> {
-    ensure_app_access(&db.0, &license_manager.0)?;
+    let db = db.0.clone();
+    let license_manager = license_manager.0.clone();
+    let recorder = recorder.0.clone();
+    let transcriber = transcriber.0.clone();
+
+    ensure_app_access_verified(&db, &license_manager).await?;
 
     // Stop recording first
     let samples = {
-        let mut recorder_guard = recorder.0.lock().unwrap();
+        let mut recorder_guard = recorder.lock().unwrap();
         if let Some(ref mut rec) = *recorder_guard {
             rec.stop_recording().map_err(CommandError::Recording)?
         } else {
@@ -779,7 +813,7 @@ async fn record_and_transcribe(
     };
 
     // Transcribe
-    let mut transcriber_guard = transcriber.0.lock().unwrap();
+    let mut transcriber_guard = transcriber.lock().unwrap();
     if let Some(ref mut t) = *transcriber_guard {
         let text = t
             .transcribe(&samples)
@@ -798,43 +832,28 @@ async fn transcribe_file(
     rate_limiter: State<'_, TranscriptionRateLimiter>,
     file_path: String,
 ) -> CommandResult<String> {
-    use std::path::Path;
+    let db = db.0.clone();
+    let license_manager = license_manager.0.clone();
+    let transcriber = transcriber.0.clone();
+    let rate_limiter = rate_limiter.0.clone();
 
-    ensure_app_access(&db.0, &license_manager.0)?;
+    ensure_app_access_verified(&db, &license_manager).await?;
 
     // Rate limiting check
-    if !rate_limiter.0.check("transcribe_file") {
+    if !rate_limiter.check("transcribe_file") {
         return Err(CommandError::Transcription(
             "Rate limit exceeded. Please wait before transcribing another file.".to_string(),
         ));
     }
 
-    // Sanitize and validate file path
-    let safe_path = sanitize_path(&file_path).map_err(CommandError::Transcription)?;
+    let safe_path =
+        canonicalize_existing_file_path(&file_path).map_err(CommandError::Transcription)?;
 
-    let path = Path::new(&safe_path);
-    if !path.exists() {
-        return Err(CommandError::Transcription(format!(
-            "File not found: {}",
-            safe_path
-        )));
-    }
-
-    // Validate file extension
-    let extension = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.to_lowercase());
-
-    match extension.as_deref() {
-        Some("wav") | Some("mp3") | Some("m4a") | Some("ogg") | Some("flac") | Some("aac")
-        | Some("webm") | Some("mkv") => {}
-        _ => {
-            return Err(CommandError::Transcription(
-                "Unsupported audio format. Please use WAV, MP3, M4A, OGG, FLAC, AAC, or WebM."
-                    .to_string(),
-            ));
-        }
+    if !path_has_extension(&safe_path, AUDIO_FILE_EXTENSIONS) {
+        return Err(CommandError::Transcription(
+            "Unsupported audio format. Please use WAV, MP3, M4A, OGG, FLAC, AAC, or WebM."
+                .to_string(),
+        ));
     }
 
     // Check file size (max 500MB)
@@ -846,12 +865,12 @@ async fn transcribe_file(
         ));
     }
 
-    // Read audio file and convert to samples
-    let samples = read_audio_file(&file_path)
+    // Read audio file and convert to capped 16kHz mono samples.
+    let samples = read_audio_file(&safe_path)
         .map_err(|e| CommandError::Transcription(format!("Failed to read audio file: {}", e)))?;
 
     // Transcribe
-    let mut transcriber_guard = transcriber.0.lock().unwrap();
+    let mut transcriber_guard = transcriber.lock().unwrap();
     if let Some(ref mut t) = *transcriber_guard {
         let text = t
             .transcribe(&samples)
@@ -862,7 +881,7 @@ async fn transcribe_file(
     }
 }
 
-fn read_audio_file(file_path: &str) -> Result<Vec<f32>, String> {
+fn read_audio_file(file_path: &std::path::Path) -> Result<Vec<f32>, String> {
     use std::fs::File;
     use symphonia::core::audio::SampleBuffer;
     use symphonia::core::codecs::DecoderOptions;
@@ -878,10 +897,7 @@ fn read_audio_file(file_path: &str) -> Result<Vec<f32>, String> {
 
     // Create a hint to help the format registry guess what format reader is appropriate
     let mut hint = Hint::new();
-    if let Some(ext) = std::path::Path::new(file_path)
-        .extension()
-        .and_then(|e| e.to_str())
-    {
+    if let Some(ext) = file_path.extension().and_then(|e| e.to_str()) {
         hint.with_extension(ext);
     }
 
@@ -906,14 +922,21 @@ fn read_audio_file(file_path: &str) -> Result<Vec<f32>, String> {
 
     let track_id = track.id;
     let sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
-    let channels = track.codec_params.channels.map(|c| c.count()).unwrap_or(2);
+    let channels = track
+        .codec_params
+        .channels
+        .map(|c| c.count())
+        .unwrap_or(2)
+        .max(1);
 
     // Create a decoder
     let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &DecoderOptions::default())
         .map_err(|e| format!("Failed to create decoder: {}", e))?;
 
-    let mut all_samples: Vec<f32> = Vec::new();
+    let mut samples = Vec::with_capacity((AUDIO_TARGET_SAMPLE_RATE as usize * 60).min(
+        MAX_FILE_AUDIO_SAMPLES,
+    ));
 
     // Decode all packets
     loop {
@@ -943,34 +966,54 @@ fn read_audio_file(file_path: &str) -> Result<Vec<f32>, String> {
             Err(e) => return Err(format!("Failed to decode: {}", e)),
         };
 
-        // Convert to f32 samples
+        // Convert the current packet to f32 samples, then immediately fold it
+        // into the capped mono 16kHz buffer. This avoids retaining the full
+        // decoded source stream in memory.
         let spec = *decoded.spec();
         let duration = decoded.capacity() as u64;
         let mut sample_buf = SampleBuffer::<f32>::new(duration, spec);
         sample_buf.copy_interleaved_ref(decoded);
 
-        all_samples.extend_from_slice(sample_buf.samples());
+        let mono = interleaved_to_mono(sample_buf.samples(), channels);
+
+        let normalized = if sample_rate != AUDIO_TARGET_SAMPLE_RATE {
+            resample_audio(&mono, sample_rate, AUDIO_TARGET_SAMPLE_RATE)
+        } else {
+            mono
+        };
+
+        append_audio_samples_with_limit(&mut samples, &normalized, MAX_FILE_AUDIO_SAMPLES)?;
     }
 
-    // Convert to mono if needed
-    let mono: Vec<f32> = if channels > 1 {
-        all_samples
+    Ok(samples)
+}
+
+fn append_audio_samples_with_limit(
+    target: &mut Vec<f32>,
+    source: &[f32],
+    max_samples: usize,
+) -> Result<(), String> {
+    let remaining = max_samples.saturating_sub(target.len());
+    if source.len() > remaining {
+        return Err(format!(
+            "Audio is too long. Maximum supported duration is {} minutes.",
+            MAX_FILE_TRANSCRIPTION_SECONDS / 60
+        ));
+    }
+
+    target.extend_from_slice(source);
+    Ok(())
+}
+
+fn interleaved_to_mono(samples: &[f32], channels: usize) -> Vec<f32> {
+    if channels > 1 {
+        samples
             .chunks(channels)
             .map(|chunk| chunk.iter().sum::<f32>() / channels as f32)
             .collect()
     } else {
-        all_samples
-    };
-
-    // Resample to 16kHz if needed
-    let target_rate = 16000u32;
-    let resampled = if sample_rate != target_rate {
-        resample_audio(&mono, sample_rate, target_rate)
-    } else {
-        mono
-    };
-
-    Ok(resampled)
+        samples.to_vec()
+    }
 }
 
 fn resample_audio(samples: &[f32], source_rate: u32, target_rate: u32) -> Vec<f32> {
@@ -1007,13 +1050,16 @@ async fn download_model(
     license_manager: State<'_, LicenseManagerState>,
     model_id: String,
 ) -> CommandResult<String> {
-    ensure_app_access(&db.0, &license_manager.0)?;
+    let db = db.0.clone();
+    let license_manager = license_manager.0.clone();
+    let downloader = downloader.0.clone();
+
+    ensure_app_access_verified(&db, &license_manager).await?;
 
     let app_clone = app.clone();
     let model_id_clone = model_id.clone();
 
     let model_path = downloader
-        .0
         .download_model(&model_id, move |progress: DownloadProgress| {
             // Emit progress event to frontend
             let _ = app_clone.emit("download-progress", progress);
@@ -1023,7 +1069,7 @@ async fn download_model(
 
     // Update database
     let path_str = model_path.to_str().unwrap().to_string();
-    db.0.set_model_downloaded(&model_id_clone, true, Some(&path_str))
+    db.set_model_downloaded(&model_id_clone, true, Some(&path_str))
         .map_err(CommandError::Database)?;
 
     Ok(path_str)
@@ -1530,21 +1576,28 @@ fn clear_stored_license(db: State<DbState>) -> CommandResult<()> {
 
 #[tauri::command]
 #[allow(unused_variables)]
-fn is_license_valid(db: State<DbState>, license_manager: State<LicenseManagerState>) -> bool {
+async fn is_license_valid(
+    db: State<'_, DbState>,
+    license_manager: State<'_, LicenseManagerState>,
+) -> CommandResult<bool> {
+    let db = db.0.clone();
+    let license_manager = license_manager.0.clone();
+
     // Linux users get free access forever
     #[cfg(target_os = "linux")]
     {
-        return true;
+        return Ok(true);
     }
 
     #[cfg(not(target_os = "linux"))]
     {
-        // First check with license manager (secure cache)
-        if has_valid_license(&license_manager.0) {
-            return true;
+        // Prefer server validation. LicenseManager falls back to offline grace
+        // only for non-authoritative network failures.
+        if has_valid_license_verified(&license_manager).await {
+            return Ok(true);
         }
 
-        has_active_trial(&db.0)
+        Ok(has_active_trial(&db))
     }
 }
 
@@ -1635,10 +1688,13 @@ fn is_platform_free() -> bool {
 
 #[tauri::command]
 #[allow(unused_variables)]
-fn get_trial_status(
-    db: State<DbState>,
-    license_manager: State<LicenseManagerState>,
+async fn get_trial_status(
+    db: State<'_, DbState>,
+    license_manager: State<'_, LicenseManagerState>,
 ) -> CommandResult<serde_json::Value> {
+    let db = db.0.clone();
+    let license_manager = license_manager.0.clone();
+
     // Linux users are always free
     #[cfg(target_os = "linux")]
     {
@@ -1653,8 +1709,8 @@ fn get_trial_status(
 
     #[cfg(not(target_os = "linux"))]
     {
-        // Check for active license first, using the secure device-bound cache.
-        if has_valid_license(&license_manager.0) {
+        // Check for active license first with server validation when possible.
+        if has_valid_license_verified(&license_manager).await {
             return Ok(serde_json::json!({
                 "isInTrial": false,
                 "daysRemaining": 0,
@@ -1663,7 +1719,7 @@ fn get_trial_status(
             }));
         }
 
-        let license = db.0.get_license().map_err(CommandError::Database)?;
+        let license = db.get_license().map_err(CommandError::Database)?;
         // Check trial status
         if let Some(trial_started) = &license.trial_started_at {
             let expected_hash = calculate_trial_integrity_hash(trial_started);
@@ -1707,10 +1763,13 @@ fn get_trial_status(
 
 #[tauri::command]
 #[allow(unused_variables)]
-fn can_use_app(
-    db: State<DbState>,
-    license_manager: State<LicenseManagerState>,
+async fn can_use_app(
+    db: State<'_, DbState>,
+    license_manager: State<'_, LicenseManagerState>,
 ) -> CommandResult<serde_json::Value> {
+    let db = db.0.clone();
+    let license_manager = license_manager.0.clone();
+
     // Linux users get free access forever - no license required
     #[cfg(target_os = "linux")]
     {
@@ -1724,8 +1783,9 @@ fn can_use_app(
 
     #[cfg(not(target_os = "linux"))]
     {
-        // Check for active license using the encrypted, device-bound cache.
-        if has_valid_license(&license_manager.0) {
+        // Prefer server validation. LicenseManager falls back to offline grace
+        // only for non-authoritative network failures.
+        if has_valid_license_verified(&license_manager).await {
             return Ok(serde_json::json!({
                 "canUse": true,
                 "reason": "licensed",
@@ -1733,7 +1793,7 @@ fn can_use_app(
             }));
         }
 
-        let license = db.0.get_license().map_err(CommandError::Database)?;
+        let license = db.get_license().map_err(CommandError::Database)?;
 
         // Check trial status
         if let Some(trial_started) = &license.trial_started_at {
@@ -2078,6 +2138,19 @@ async fn export_error_reports(
 }
 
 #[tauri::command]
+async fn save_export_file(path: String, content: String) -> Result<(), CommandError> {
+    let sanitized_content = sanitize_text(&content, MAX_EXPORT_BYTES)
+        .map_err(CommandError::PostProcessing)?;
+    let export_path = validate_export_path(&path)
+        .map_err(|e| CommandError::Io(std::io::Error::other(e)))?;
+
+    std::fs::write(&export_path, sanitized_content)?;
+    info!("Export saved to: {:?}", export_path);
+
+    Ok(())
+}
+
+#[tauri::command]
 async fn clear_error_reports() -> Result<(), CommandError> {
     if let Some(reporter) = ErrorReporter::global() {
         reporter.clear();
@@ -2120,7 +2193,6 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_notification::init())
@@ -2268,6 +2340,7 @@ pub fn run() {
             get_error_reports,
             get_error_stats,
             export_error_reports,
+            save_export_file,
             clear_error_reports,
             load_error_reports,
         ])
@@ -2403,5 +2476,41 @@ fn show_main_window(app: &tauri::AppHandle) {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
+    }
+}
+
+async fn ensure_app_access_verified(
+    db: &Database,
+    license_manager: &LicenseManager,
+) -> CommandResult<()> {
+    if has_valid_license_verified(license_manager).await || has_active_trial(db) {
+        Ok(())
+    } else {
+        Err(CommandError::License(
+            "A valid license or active trial is required.".to_string(),
+        ))
+    }
+}
+
+#[cfg(test)]
+mod audio_ingestion_tests {
+    use super::*;
+
+    #[test]
+    fn append_audio_samples_rejects_over_limit() {
+        let mut target = vec![0.0, 0.1];
+        let source = vec![0.2, 0.3];
+
+        let result = append_audio_samples_with_limit(&mut target, &source, 3);
+
+        assert!(result.is_err());
+        assert_eq!(target, vec![0.0, 0.1]);
+    }
+
+    #[test]
+    fn interleaved_to_mono_averages_channels() {
+        let mono = interleaved_to_mono(&[1.0, -1.0, 0.5, 0.25], 2);
+
+        assert_eq!(mono, vec![0.0, 0.375]);
     }
 }

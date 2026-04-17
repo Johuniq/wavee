@@ -117,6 +117,7 @@ export async function transcribeFile(
   let text = await invoke<string>("transcribe_file", { filePath });
   if (enablePostProcessing && text) {
     text = await postProcessText(text);
+    text = stripVoiceCommandTokens(text);
   }
   return text;
 }
@@ -203,6 +204,7 @@ export interface VoiceToTextOptions {
   onError?: (error: string) => void;
   injectToActiveWindow?: boolean;
   enablePostProcessing?: boolean;
+  enableVoiceCommands?: boolean;
 }
 
 /**
@@ -227,8 +229,9 @@ export async function completeVoiceToText(
     // Apply post-processing if enabled
     if (options.enablePostProcessing && text) {
       text = await postProcessText(text);
-      // Process voice commands (execute actions and remove from text)
-      text = await processVoiceCommands(text);
+      text = options.enableVoiceCommands
+        ? await processVoiceCommands(text)
+        : stripVoiceCommandTokens(text);
     }
 
     options.onTranscriptionComplete?.(text);
@@ -349,6 +352,16 @@ const VOICE_COMMANDS: Record<string, () => Promise<void>> = {
   },
 };
 
+function stripVoiceCommandTokens(text: string): string {
+  let result = text;
+
+  for (const command of Object.keys(VOICE_COMMANDS)) {
+    result = result.split(command).join("");
+  }
+
+  return result.trim();
+}
+
 /**
  * Process voice commands in text and execute them
  * Returns the text with commands removed, and executes the commands
@@ -365,7 +378,7 @@ async function processVoiceCommands(text: string): Promise<string> {
         console.error(`Failed to execute voice command ${command}:`, error);
       }
       // Remove the command from text
-      result = result.replace(command, "").trim();
+      result = result.split(command).join("").trim();
     }
   }
 
@@ -378,11 +391,13 @@ async function processVoiceCommands(text: string): Promise<string> {
 export async function stopTranscribeAndInject(
   enablePostProcessing: boolean = true,
   clipboardMode: boolean = false,
-  selectedModelId?: string
+  selectedModelId?: string,
+  enableVoiceCommands: boolean = false
 ): Promise<string | null> {
   try {
     let text = await completeVoiceToText({
       enablePostProcessing,
+      enableVoiceCommands,
       injectToActiveWindow: !clipboardMode,
     }, selectedModelId);
 

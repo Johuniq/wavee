@@ -153,7 +153,6 @@ export async function downloadFile(
   try {
     // Use dynamic import to avoid issues
     const { save } = await import("@tauri-apps/plugin-dialog");
-    const { writeTextFile } = await import("@tauri-apps/plugin-fs");
 
     // Open save dialog
     const isMarkdown =
@@ -172,8 +171,7 @@ export async function downloadFile(
     });
 
     if (filePath) {
-      // Write file to selected location
-      await writeTextFile(filePath, content);
+      await invoke("save_export_file", { path: filePath, content });
       return true;
     }
     return false;

@@ -128,6 +128,7 @@ body,
 #root {
   scrollbar-width: none; /* hide scrollbar for Firefox */
   -ms-overflow-style: none; /* hide scrollbar for IE 10+ */
+  overscroll-behavior-x: none;
 }
 
 /* WebKit (Chrome, Edge, Safari) */
@@ -538,43 +539,8 @@ body,
 
 /* Glass container background mesh */
 .glass-mesh-bg {
-  position: fixed;
-  inset: 0;
-  background: radial-gradient(
-      ellipse at 20% 30%,
-      rgba(120, 180, 255, 0.15) 0%,
-      transparent 50%
-    ),
-    radial-gradient(
-      ellipse at 80% 70%,
-      rgba(255, 120, 180, 0.12) 0%,
-      transparent 50%
-    ),
-    radial-gradient(
-      ellipse at 50% 50%,
-      rgba(180, 120, 255, 0.1) 0%,
-      transparent 60%
-    );
+  display: none;
   pointer-events: none;
-  z-index: -1;
-}
-
-.dark .glass-mesh-bg {
-  background: radial-gradient(
-      ellipse at 20% 30%,
-      rgba(60, 100, 180, 0.2) 0%,
-      transparent 50%
-    ),
-    radial-gradient(
-      ellipse at 80% 70%,
-      rgba(180, 60, 120, 0.15) 0%,
-      transparent 50%
-    ),
-    radial-gradient(
-      ellipse at 50% 50%,
-      rgba(100, 60, 180, 0.12) 0%,
-      transparent 60%
-    );
 }
 
 /* Floating glass elements animation */

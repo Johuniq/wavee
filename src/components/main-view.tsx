@@ -261,6 +261,7 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
         currentSettings.postProcessingEnabled,
         currentSettings.clipboardMode,
         selectedModel?.id,
+        currentSettings.voiceCommandsEnabled,
       );
       const durationMs = Date.now() - startTime;
 

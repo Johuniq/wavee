@@ -8,7 +8,10 @@ use std::time::Duration;
 
 // Pre-allocate buffer for ~30 seconds of 16kHz mono audio
 // This reduces dynamic allocations during recording
-const INITIAL_BUFFER_CAPACITY: usize = 16000 * 30;
+const TARGET_SAMPLE_RATE: u32 = 16_000;
+const INITIAL_BUFFER_CAPACITY: usize = TARGET_SAMPLE_RATE as usize * 30;
+const MAX_RECORDING_SECONDS: usize = 5 * 60;
+const MAX_RECORDING_SAMPLES: usize = TARGET_SAMPLE_RATE as usize * MAX_RECORDING_SECONDS;
 
 pub enum RecorderCommand {
     Stop,
@@ -422,54 +425,77 @@ fn build_stream_for_config(
 ) -> Result<cpal::Stream, String> {
     let sample_rate = config.sample_rate().0;
     let channels = config.channels() as usize;
-    let target_sample_rate = 16000u32;
+    let target_sample_rate = TARGET_SAMPLE_RATE;
     let err_fn = |err| eprintln!("[AUDIO ERROR] Audio stream error: {}", err);
 
     let stream = match config.sample_format() {
-        SampleFormat::F32 => device.build_input_stream(
-            &config.into(),
-            move |data: &[f32], _: &_| {
-                if is_recording.load(Ordering::SeqCst) {
-                    process_audio_data(data, channels, sample_rate, target_sample_rate, &samples);
-                }
-            },
-            err_fn,
-            None,
-        ),
-        SampleFormat::I16 => device.build_input_stream(
-            &config.into(),
-            move |data: &[i16], _: &_| {
-                if is_recording.load(Ordering::SeqCst) {
-                    let float_data: Vec<f32> = data.iter().map(|&s| s.to_float_sample()).collect();
-                    process_audio_data(
-                        &float_data,
-                        channels,
-                        sample_rate,
-                        target_sample_rate,
-                        &samples,
-                    );
-                }
-            },
-            err_fn,
-            None,
-        ),
-        SampleFormat::U16 => device.build_input_stream(
-            &config.into(),
-            move |data: &[u16], _: &_| {
-                if is_recording.load(Ordering::SeqCst) {
-                    let float_data: Vec<f32> = data.iter().map(|&s| s.to_float_sample()).collect();
-                    process_audio_data(
-                        &float_data,
-                        channels,
-                        sample_rate,
-                        target_sample_rate,
-                        &samples,
-                    );
-                }
-            },
-            err_fn,
-            None,
-        ),
+        SampleFormat::F32 => {
+            let is_recording = is_recording.clone();
+            let samples = samples.clone();
+            device.build_input_stream(
+                &config.into(),
+                move |data: &[f32], _: &_| {
+                    if is_recording.load(Ordering::SeqCst) {
+                        process_audio_data(
+                            data,
+                            channels,
+                            sample_rate,
+                            target_sample_rate,
+                            &samples,
+                            &is_recording,
+                        );
+                    }
+                },
+                err_fn,
+                None,
+            )
+        }
+        SampleFormat::I16 => {
+            let is_recording = is_recording.clone();
+            let samples = samples.clone();
+            device.build_input_stream(
+                &config.into(),
+                move |data: &[i16], _: &_| {
+                    if is_recording.load(Ordering::SeqCst) {
+                        let float_data: Vec<f32> =
+                            data.iter().map(|&s| s.to_float_sample()).collect();
+                        process_audio_data(
+                            &float_data,
+                            channels,
+                            sample_rate,
+                            target_sample_rate,
+                            &samples,
+                            &is_recording,
+                        );
+                    }
+                },
+                err_fn,
+                None,
+            )
+        }
+        SampleFormat::U16 => {
+            let is_recording = is_recording.clone();
+            let samples = samples.clone();
+            device.build_input_stream(
+                &config.into(),
+                move |data: &[u16], _: &_| {
+                    if is_recording.load(Ordering::SeqCst) {
+                        let float_data: Vec<f32> =
+                            data.iter().map(|&s| s.to_float_sample()).collect();
+                        process_audio_data(
+                            &float_data,
+                            channels,
+                            sample_rate,
+                            target_sample_rate,
+                            &samples,
+                            &is_recording,
+                        );
+                    }
+                },
+                err_fn,
+                None,
+            )
+        }
         _ => return Err("Unsupported sample format".to_string()),
     }
     .map_err(|e| format!("Failed to build audio stream: {}", e))?;
@@ -567,6 +593,7 @@ fn process_audio_data(
     source_rate: u32,
     target_rate: u32,
     samples: &Arc<Mutex<Vec<f32>>>,
+    is_recording: &Arc<AtomicBool>,
 ) {
     // Convert to mono if stereo
     let mono: Vec<f32> = if channels > 1 {
@@ -584,7 +611,19 @@ fn process_audio_data(
         mono
     };
 
-    samples.lock().unwrap().extend(resampled);
+    let mut samples = samples.lock().unwrap();
+    let remaining = MAX_RECORDING_SAMPLES.saturating_sub(samples.len());
+    if remaining == 0 {
+        is_recording.store(false, Ordering::SeqCst);
+        return;
+    }
+
+    if resampled.len() >= remaining {
+        samples.extend_from_slice(&resampled[..remaining]);
+        is_recording.store(false, Ordering::SeqCst);
+    } else {
+        samples.extend(resampled);
+    }
 }
 
 fn resample(samples: &[f32], source_rate: u32, target_rate: u32) -> Vec<f32> {

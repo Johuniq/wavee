@@ -470,6 +470,29 @@ export function SettingsView({ onClose }: SettingsViewProps) {
               />
             </div>
 
+            {/* Voice Commands */}
+            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
+                  <Keyboard className="h-4 w-4 text-foreground/60" />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium cursor-pointer text-foreground">
+                    Voice Commands
+                  </Label>
+                  <p className="text-xs text-foreground/60">
+                    Allow spoken editing commands like undo, paste, and delete line
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={settings.voiceCommandsEnabled}
+                onCheckedChange={(checked) =>
+                  updateSettings({ voiceCommandsEnabled: checked })
+                }
+              />
+            </div>
+
             {/* Clipboard Mode */}
             <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
               <div className="flex items-center gap-3">

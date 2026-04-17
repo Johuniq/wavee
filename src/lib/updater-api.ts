@@ -7,6 +7,9 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { logger } from "./logger";
 
+const MINIMUM_SAFE_UPDATE_VERSION = "1.0.0";
+const UPDATER_CHECK_OPTIONS = { allowDowngrades: false } as const;
+
 export interface UpdateInfo {
   version: string;
   date?: string;
@@ -28,6 +31,36 @@ export type UpdateStatus =
   | { status: "ready"; info: UpdateInfo }
   | { status: "error"; message: string };
 
+function parseVersion(version: string): number[] {
+  return version
+    .replace(/^v/i, "")
+    .split(/[.-]/)
+    .map((part) => {
+      const value = Number.parseInt(part, 10);
+      return Number.isFinite(value) ? value : 0;
+    });
+}
+
+function compareVersions(left: string, right: string): number {
+  const a = parseVersion(left);
+  const b = parseVersion(right);
+  const length = Math.max(a.length, b.length);
+
+  for (let i = 0; i < length; i += 1) {
+    const diff = (a[i] ?? 0) - (b[i] ?? 0);
+    if (diff !== 0) return diff > 0 ? 1 : -1;
+  }
+
+  return 0;
+}
+
+function isAllowedUpdateVersion(updateVersion: string, currentVersion: string) {
+  return (
+    compareVersions(updateVersion, currentVersion) > 0 &&
+    compareVersions(updateVersion, MINIMUM_SAFE_UPDATE_VERSION) >= 0
+  );
+}
+
 /**
  * Check for available updates
  */
@@ -35,13 +68,26 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
   try {
     logger.info("Checking for updates...");
 
-    const update = await check();
+    const currentVersion = await getCurrentVersion();
+    const update = await check(UPDATER_CHECK_OPTIONS);
 
     if (!update) {
       logger.info("No updates available");
       return {
         status: "not-available",
-        currentVersion: await getCurrentVersion(),
+        currentVersion,
+      };
+    }
+
+    if (!isAllowedUpdateVersion(update.version, currentVersion)) {
+      logger.warn("Rejected unsafe update version", {
+        currentVersion,
+        updateVersion: update.version,
+        minimumSafeUpdateVersion: MINIMUM_SAFE_UPDATE_VERSION,
+      });
+      return {
+        status: "not-available",
+        currentVersion,
       };
     }
 
@@ -53,7 +99,7 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
         version: update.version,
         date: update.date,
         body: update.body,
-        currentVersion: await getCurrentVersion(),
+        currentVersion,
       },
     };
   } catch (error) {
@@ -99,12 +145,20 @@ export async function downloadAndInstallUpdate(
   try {
     logger.info("Starting update download...");
 
-    const update = await check();
+    const currentVersion = await getCurrentVersion();
+    const update = await check(UPDATER_CHECK_OPTIONS);
 
     if (!update) {
       return {
         status: "not-available",
-        currentVersion: await getCurrentVersion(),
+        currentVersion,
+      };
+    }
+
+    if (!isAllowedUpdateVersion(update.version, currentVersion)) {
+      return {
+        status: "error",
+        message: `Rejected update ${update.version}; current version is ${currentVersion}.`,
       };
     }
 
@@ -136,7 +190,7 @@ export async function downloadAndInstallUpdate(
         version: update.version,
         date: update.date,
         body: update.body,
-        currentVersion: await getCurrentVersion(),
+        currentVersion,
       },
     };
   } catch (error) {
