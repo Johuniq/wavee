@@ -111,7 +111,8 @@ jobs:
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
-            throw "WINDOWS_CERTIFICATE and WINDOWS_CERTIFICATE_PASSWORD secrets are required for Windows release signing."
+            Write-Warning "WINDOWS_CERTIFICATE and WINDOWS_CERTIFICATE_PASSWORD secrets are not set. Building unsigned Windows installer."
+            exit 0
           }
 
           $certPath = Join-Path $env:RUNNER_TEMP "wavee-signing.pfx"
@@ -126,7 +127,7 @@ jobs:
           "WINDOWS_CERTIFICATE_THUMBPRINT=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Configure Windows signing
-        if: matrix.platform == 'windows-latest'
+        if: matrix.platform == 'windows-latest' && env.WINDOWS_CERTIFICATE_THUMBPRINT != ''
         shell: pwsh
         run: |
           if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_THUMBPRINT)) {
