@@ -232,9 +232,15 @@ jobs:
 
           cargo install tauri-cli --version "^2" --locked
 
-          VERSION="${GITHUB_REF_NAME#v}" \
+          latest_generated=false
+          if VERSION="${GITHUB_REF_NAME#v}" \
             REQUIRE_ALL_PLATFORMS=true \
-            node scripts/generate-latest-json.mjs release-assets release-assets/latest.json
+            node scripts/generate-latest-json.mjs release-assets release-assets/latest.json; then
+            latest_generated=true
+          else
+            echo "::warning::Updater manifest signing failed. Publishing release assets and checksums without latest.json."
+            rm -f release-assets/latest.json
+          fi
 
           sig_files=()
           for sig_file in release-assets/*.sig; do
@@ -250,9 +256,13 @@ jobs:
             echo "No standalone .sig files were generated; latest.json contains updater signatures."
           fi
 
-          gh release upload "$GITHUB_REF_NAME" release-assets/latest.json \
-            --repo "$GITHUB_REPOSITORY" \
-            --clobber
+          if [[ "$latest_generated" == "true" && -f release-assets/latest.json ]]; then
+            gh release upload "$GITHUB_REF_NAME" release-assets/latest.json \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            echo "Skipping latest.json upload because updater signing did not complete."
+          fi
 
           cd release-assets
           sha256sum * | sort -k2 > SHA256SUMS.txt
