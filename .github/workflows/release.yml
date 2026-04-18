@@ -169,6 +169,41 @@ jobs:
           args: ${{ matrix.args }}
           includeUpdaterJson: true
 
+      - name: Upload macOS updater app archive
+        if: matrix.platform == 'macos-latest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "${{ matrix.args }}" == *"aarch64-apple-darwin"* ]]; then
+            TARGET="aarch64-apple-darwin"
+            ARCH="aarch64"
+          else
+            TARGET="x86_64-apple-darwin"
+            ARCH="x64"
+          fi
+
+          MACOS_BUNDLE_DIR="src-tauri/target/${TARGET}/release/bundle/macos"
+          APP_NAME="$(find "$MACOS_BUNDLE_DIR" -maxdepth 1 -name "*.app" -type d -print -quit)"
+
+          if [[ -z "$APP_NAME" ]]; then
+            echo "::error::No .app bundle found in ${MACOS_BUNDLE_DIR}"
+            find "src-tauri/target/${TARGET}/release/bundle" -maxdepth 3 -print || true
+            exit 1
+          fi
+
+          ARCHIVE="Wavee_${VERSION}_${ARCH}.app.tar.gz"
+          COPYFILE_DISABLE=1 tar -C "$MACOS_BUNDLE_DIR" \
+            --exclude='._*' \
+            --exclude='.DS_Store' \
+            -czf "$ARCHIVE" "$(basename "$APP_NAME")"
+
+          gh release upload "$GITHUB_REF_NAME" "$ARCHIVE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
   publish-release:
     runs-on: ubuntu-latest
     needs: [create-release, build-tauri]
