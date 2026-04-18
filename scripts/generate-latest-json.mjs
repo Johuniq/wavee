@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
 const [assetDir, outFile] = process.argv.slice(2);
@@ -26,6 +27,13 @@ if (!signingKey) {
   process.exit(1);
 }
 
+const signingKeyDir = mkdtempSync(join(tmpdir(), "wavee-tauri-key-"));
+const signingKeyPath = join(signingKeyDir, "tauri.key");
+writeFileSync(signingKeyPath, signingKey, { mode: 0o600 });
+process.on("exit", () => {
+  rmSync(signingKeyDir, { recursive: true, force: true });
+});
+
 const files = readdirSync(assetDir).filter((name) => !name.endsWith(".sig"));
 
 function findAsset(patterns) {
@@ -39,10 +47,18 @@ function signAsset(fileName) {
   const signaturePath = `${filePath}.sig`;
 
   if (!existsSync(signaturePath)) {
-    execFileSync("cargo", ["tauri", "signer", "sign", "--password", signingPassword, filePath], {
+    execFileSync("cargo", [
+      "tauri",
+      "signer",
+      "sign",
+      "--private-key-path",
+      signingKeyPath,
+      "--password",
+      signingPassword,
+      filePath,
+    ], {
       env: {
         ...process.env,
-        TAURI_SIGNING_PRIVATE_KEY: signingKey,
         TAURI_SIGNING_PRIVATE_KEY_PASSWORD: signingPassword,
       },
       stdio: "inherit",
