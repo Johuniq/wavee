@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Open-source desktop dictation app that turns your voice into text at your cursor",
   "author": "Johuniq",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "homepage": "https://github.com/johuniq/wavee#readme",
   "repository": {
     "type": "git",

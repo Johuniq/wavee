@@ -500,4 +500,4 @@ Potential features for future releases:
 
 **Version**: 1.0.0  
 **Last Updated**: December 2025  
-**License**: MIT
+**License**: AGPL-3.0-only

@@ -180,6 +180,6 @@ Please report vulnerabilities privately using the process in [SECURITY.md](SECUR
 
 ## License
 
-Wavee is released under the [MIT License](LICENSE).
+Wavee is released under the [GNU Affero General Public License v3.0](LICENSE).
 
 This repository includes vendored third-party code under `src-tauri/vendor/`. Those components keep their own upstream license files where provided.
