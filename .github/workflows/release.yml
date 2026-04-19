@@ -16,7 +16,8 @@ jobs:
   create-release:
     runs-on: ubuntu-latest
     outputs:
-      release_id: ${{ steps.create-release.outputs.result }}
+      release_id: ${{ steps.prepare-release.outputs.release_id }}
+      release_was_draft: ${{ steps.prepare-release.outputs.release_was_draft }}
     steps:
       - uses: actions/checkout@v4
 
@@ -24,21 +25,52 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Create Release
-        id: create-release
+      - name: Create Or Reuse Release
+        id: prepare-release
         uses: actions/github-script@v7
         with:
           script: |
-            const { data } = await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: `v${{ steps.version.outputs.version }}`,
-              name: `Wavee v${{ steps.version.outputs.version }}`,
-              body: 'See the assets section below to download the installer for your platform.',
-              draft: true,
-              prerelease: false
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tagName = `v${{ steps.version.outputs.version }}`;
+            const releaseName = `Wavee ${tagName}`;
+            const body = 'See the assets section below to download the installer for your platform.';
+
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner,
+              repo,
+              per_page: 100
             });
-            return data.id
+
+            const matching = releases.filter((release) => release.tag_name === tagName);
+            let release = matching.find((candidate) => !candidate.draft) || matching[0];
+
+            if (release) {
+              core.info(`Reusing ${release.draft ? 'draft' : 'published'} release ${release.id} for ${tagName}.`);
+              await github.rest.repos.updateRelease({
+                owner,
+                repo,
+                release_id: release.id,
+                name: release.name || releaseName,
+                body: release.body || body,
+                prerelease: false
+              });
+            } else {
+              core.info(`Creating draft release for ${tagName}.`);
+              const response = await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: tagName,
+                name: releaseName,
+                body,
+                draft: true,
+                prerelease: false
+              });
+              release = response.data;
+            }
+
+            core.setOutput('release_id', String(release.id));
+            core.setOutput('release_was_draft', String(release.draft));
 
   build-tauri:
     needs: create-release
@@ -274,17 +306,20 @@ jobs:
         uses: actions/github-script@v7
         env:
           release_id: ${{ needs.create-release.outputs.release_id }}
+          release_was_draft: ${{ needs.create-release.outputs.release_was_draft }}
         with:
           script: |
-            github.rest.repos.updateRelease({
+            const payload = {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              release_id: process.env.release_id,
+              release_id: Number(process.env.release_id),
               body: [
-                'See the assets section below to download the installer for your platform.',
-                '',
-                'Windows builds are expected to be Authenticode signed in production.',
-                'Verify downloaded assets against `SHA256SUMS.txt` before running them.'
-              ].join('\n'),
-              draft: false,
-            })
+                'See the assets section below to download the installer for your platform.'
+              ].join('\n')
+            };
+
+            if (process.env.release_was_draft === 'true') {
+              payload.draft = false;
+            }
+
+            await github.rest.repos.updateRelease(payload);
