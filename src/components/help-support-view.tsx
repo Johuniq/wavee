@@ -6,7 +6,6 @@ import {
   ExternalLink,
   HelpCircle,
   Keyboard,
-  Mail,
   Mic,
   RefreshCcw,
   Wrench,
@@ -44,19 +43,13 @@ const supportLinks = [
     icon: BookOpen,
     title: "Release notes",
     text: "Latest builds and update details",
-    url: "https://github.com/Johuniq/wavee/releases",
+    url: "https://github.com/johuniq/wavee/releases",
   },
   {
     icon: Bug,
     title: "Report a bug",
     text: "Share what happened and what you expected",
-    url: "https://github.com/Johuniq/wavee/issues",
-  },
-  {
-    icon: Mail,
-    title: "Contact support",
-    text: "support@johuniq.tech",
-    url: "mailto:support@johuniq.tech",
+    url: "https://github.com/johuniq/wavee/issues/new/choose",
   },
 ];
 
@@ -129,14 +122,14 @@ export function HelpSupportView({ onClose }: HelpSupportViewProps) {
         <div className="glass-card p-4 rounded-2xl">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
-              <Mail className="h-4 w-4 text-foreground/60" />
+              <Bug className="h-4 w-4 text-foreground/60" />
             </div>
             <div>
               <h2 className="font-semibold text-sm text-foreground">
                 Support resources
               </h2>
               <p className="text-xs text-foreground/60">
-                Get updates or send a report
+                Get updates or open a report
               </p>
             </div>
           </div>

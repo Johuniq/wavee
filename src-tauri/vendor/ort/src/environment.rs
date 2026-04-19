@@ -98,7 +98,7 @@ static _ON_EXIT: unsafe extern "system" fn(module: *mut (), reason: u32, reserve
 // macOS used to have the __mod_term_func section which worked similar to `.fini_array`, but one day they just decided
 // to remove it I guess? So we have to set an atexit handler instead. But normal atexit doesn't work, we need to use
 // __cxa_atexit. And if you register it too early in the program (i.e. in __mod_init_func), it'll fire *after* C++
-// destructors. So we call this after we create the environment instead. This shit took years off my life.
+// destructors. So we call this after we create the environment instead.
 #[cfg(target_vendor = "apple")]
 fn register_atexit() {
 	unsafe extern "C" {
@@ -425,7 +425,7 @@ pub(crate) unsafe extern "system" fn thread_create<T: ThreadManager + Any>(
 		})
 	};
 	#[cfg(not(feature = "std"))]
-	let res = Result::<_, crate::Error>::Ok(runner()); // dumb hack
+	let res = Result::<_, crate::Error>::Ok(runner());
 	#[cfg(feature = "std")]
 	let res = std::panic::catch_unwind(runner);
 	match res {

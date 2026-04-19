@@ -677,7 +677,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             </p>
             <div className="h-px w-16 bg-border/50 my-3" />
             <p className="text-xs text-foreground/60">
-              © {new Date().getFullYear()} Johuniq. All rights reserved.
+              © {new Date().getFullYear()} Johuniq. Released under the MIT License.
             </p>
           </div>
         </div>

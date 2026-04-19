@@ -1,66 +1,113 @@
 # Wavee
 
-Wavee is a desktop voice-to-text application that runs locally on Windows and macOS. It provides fast, private transcription using local AI models, keyboard shortcuts for quick capture, and tools for managing transcription history. The project focuses on privacy, offline processing, and a streamlined user experience.
+Wavee is an open-source desktop voice-to-text app built with Tauri, React, and Rust. It records speech, transcribes it locally with supported AI models, and can insert the result into other applications with optional post-processing.
 
-License: Proprietary (All rights reserved)
-
----
+Audio is processed on your device by default. Model files are downloaded to local app storage and transcription history is stored in a local SQLite database.
 
 ## Features
 
-- Local AI transcription (no cloud uploads)
-- Global hotkeys for push-to-talk and toggle recording
-- File transcription for common audio formats (WAV, MP3, M4A, OGG, FLAC)
-- History and export/import of transcriptions and settings
-- Configurable models, language, and hotkey behavior
+- Local speech-to-text transcription with Whisper-compatible models
+- Push-to-talk and toggle recording modes with configurable global hotkeys
+- File transcription for common audio formats such as WAV, MP3, M4A, OGG, FLAC, AAC, WebM, and MKV
+- Optional post-processing for punctuation, file mentions, code-oriented phrases, and voice commands
+- Local transcription history with search, pagination, delete, and clear actions
+- Model download and management tools
+- Cross-platform desktop packaging through Tauri
 
 ## Supported Platforms
 
-- Windows (NSIS, MSI)
-- macOS (DMG, .app)
+- Windows
+- macOS
+- Linux
 
-## Usage
+Some platform integrations depend on OS permissions and native packages. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup notes.
 
-1. Launch the application.
-2. Complete the setup to choose a default model and language.
-3. Use the configured hotkey to record and transcribe speech.
-4. View previous transcriptions in the History view; copy or export entries as needed.
+## Repository Layout
 
-Recording modes
+```text
+src/                 React frontend
+src-tauri/           Rust/Tauri backend
+src-tauri/tests/     Backend integration and E2E tests
+scripts/             Release and maintenance scripts
+public/              Static frontend assets
+.github/             CI, issue templates, and release workflow
+```
 
-| Mode         | Hotkey                                 | Behavior                                      |
-| ------------ | -------------------------------------- | --------------------------------------------- |
-| Push-to-talk | configurable (default: `Alt+Shift+S`) | Hold to record, release to transcribe         |
-| Toggle       | configurable (default: `Alt+Shift+D`) | Press to start recording, press again to stop |
+## Getting Started
 
-## Configuration and data location
+### Prerequisites
 
-Settings and history are stored locally in an SQLite database in the platform's application data directory. Example locations:
+- Node.js LTS
+- pnpm
+- Rust stable, minimum Rust 1.81
+- Platform dependencies required by Tauri
+
+Install frontend dependencies:
+
+```sh
+pnpm install
+```
+
+Run the app in development mode:
+
+```sh
+pnpm tauri:dev
+```
+
+Build the frontend:
+
+```sh
+pnpm build
+```
+
+Build the desktop app:
+
+```sh
+pnpm tauri:build
+```
+
+## Testing
+
+Run TypeScript checks:
+
+```sh
+pnpm run typecheck
+```
+
+Run Rust unit, integration, and backend E2E tests:
+
+```sh
+cd src-tauri
+cargo test -j 1
+```
+
+`-j 1` is recommended on Windows development machines with limited paging-file space because the ONNX Runtime build artifacts are large.
+
+## Data Storage
+
+Settings, app state, license/trial state, and transcription history are stored locally in an SQLite database in the platform app-data directory:
 
 - Windows: `%APPDATA%/com.johuniq.wavee/`
 - macOS: `~/Library/Application Support/com.johuniq.wavee/`
+- Linux: `~/.config/com.johuniq.wavee/`
 
-## Security and privacy
+Downloaded model files are stored under the app-data models directory.
 
-- All transcription is performed locally; audio is not uploaded to remote services by default.
-- The backend validates and sanitizes IPC inputs to reduce risk from malformed data.
-- Strong encryption (AES-256-GCM) for sensitive local license data.
+## Security And Privacy
 
-## Installation
+- Audio is processed locally by default.
+- The app uses a restrictive Tauri content security policy.
+- Backend commands validate and sanitize inputs before filesystem, database, and transcription operations.
+- Sensitive local license cache data is encrypted with AES-256-GCM.
 
-1. Download the latest release for your platform from [Releases](https://github.com/Johuniq/wavee/releases)
-2. Run the installer for your platform.
-3. On first launch, you may need to bypass a security warning (one-time only)
+Please report vulnerabilities privately using the process in [SECURITY.md](SECURITY.md).
 
-Unsigned builds may show an operating-system security warning on first launch. Verify that the installer came from the official release page before bypassing any warning.
+## Contributing
+
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and [SECURITY.md](SECURITY.md) before opening an issue or pull request.
 
 ## License
 
-This project is proprietary software. See the `LICENSE` file for licensing terms and contact information to obtain a commercial license.
+Wavee is released under the [MIT License](LICENSE).
 
-## Acknowledgements
-
-- Whisper and related projects for transcription research
-- Tauri for the cross-platform application framework
-
-For bug reports and feature requests, open an issue on the project's GitHub repository.
+This repository includes vendored third-party code under `src-tauri/vendor/`. Those components keep their own upstream license files where provided.

@@ -10,22 +10,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Project root is one level up from scripts/
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-echo "🔐 Wavee Update Key Generator"
+echo "Wavee Update Key Generator"
 echo "================================"
 echo ""
-echo "📁 Project root: $PROJECT_ROOT"
+echo "Project root: $PROJECT_ROOT"
 echo ""
 
 # Check if Cargo/Tauri CLI is available
 if ! command -v cargo &> /dev/null; then
-    echo "❌ Error: Rust/Cargo is not installed"
+    echo "Error: Rust/Cargo is not installed"
     exit 1
 fi
 
 # Check for existing keys
 KEYS_DIR="$PROJECT_ROOT/keys"
 if [ -d "$KEYS_DIR" ]; then
-    echo "⚠️  Keys directory already exists!"
+    echo "Warning: Keys directory already exists."
     echo "   Location: $KEYS_DIR"
     read -p "   Overwrite existing keys? (y/N): " confirm
     if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
@@ -37,7 +37,7 @@ fi
 
 mkdir -p "$KEYS_DIR"
 
-echo "📝 Generating signing keys..."
+echo "Generating signing keys..."
 echo "   Note: You will be prompted for a password."
 echo "   This password is used to encrypt the private key."
 echo ""
@@ -48,9 +48,9 @@ cargo tauri signer generate -w "$KEYS_DIR/wavee.key"
 cd "$PROJECT_ROOT"
 
 echo ""
-echo "✅ Keys generated successfully!"
+echo "Keys generated successfully!"
 echo ""
-echo "📁 Files created:"
+echo "Files created:"
 echo "   - $KEYS_DIR/wavee.key (PRIVATE - keep secure!)"
 echo "   - $KEYS_DIR/wavee.key.pub (PUBLIC - put in tauri.conf.json)"
 echo ""
@@ -58,12 +58,12 @@ echo ""
 # Read and display the public key
 if [ -f "$KEYS_DIR/wavee.key.pub" ]; then
     PUBKEY=$(cat "$KEYS_DIR/wavee.key.pub")
-    echo "🔑 Your public key (copy this to tauri.conf.json):"
+    echo "Your public key (copy this to tauri.conf.json):"
     echo "   $PUBKEY"
     echo ""
 fi
 
-echo "📋 Next steps:"
+echo "Next steps:"
 echo "   1. Copy the public key above into tauri.conf.json:"
 echo '      "updater": { "pubkey": "YOUR_PUBLIC_KEY_HERE" }'
 echo ""
@@ -73,7 +73,7 @@ echo "      - TAURI_SIGNING_PRIVATE_KEY_PASSWORD: the password you entered"
 echo ""
 echo "   3. Add the private key to your secure backup!"
 echo ""
-echo "⚠️  SECURITY WARNING:"
+echo "SECURITY WARNING:"
 echo "   - NEVER commit the private key to git"
 echo "   - Add '$KEYS_DIR/' to your .gitignore"
 echo ""

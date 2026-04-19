@@ -1,14 +1,14 @@
 #![recursion_limit = "512"]
 
 mod audio;
-mod database;
-mod downloader;
+pub mod database;
+pub mod downloader;
 mod error_reporting;
-mod license;
-mod post_process;
-mod security;
+pub mod license;
+pub mod post_process;
+pub mod security;
 mod text_inject;
-mod transcription;
+pub mod transcription;
 
 use audio::{AudioCaptureSource, AudioInputDevice, AudioOutputDevice, AudioRecorder};
 use database::{AppSettings, AppState, Database, LicenseData, TranscriptionHistory, WhisperModel};
@@ -93,8 +93,8 @@ fn canonicalize_existing_file_path(path: &str) -> Result<std::path::PathBuf, Str
     let canonical = path
         .canonicalize()
         .map_err(|e| format!("Cannot access selected file: {}", e))?;
-    let metadata = std::fs::metadata(&canonical)
-        .map_err(|e| format!("Cannot read selected file: {}", e))?;
+    let metadata =
+        std::fs::metadata(&canonical).map_err(|e| format!("Cannot read selected file: {}", e))?;
 
     if !metadata.is_file() {
         return Err("Selected path is not a file".to_string());
@@ -164,12 +164,9 @@ fn is_valid_language_code(language: &str) -> bool {
 fn is_model_language_supported(model_id: &str, language: &str) -> bool {
     match model_id {
         // English-only models
-        "tiny.en"
-        | "base.en"
-        | "small.en"
-        | "medium.en"
-        | "distil-small.en"
-        | "parakeet-v2" => language == "en",
+        "tiny.en" | "base.en" | "small.en" | "medium.en" | "distil-small.en" | "parakeet-v2" => {
+            language == "en"
+        }
 
         // Parakeet v3 supported languages
         "parakeet-v3" => matches!(
@@ -370,31 +367,50 @@ fn has_active_trial(db: &Database) -> bool {
             return false;
         };
 
-        if license.status != "trial" {
-            return false;
-        }
-
-        let Some(trial_started) = license.trial_started_at else {
-            return false;
-        };
-
-        let expected_hash = calculate_trial_integrity_hash(&trial_started);
-        if license.trial_integrity_hash.as_deref() != Some(expected_hash.as_str()) {
-            warn!("Trial integrity check failed");
-            return false;
-        }
-
-        let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(&trial_started) else {
-            return false;
-        };
-
-        let days_since_start =
-            (chrono::Utc::now() - start_date.with_timezone(&chrono::Utc)).num_days();
-        (0..7).contains(&days_since_start)
+        has_active_trial_core(&license, chrono::Utc::now())
     }
 }
 
-fn db_license_allows_usage(license: &database::LicenseData) -> bool {
+pub fn has_active_trial_core(
+    license: &database::LicenseData,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    if license.status != "trial" {
+        return false;
+    }
+
+    let Some(trial_started) = &license.trial_started_at else {
+        return false;
+    };
+
+    let expected_hash = calculate_trial_integrity_hash(trial_started);
+    if license.trial_integrity_hash.as_deref() != Some(expected_hash.as_str()) {
+        warn!("Trial integrity check failed");
+        return false;
+    }
+
+    let Ok(start_date) = chrono::DateTime::parse_from_rfc3339(trial_started) else {
+        return false;
+    };
+
+    let start_date = start_date.with_timezone(&chrono::Utc);
+    if start_date > now {
+        warn!("Trial start date is in the future");
+        return false;
+    }
+
+    let days_since_start = (now - start_date).num_days();
+    (0..7).contains(&days_since_start)
+}
+
+pub fn db_license_allows_usage(license: &database::LicenseData) -> bool {
+    db_license_allows_usage_core(license, chrono::Utc::now())
+}
+
+pub fn db_license_allows_usage_core(
+    license: &database::LicenseData,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
     if !license.is_activated || license.status != "active" {
         return false;
     }
@@ -409,7 +425,7 @@ fn db_license_allows_usage(license: &database::LicenseData) -> bool {
             return false;
         };
 
-        if expiry < chrono::Utc::now() {
+        if expiry < now {
             return false;
         }
     }
@@ -423,7 +439,6 @@ fn db_license_allows_usage(license: &database::LicenseData) -> bool {
         return false;
     };
 
-    let now = chrono::Utc::now();
     let last_validated = last_validated.with_timezone(&chrono::Utc);
     if last_validated > now {
         warn!("Stored license validation timestamp is in the future");
@@ -433,7 +448,7 @@ fn db_license_allows_usage(license: &database::LicenseData) -> bool {
     (now - last_validated).num_hours() < 168
 }
 
-fn calculate_trial_integrity_hash(trial_started_at: &str) -> String {
+pub fn calculate_trial_integrity_hash(trial_started_at: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(trial_started_at.as_bytes());
     hasher.update(get_device_id().as_bytes());
@@ -1014,9 +1029,8 @@ fn read_audio_file(file_path: &std::path::Path) -> Result<Vec<f32>, String> {
         .make(&track.codec_params, &DecoderOptions::default())
         .map_err(|e| format!("Failed to create decoder: {}", e))?;
 
-    let mut samples = Vec::with_capacity((AUDIO_TARGET_SAMPLE_RATE as usize * 60).min(
-        MAX_FILE_AUDIO_SAMPLES,
-    ));
+    let mut samples =
+        Vec::with_capacity((AUDIO_TARGET_SAMPLE_RATE as usize * 60).min(MAX_FILE_AUDIO_SAMPLES));
 
     // Decode all packets
     loop {
@@ -2264,10 +2278,10 @@ async fn export_error_reports(
 
 #[tauri::command]
 async fn save_export_file(path: String, content: String) -> Result<(), CommandError> {
-    let sanitized_content = sanitize_text(&content, MAX_EXPORT_BYTES)
-        .map_err(CommandError::PostProcessing)?;
-    let export_path = validate_export_path(&path)
-        .map_err(|e| CommandError::Io(std::io::Error::other(e)))?;
+    let sanitized_content =
+        sanitize_text(&content, MAX_EXPORT_BYTES).map_err(CommandError::PostProcessing)?;
+    let export_path =
+        validate_export_path(&path).map_err(|e| CommandError::Io(std::io::Error::other(e)))?;
 
     std::fs::write(&export_path, sanitized_content)?;
     info!("Export saved to: {:?}", export_path);
@@ -2642,5 +2656,58 @@ mod audio_ingestion_tests {
         let mono = interleaved_to_mono(&[1.0, -1.0, 0.5, 0.25], 2);
 
         assert_eq!(mono, vec![0.0, 0.375]);
+    }
+}
+
+#[cfg(test)]
+mod text_injection_tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_text_removes_unwanted_control_characters() {
+        // Keeps \n, \r, \t but trims bad null bytes \0 etc
+        let dirty = "Hello\nWorld\t\r\0\x07";
+        let clean = sanitize_text(dirty, 100).unwrap();
+        assert_eq!(clean, "Hello\nWorld\t\r");
+    }
+
+    #[test]
+    fn sanitize_text_respects_byte_limits() {
+        let text = "Exactly ten!";
+        // 12 bytes
+        assert!(sanitize_text(text, 12).is_ok());
+        assert!(sanitize_text(text, 10).is_err()); // Exceeds limit
+    }
+}
+
+#[cfg(test)]
+mod model_compatibility_tests {
+    use super::*;
+
+    #[test]
+    fn is_valid_language_code_checks() {
+        assert!(is_valid_language_code("auto"));
+        assert!(is_valid_language_code("en"));
+        assert!(is_valid_language_code("spa"));
+        assert!(!is_valid_language_code("e")); // Too short
+        assert!(!is_valid_language_code("EN")); // Must be lowercase
+        assert!(!is_valid_language_code("english")); // Too long
+    }
+
+    #[test]
+    fn expected_models_lock_onto_specific_languages() {
+        // English-only models
+        assert!(is_model_language_supported("tiny.en", "en"));
+        assert!(!is_model_language_supported("tiny.en", "es"));
+        assert!(!is_model_language_supported("tiny.en", "auto"));
+
+        // Parakeet allows specific langs
+        assert!(is_model_language_supported("parakeet-v3", "auto"));
+        assert!(is_model_language_supported("parakeet-v3", "fr"));
+        assert!(!is_model_language_supported("parakeet-v3", "invalid"));
+
+        // Multilingual whisper allows standard codes or auto
+        assert!(is_model_language_supported("large-v3", "auto"));
+        assert!(is_model_language_supported("large-v3", "de"));
     }
 }

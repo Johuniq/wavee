@@ -1,12 +1,12 @@
 [package]
 name = "wavee"
 version = "1.0.0"
-description = "Wavee - Voice to Text Desktop Application"
+description = "Open-source desktop voice-to-text app with local AI transcription"
 authors = ["Johuniq"]
 edition = "2021"
-license-file = "../LICENSE"
-repository = "https://github.com/johuniq/Wavee"
-readme = "README.md"
+license = "MIT"
+repository = "https://github.com/johuniq/wavee"
+readme = "../README.md"
 keywords = ["voice", "speech-to-text", "transcription", "whisper", "tauri"]
 categories = ["multimedia::audio"]
 rust-version = "1.81"
@@ -138,6 +138,7 @@ strip = false
 
 [dev-dependencies]
 tempfile = "3.23.0"
+httpmock = "0.7"
 
 [patch.crates-io]
 ort = { path = "vendor/ort" }

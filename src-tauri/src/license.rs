@@ -524,17 +524,18 @@ pub fn clear_cache() -> Result<(), String> {
 /// Main license management interface
 pub struct LicenseManager {
     client: Client,
-    org_id: String,
+    pub org_id: String,
+    pub api_base: String,
 }
 
 impl LicenseManager {
     /// Create new license manager
     pub fn new() -> Self {
-        Self::with_org_id(POLAR_ORG_ID)
+        Self::with_org_id(POLAR_ORG_ID, POLAR_API_BASE)
     }
 
     /// Create license manager with custom org ID
-    pub fn with_org_id(org_id: &str) -> Self {
+    pub fn with_org_id(org_id: &str, api_base: &str) -> Self {
         let client = Client::builder()
             .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
             .build()
@@ -543,6 +544,7 @@ impl LicenseManager {
         Self {
             client,
             org_id: org_id.to_string(),
+            api_base: api_base.to_string(),
         }
     }
 
@@ -567,7 +569,7 @@ impl LicenseManager {
             meta: Some(get_device_meta()),
         };
 
-        let url = format!("{}/activate", POLAR_API_BASE);
+        let url = format!("{}/activate", self.api_base);
         debug!("POST {}", url);
 
         let response = self
@@ -922,7 +924,7 @@ impl LicenseManager {
             activation_id: activation_id.to_string(),
         };
 
-        let url = format!("{}/deactivate", POLAR_API_BASE);
+        let url = format!("{}/deactivate", self.api_base);
 
         let response = self
             .client
@@ -1050,7 +1052,7 @@ impl LicenseManager {
             conditions: Some(get_device_conditions(&get_device_id())),
         };
 
-        let url = format!("{}/validate", POLAR_API_BASE);
+        let url = format!("{}/validate", self.api_base);
 
         let response = self
             .client

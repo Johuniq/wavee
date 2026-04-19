@@ -5,13 +5,13 @@
 
 set -e
 
-echo "🚀 Wavee Production Build"
+echo "Wavee Production Build"
 echo "=========================="
 echo ""
 
 # Check if we're in the right directory
 if [ ! -f "package.json" ]; then
-    echo "❌ Error: Must be run from the project root directory"
+    echo "Error: Must be run from the project root directory"
     exit 1
 fi
 
@@ -27,15 +27,15 @@ print_step() {
 }
 
 print_warning() {
-    echo -e "${YELLOW}⚠ $1${NC}"
+    echo -e "${YELLOW}Warning: $1${NC}"
 }
 
 print_error() {
-    echo -e "${RED}❌ $1${NC}"
+    echo -e "${RED}Error: $1${NC}"
 }
 
 print_success() {
-    echo -e "${GREEN}✅ $1${NC}"
+    echo -e "${GREEN}Success: $1${NC}"
 }
 
 print_info() {
@@ -153,12 +153,12 @@ echo ""
 echo "=========================="
 print_success "Build completed successfully!"
 echo ""
-echo "📦 Build artifacts location:"
+echo "Build artifacts location:"
 
 # List actual build files
 if [ -d "src-tauri/target/release/bundle" ]; then
     echo ""
-    echo "📁 Generated installers:"
+    echo "Generated installers:"
     
     # Find and list all installer files
     find src-tauri/target/release/bundle -type f \( \
@@ -172,15 +172,15 @@ if [ -d "src-tauri/target/release/bundle" ]; then
     \) 2>/dev/null | while read file; do
         size=$(du -h "$file" | cut -f1)
         filename=$(basename "$file")
-        echo "   📄 $filename ($size)"
+        echo "   $filename ($size)"
         echo "      Path: $file"
     done
     
     echo ""
-    echo "📁 Bundle directories:"
+    echo "Bundle directories:"
     ls -d src-tauri/target/release/bundle/*/ 2>/dev/null | while read dir; do
         dirname=$(basename "$dir")
-        echo "   📂 $dirname/"
+        echo "   $dirname/"
     done
 fi
 

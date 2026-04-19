@@ -11,6 +11,18 @@ node_modules
 dist
 dist-ssr
 *.local
+src-tauri/target
+release-signing/
+release-assets/
+*.msi
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.sig
+latest.json
+SHA256SUMS.txt
 
 # Editor directories and files
 .vscode/*
@@ -27,3 +39,5 @@ dist-ssr
 keys/
 *.key
 *.key.pub
+*.pfx
+*.p12

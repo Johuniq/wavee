@@ -62,10 +62,10 @@
     ],
     "resources": [],
     "category": "Utility",
-    "shortDescription": "Voice-to-text desktop app powered by AI",
-    "longDescription": "Wavee is a powerful voice-to-text application that lets you dictate text anywhere on your computer using AI-powered speech recognition. Features include push-to-talk and toggle recording modes, multiple Whisper AI model sizes, automatic text injection, transcription history, and file transcription support.",
+    "shortDescription": "Open-source voice-to-text desktop app",
+    "longDescription": "Wavee is an open-source voice-to-text application that lets you dictate text on your computer using local speech recognition models. Features include push-to-talk and toggle recording modes, model management, optional text injection, transcription history, and file transcription support.",
     "publisher": "Johuniq",
-    "copyright": "Copyright (c) 2026 Johuniq. All rights reserved.",
+    "copyright": "Copyright (c) 2026 Johuniq",
     "licenseFile": "../LICENSE",
     "linux": {
       "appimage": {
@@ -132,7 +132,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ1RkM0MEMwNkVBMzE1QgpSV1JiTWVvR0RNUmZCQlR1bzkyMTcycjJwY0JVeFlYQnpxNHBHU2ZESmhXbkh3UUx1T2dDWHB2Tgo=",
       "endpoints": [
-        "https://github.com/Johuniq/wavee/releases/latest/download/latest.json"
+        "https://github.com/johuniq/wavee/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

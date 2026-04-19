@@ -11,7 +11,7 @@ if (!assetDir || !outFile) {
 }
 
 const version = process.env.VERSION;
-const repository = process.env.GITHUB_REPOSITORY || "Johuniq/wavee";
+const repository = process.env.GITHUB_REPOSITORY || "johuniq/wavee";
 const stripTrailingLineBreaks = (value) => value?.replace(/[\r\n]+$/, "");
 const expandEscapedNewlines = (value) => value.replace(/\\n/g, "\n").replace(/\\r/g, "\r");
 const normalizeSigningKey = (rawValue) => {

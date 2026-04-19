@@ -1,10 +1,18 @@
 {
-  "name": "Wavee",
-  "private": true,
+  "name": "wavee",
+  "private": false,
   "version": "1.0.0",
-  "description": "Wavee - Voice to Text Desktop Application powered by AI",
+  "description": "Open-source desktop voice-to-text app with local AI transcription",
   "author": "Johuniq",
-  "license": "Proprietary",
+  "license": "MIT",
+  "homepage": "https://github.com/johuniq/wavee#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johuniq/wavee.git"
+  },
+  "bugs": {
+    "url": "https://github.com/johuniq/wavee/issues"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,6 +24,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "pnpm run typecheck",
     "lint:fix": "pnpm run typecheck",
+    "test:rust": "cd src-tauri && cargo test -j 1",
+    "test:backend": "cd src-tauri && cargo test --tests -j 1",
+    "check": "pnpm run typecheck && pnpm run test:rust",
     "clean": "rm -rf dist src-tauri/target",
     "build:production": "bash scripts/build-production.sh"
   },

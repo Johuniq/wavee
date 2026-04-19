@@ -13,6 +13,7 @@ pub struct ModelDownloader {
     client: Client,
     models_dir: PathBuf,
     cancel_tokens: Mutex<HashMap<String, Arc<AtomicBool>>>,
+    pub test_url_override: Option<String>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -29,6 +30,7 @@ impl ModelDownloader {
             client: Client::new(),
             models_dir,
             cancel_tokens: Mutex::new(HashMap::new()),
+            test_url_override: None,
         }
     }
 
@@ -126,11 +128,16 @@ impl ModelDownloader {
                 .await;
         }
 
-        let url = crate::transcription::get_model_url(model_id)
+        let original_url = crate::transcription::get_model_url(model_id)
             .ok_or_else(|| format!("Unknown model: {}", model_id))?;
 
+        let url = self
+            .test_url_override
+            .clone()
+            .unwrap_or_else(|| original_url.to_string());
+
         // Security: Enforce HTTPS only
-        if !url.starts_with("https://") {
+        if !url.starts_with("https://") && self.test_url_override.is_none() {
             return Err("Security error: Only HTTPS URLs are allowed for downloads".to_string());
         }
 

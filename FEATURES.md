@@ -312,14 +312,14 @@ minimizeToTray: boolean;    // Hide to tray when window closes
 
 ---
 
-## License Management
+## Optional License And Trial Management
 
 ### License System
-Wavee uses a proprietary license management system:
+Wavee includes an optional local license and trial management layer that downstream distributors can configure or replace:
 
 **License Types**:
 - **Trial**: Limited-time evaluation access (default)
-- **Full License**: Unlimited usage after activation
+- **Full License**: Usage after activation
 
 ### License Information
 ```typescript
@@ -351,7 +351,7 @@ interface License {
 ### License Features
 - **Offline Validation**: License checked locally
 - **Device Limit**: Number of devices per license
-- **Cloud-Free**: License validation without cloud (optional)
+- **Offline Grace Period**: Recently validated licenses can continue to work while offline
 
 ---
 
@@ -465,22 +465,22 @@ The application tracks errors across multiple categories:
 ## Security Considerations
 
 ### Privacy
-- ✅ **Offline Processing**: No internet connection required
-- ✅ **No Telemetry**: No user tracking or analytics
-- ✅ **Local Storage**: All data stored locally
-- ✅ **No Cloud Uploads**: Audio processed entirely locally
+- **Offline Processing**: No internet connection required
+- **No Telemetry**: No user tracking or analytics
+- **Local Storage**: All data stored locally
+- **No Cloud Uploads**: Audio processed entirely locally
 
 ### Data Protection
-- ✅ **Encryption**: AES-256-GCM for sensitive data
-- ✅ **Input Validation**: All IPC inputs sanitized
-- ✅ **Path Validation**: File paths validated and sanitized
-- ✅ **Text Sanitization**: Limits on text length and control characters
+- **Encryption**: AES-256-GCM for sensitive data
+- **Input Validation**: All IPC inputs sanitized
+- **Path Validation**: File paths validated and sanitized
+- **Text Sanitization**: Limits on text length and control characters
 
 ### Code Security
-- ✅ **Memory Safety**: Rust's memory safety guarantees
-- ✅ **Type Safety**: Full TypeScript on frontend
-- ✅ **Dependency Auditing**: Regular security audits
-- ✅ **Open Source**: Code available for security review
+- **Memory Safety**: Rust's memory safety guarantees
+- **Type Safety**: Full TypeScript on frontend
+- **Dependency Auditing**: Regular security audits
+- **Open Source**: Code available for security review
 
 ---
 
@@ -509,4 +509,4 @@ Potential features for future releases:
 
 **Version**: 1.0.0  
 **Last Updated**: December 2025  
-**License**: Proprietary (All rights reserved)
+**License**: MIT
