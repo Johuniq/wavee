@@ -1,6 +1,10 @@
 # Wavee
 
-![Wavee preview](public/og-image.png)
+<p align="center">
+  <img src="src/assets/logo.png" alt="Wavee logo" width="96" height="96" />
+</p>
+
+![Wavee preview](src/assets/app_screenshot.png)
 
 **Wave your voice. Get text at your cursor.**
 
