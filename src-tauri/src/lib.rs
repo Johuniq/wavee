@@ -1259,6 +1259,20 @@ fn post_process_text(text: String) -> CommandResult<String> {
     Ok(processed)
 }
 
+#[tauri::command]
+fn extract_voice_commands(text: String) -> CommandResult<String> {
+    let sanitized = sanitize_text(&text, 100_000).map_err(CommandError::PostProcessing)?;
+
+    if sanitized.is_empty() {
+        return Ok(String::new());
+    }
+
+    let processor = PostProcessor::new();
+    let processed = processor.extract_voice_commands(&sanitized);
+
+    Ok(processed)
+}
+
 // ==================== Text Injection Commands ====================
 
 #[tauri::command]
@@ -1292,11 +1306,14 @@ fn execute_keyboard_shortcut(
         "select_all",
         "backspace_word",
         "backspace",
+        "delete",
         "delete_word",
         "delete_line",
         "enter",
         "tab",
         "escape",
+        "page_up",
+        "page_down",
         "left",
         "right",
         "up",
@@ -1305,6 +1322,14 @@ fn execute_keyboard_shortcut(
         "end",
         "word_left",
         "word_right",
+        "select_left",
+        "select_right",
+        "select_up",
+        "select_down",
+        "select_word_left",
+        "select_word_right",
+        "select_to_start",
+        "select_to_end",
     ];
     if !allowed_shortcuts.contains(&shortcut.as_str()) {
         return Err(CommandError::TextInjection(format!(
@@ -2386,6 +2411,7 @@ pub fn run() {
             execute_keyboard_shortcut,
             // Post-processing
             post_process_text,
+            extract_voice_commands,
             // Transcription history
             add_transcription,
             get_transcription_history,

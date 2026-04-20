@@ -146,12 +146,15 @@ Common examples include:
 - Undo and redo
 - Copy, cut, and paste
 - Select all
-- Backspace and delete actions
+- Backspace, forward delete, and delete actions
 - Delete word or delete line behavior
 - Enter, tab, and escape
 - Move left, right, up, and down
+- Page up and page down
 - Jump by word
 - Move to the start or end of a line
+- Extend selection left, right, up, and down
+- Select by word or select to the start/end of a line
 
 This makes Wavee useful not only for writing text, but also for controlling text flow while you work.
 
@@ -169,10 +172,14 @@ Wavee is especially useful for:
 
 Wavee currently supports:
 
-- Windows
-- macOS
+- Windows 10 (version 1803 or later) and Windows 11
+- macOS 13 Ventura or later
 
 Linux desktop builds are not currently supported.
+
+macOS builds are produced for both Apple Silicon and Intel Macs.
+
+Windows installers use WebView2. On Windows 10 version 1803+ and Windows 11, this is typically already available or installed automatically by the installer.
 
 System requirements vary depending on the transcription model you choose. Larger models generally need more memory and storage.
 

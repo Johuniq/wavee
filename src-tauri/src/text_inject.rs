@@ -212,6 +212,9 @@ impl TextInjector {
             "backspace" => {
                 self.enigo.key(Key::Backspace, Direction::Click).ok();
             }
+            "delete" => {
+                self.enigo.key(Key::Delete, Direction::Click).ok();
+            }
             "delete_line" => {
                 // Select entire line then delete: Home, Shift+End, Delete
                 #[cfg(target_os = "macos")]
@@ -241,6 +244,12 @@ impl TextInjector {
             }
             "escape" => {
                 self.enigo.key(Key::Escape, Direction::Click).ok();
+            }
+            "page_up" => {
+                self.enigo.key(Key::PageUp, Direction::Click).ok();
+            }
+            "page_down" => {
+                self.enigo.key(Key::PageDown, Direction::Click).ok();
             }
             "left" => {
                 self.enigo.key(Key::LeftArrow, Direction::Click).ok();
@@ -287,6 +296,72 @@ impl TextInjector {
                     self.enigo.key(Key::RightArrow, Direction::Click).ok();
                     self.enigo.key(Key::Control, Direction::Release).ok();
                 }
+            }
+            "select_left" => {
+                self.enigo.key(Key::Shift, Direction::Press).ok();
+                self.enigo.key(Key::LeftArrow, Direction::Click).ok();
+                self.enigo.key(Key::Shift, Direction::Release).ok();
+            }
+            "select_right" => {
+                self.enigo.key(Key::Shift, Direction::Press).ok();
+                self.enigo.key(Key::RightArrow, Direction::Click).ok();
+                self.enigo.key(Key::Shift, Direction::Release).ok();
+            }
+            "select_up" => {
+                self.enigo.key(Key::Shift, Direction::Press).ok();
+                self.enigo.key(Key::UpArrow, Direction::Click).ok();
+                self.enigo.key(Key::Shift, Direction::Release).ok();
+            }
+            "select_down" => {
+                self.enigo.key(Key::Shift, Direction::Press).ok();
+                self.enigo.key(Key::DownArrow, Direction::Click).ok();
+                self.enigo.key(Key::Shift, Direction::Release).ok();
+            }
+            "select_word_left" => {
+                #[cfg(target_os = "macos")]
+                {
+                    self.enigo.key(Key::Alt, Direction::Press).ok();
+                    self.enigo.key(Key::Shift, Direction::Press).ok();
+                    self.enigo.key(Key::LeftArrow, Direction::Click).ok();
+                    self.enigo.key(Key::Shift, Direction::Release).ok();
+                    self.enigo.key(Key::Alt, Direction::Release).ok();
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    self.enigo.key(Key::Control, Direction::Press).ok();
+                    self.enigo.key(Key::Shift, Direction::Press).ok();
+                    self.enigo.key(Key::LeftArrow, Direction::Click).ok();
+                    self.enigo.key(Key::Shift, Direction::Release).ok();
+                    self.enigo.key(Key::Control, Direction::Release).ok();
+                }
+            }
+            "select_word_right" => {
+                #[cfg(target_os = "macos")]
+                {
+                    self.enigo.key(Key::Alt, Direction::Press).ok();
+                    self.enigo.key(Key::Shift, Direction::Press).ok();
+                    self.enigo.key(Key::RightArrow, Direction::Click).ok();
+                    self.enigo.key(Key::Shift, Direction::Release).ok();
+                    self.enigo.key(Key::Alt, Direction::Release).ok();
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    self.enigo.key(Key::Control, Direction::Press).ok();
+                    self.enigo.key(Key::Shift, Direction::Press).ok();
+                    self.enigo.key(Key::RightArrow, Direction::Click).ok();
+                    self.enigo.key(Key::Shift, Direction::Release).ok();
+                    self.enigo.key(Key::Control, Direction::Release).ok();
+                }
+            }
+            "select_to_start" => {
+                self.enigo.key(Key::Shift, Direction::Press).ok();
+                self.enigo.key(Key::Home, Direction::Click).ok();
+                self.enigo.key(Key::Shift, Direction::Release).ok();
+            }
+            "select_to_end" => {
+                self.enigo.key(Key::Shift, Direction::Press).ok();
+                self.enigo.key(Key::End, Direction::Click).ok();
+                self.enigo.key(Key::Shift, Direction::Release).ok();
             }
             _ => {
                 return Err(format!("Unknown shortcut: {}", shortcut));

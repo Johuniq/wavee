@@ -112,13 +112,22 @@ export async function recordAndTranscribe(): Promise<string> {
 
 export async function transcribeFile(
   filePath: string,
-  enablePostProcessing: boolean = true
+  enablePostProcessing: boolean = true,
+  enableVoiceCommands: boolean = false
 ): Promise<string> {
   let text = await invoke<string>("transcribe_file", { filePath });
-  if (enablePostProcessing && text) {
+  if (text && enablePostProcessing) {
     text = await postProcessText(text);
-    text = stripVoiceCommandTokens(text);
+  } else if (text && enableVoiceCommands) {
+    text = await extractVoiceCommands(text);
   }
+
+  if (text) {
+    text = enableVoiceCommands
+      ? await processVoiceCommands(text)
+      : stripVoiceCommandTokens(text);
+  }
+
   return text;
 }
 
@@ -184,6 +193,10 @@ export async function postProcessText(text: string): Promise<string> {
   return await invoke<string>("post_process_text", { text });
 }
 
+export async function extractVoiceCommands(text: string): Promise<string> {
+  return await invoke<string>("extract_voice_commands", { text });
+}
+
 // ============================================
 // Text Injection API
 // ============================================
@@ -226,9 +239,13 @@ export async function completeVoiceToText(
 
     text = await recordAndTranscribe();
 
-    // Apply post-processing if enabled
-    if (options.enablePostProcessing && text) {
+    if (text && options.enablePostProcessing) {
       text = await postProcessText(text);
+    } else if (text && options.enableVoiceCommands) {
+      text = await extractVoiceCommands(text);
+    }
+
+    if (text) {
       text = options.enableVoiceCommands
         ? await processVoiceCommands(text)
         : stripVoiceCommandTokens(text);
@@ -310,6 +327,9 @@ const VOICE_COMMANDS: Record<string, () => Promise<void>> = {
   "[[BACKSPACE]]": async () => {
     await invoke("execute_keyboard_shortcut", { shortcut: "backspace" });
   },
+  "[[DELETE_FORWARD]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "delete" });
+  },
   "[[DELETE_WORD]]": async () => {
     await invoke("execute_keyboard_shortcut", { shortcut: "delete_word" });
   },
@@ -324,6 +344,12 @@ const VOICE_COMMANDS: Record<string, () => Promise<void>> = {
   },
   "[[ESCAPE]]": async () => {
     await invoke("execute_keyboard_shortcut", { shortcut: "escape" });
+  },
+  "[[PAGE_UP]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "page_up" });
+  },
+  "[[PAGE_DOWN]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "page_down" });
   },
   // Cursor movement commands
   "[[LEFT]]": async () => {
@@ -349,6 +375,30 @@ const VOICE_COMMANDS: Record<string, () => Promise<void>> = {
   },
   "[[WORD_RIGHT]]": async () => {
     await invoke("execute_keyboard_shortcut", { shortcut: "word_right" });
+  },
+  "[[SELECT_LEFT]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "select_left" });
+  },
+  "[[SELECT_RIGHT]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "select_right" });
+  },
+  "[[SELECT_UP]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "select_up" });
+  },
+  "[[SELECT_DOWN]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "select_down" });
+  },
+  "[[SELECT_WORD_LEFT]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "select_word_left" });
+  },
+  "[[SELECT_WORD_RIGHT]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "select_word_right" });
+  },
+  "[[SELECT_TO_START]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "select_to_start" });
+  },
+  "[[SELECT_TO_END]]": async () => {
+    await invoke("execute_keyboard_shortcut", { shortcut: "select_to_end" });
   },
 };
 

@@ -122,27 +122,38 @@ lazy_static! {
     static ref COMMAND_UNDO: Regex = Regex::new(r"(?i)\bundo(\s+(that|last|it))?\b[.,!?]?").unwrap();
     static ref COMMAND_REDO: Regex = Regex::new(r"(?i)\bredo(\s+(that|last|it))?\b[.,!?]?").unwrap();
     static ref COMMAND_SELECT_ALL: Regex = Regex::new(r"(?i)\bselect\s+all(\s+text)?\b[.,!?]?").unwrap();
-    static ref COMMAND_COPY_THAT: Regex = Regex::new(r"(?i)\bcopy\s+(that|this|selection|it)\b[.,!?]?").unwrap();
-    static ref COMMAND_CUT_THAT: Regex = Regex::new(r"(?i)\bcut\s+(that|this|selection|it)\b[.,!?]?").unwrap();
+    static ref COMMAND_COPY_THAT: Regex = Regex::new(r"(?i)\bcopy(\s+(that|this|selection|it))?\b[.,!?]?").unwrap();
+    static ref COMMAND_CUT_THAT: Regex = Regex::new(r"(?i)\bcut(\s+(that|this|selection|it))?\b[.,!?]?").unwrap();
     static ref COMMAND_PASTE_THAT: Regex = Regex::new(r"(?i)\bpaste(\s+(that|here|it))?\b[.,!?]?").unwrap();
 
     // Additional navigation/editing commands
     static ref COMMAND_BACKSPACE: Regex = Regex::new(r"(?i)\b(backspace|delete\s+character|remove\s+character)\b[.,!?]?").unwrap();
+    static ref COMMAND_DELETE_FORWARD: Regex = Regex::new(r"(?i)\b(forward\s+delete|delete\s+forward|delete\s+next\s+character|delete\s+key)\b[.,!?]?").unwrap();
     static ref COMMAND_DELETE_WORD: Regex = Regex::new(r"(?i)\b(delete\s+word|remove\s+word|backspace\s+word)\b[.,!?]?").unwrap();
     static ref COMMAND_DELETE_LINE: Regex = Regex::new(r"(?i)\b(delete\s+line|remove\s+line|clear\s+line)\b[.,!?]?").unwrap();
-    static ref COMMAND_ENTER: Regex = Regex::new(r"(?i)\b(press\s+enter|hit\s+enter|enter\s+key)\b[.,!?]?").unwrap();
-    static ref COMMAND_TAB_KEY: Regex = Regex::new(r"(?i)\b(press\s+tab|hit\s+tab|tab\s+key)\b[.,!?]?").unwrap();
-    static ref COMMAND_ESCAPE: Regex = Regex::new(r"(?i)\b(press\s+escape|hit\s+escape|escape\s+key)\b[.,!?]?").unwrap();
+    static ref COMMAND_ENTER: Regex = Regex::new(r"(?i)\b(press\s+enter|hit\s+enter|enter(\s+key)?)\b[.,!?]?").unwrap();
+    static ref COMMAND_TAB_KEY: Regex = Regex::new(r"(?i)\b(press\s+tab|hit\s+tab|tab(\s+key)?)\b[.,!?]?").unwrap();
+    static ref COMMAND_ESCAPE: Regex = Regex::new(r"(?i)\b(press\s+escape|hit\s+escape|escape(\s+key)?)\b[.,!?]?").unwrap();
+    static ref COMMAND_PAGE_UP: Regex = Regex::new(r"(?i)\b(page\s+up|scroll\s+up\s+(a\s+)?page)\b[.,!?]?").unwrap();
+    static ref COMMAND_PAGE_DOWN: Regex = Regex::new(r"(?i)\b(page\s+down|scroll\s+down\s+(a\s+)?page)\b[.,!?]?").unwrap();
 
     // Cursor movement commands
     static ref COMMAND_GO_LEFT: Regex = Regex::new(r"(?i)\b(go\s+left|move\s+left|cursor\s+left|left\s+arrow)\b[.,!?]?").unwrap();
     static ref COMMAND_GO_RIGHT: Regex = Regex::new(r"(?i)\b(go\s+right|move\s+right|cursor\s+right|right\s+arrow)\b[.,!?]?").unwrap();
     static ref COMMAND_GO_UP: Regex = Regex::new(r"(?i)\b(go\s+up|move\s+up|cursor\s+up|up\s+arrow)\b[.,!?]?").unwrap();
     static ref COMMAND_GO_DOWN: Regex = Regex::new(r"(?i)\b(go\s+down|move\s+down|cursor\s+down|down\s+arrow)\b[.,!?]?").unwrap();
-    static ref COMMAND_GO_START: Regex = Regex::new(r"(?i)\b(go\s+to\s+start|go\s+to\s+beginning|beginning\s+of\s+line|home\s+key)\b[.,!?]?").unwrap();
-    static ref COMMAND_GO_END: Regex = Regex::new(r"(?i)\b(go\s+to\s+end|end\s+of\s+line|end\s+key)\b[.,!?]?").unwrap();
-    static ref COMMAND_GO_WORD_LEFT: Regex = Regex::new(r"(?i)\b(word\s+left|previous\s+word|back\s+word)\b[.,!?]?").unwrap();
-    static ref COMMAND_GO_WORD_RIGHT: Regex = Regex::new(r"(?i)\b(word\s+right|next\s+word|forward\s+word)\b[.,!?]?").unwrap();
+    static ref COMMAND_GO_START: Regex = Regex::new(r"(?i)\b(go\s+to\s+start|go\s+to\s+beginning|move\s+to\s+start|move\s+to\s+beginning|start\s+of\s+line|beginning\s+of\s+line|home(\s+key)?)\b[.,!?]?").unwrap();
+    static ref COMMAND_GO_END: Regex = Regex::new(r"(?i)\b(go\s+to\s+end|move\s+to\s+end|end\s+of\s+line|end(\s+key)?)\b[.,!?]?").unwrap();
+    static ref COMMAND_GO_WORD_LEFT: Regex = Regex::new(r"(?i)\b(word\s+left|move\s+word\s+left|previous\s+word|back\s+word)\b[.,!?]?").unwrap();
+    static ref COMMAND_GO_WORD_RIGHT: Regex = Regex::new(r"(?i)\b(word\s+right|move\s+word\s+right|next\s+word|forward\s+word)\b[.,!?]?").unwrap();
+    static ref COMMAND_SELECT_LEFT: Regex = Regex::new(r"(?i)\b(select\s+left|extend\s+left|select\s+one\s+left)\b[.,!?]?").unwrap();
+    static ref COMMAND_SELECT_RIGHT: Regex = Regex::new(r"(?i)\b(select\s+right|extend\s+right|select\s+one\s+right)\b[.,!?]?").unwrap();
+    static ref COMMAND_SELECT_UP: Regex = Regex::new(r"(?i)\b(select\s+up|extend\s+up)\b[.,!?]?").unwrap();
+    static ref COMMAND_SELECT_DOWN: Regex = Regex::new(r"(?i)\b(select\s+down|extend\s+down)\b[.,!?]?").unwrap();
+    static ref COMMAND_SELECT_WORD_LEFT: Regex = Regex::new(r"(?i)\b(select\s+(word\s+left|previous\s+word)|extend\s+(word\s+left|previous\s+word))\b[.,!?]?").unwrap();
+    static ref COMMAND_SELECT_WORD_RIGHT: Regex = Regex::new(r"(?i)\b(select\s+(word\s+right|next\s+word)|extend\s+(word\s+right|next\s+word))\b[.,!?]?").unwrap();
+    static ref COMMAND_SELECT_TO_START: Regex = Regex::new(r"(?i)\b(select\s+to\s+(start|beginning)|select\s+to\s+start\s+of\s+line|select\s+to\s+beginning\s+of\s+line)\b[.,!?]?").unwrap();
+    static ref COMMAND_SELECT_TO_END: Regex = Regex::new(r"(?i)\b(select\s+to\s+end|select\s+to\s+end\s+of\s+line)\b[.,!?]?").unwrap();
 
     // Navigation/formatting commands
     static ref COMMAND_ALL_CAPS: Regex = Regex::new(r"(?i)\ball\s*caps\s+(.+?)(?:\s+end\s*caps|\s*$)").unwrap();
@@ -353,6 +364,12 @@ impl PostProcessor {
         result
     }
 
+    /// Process only voice-command markers without applying the rest of the
+    /// smart text formatting pipeline.
+    pub fn extract_voice_commands(&self, text: &str) -> String {
+        self.process_voice_commands(text)
+    }
+
     /// Process voice commands like punctuation, new line, delete, etc.
     fn process_voice_commands(&self, text: &str) -> String {
         let mut result = text.to_string();
@@ -441,6 +458,9 @@ impl PostProcessor {
         result = COMMAND_BACKSPACE
             .replace_all(&result, "[[BACKSPACE]]")
             .to_string();
+        result = COMMAND_DELETE_FORWARD
+            .replace_all(&result, "[[DELETE_FORWARD]]")
+            .to_string();
         result = COMMAND_DELETE_WORD
             .replace_all(&result, "[[DELETE_WORD]]")
             .to_string();
@@ -451,6 +471,12 @@ impl PostProcessor {
         result = COMMAND_TAB_KEY.replace_all(&result, "[[TAB]]").to_string();
         result = COMMAND_ESCAPE
             .replace_all(&result, "[[ESCAPE]]")
+            .to_string();
+        result = COMMAND_PAGE_UP
+            .replace_all(&result, "[[PAGE_UP]]")
+            .to_string();
+        result = COMMAND_PAGE_DOWN
+            .replace_all(&result, "[[PAGE_DOWN]]")
             .to_string();
 
         // Cursor movement commands
@@ -469,6 +495,30 @@ impl PostProcessor {
             .to_string();
         result = COMMAND_GO_WORD_RIGHT
             .replace_all(&result, "[[WORD_RIGHT]]")
+            .to_string();
+        result = COMMAND_SELECT_LEFT
+            .replace_all(&result, "[[SELECT_LEFT]]")
+            .to_string();
+        result = COMMAND_SELECT_RIGHT
+            .replace_all(&result, "[[SELECT_RIGHT]]")
+            .to_string();
+        result = COMMAND_SELECT_UP
+            .replace_all(&result, "[[SELECT_UP]]")
+            .to_string();
+        result = COMMAND_SELECT_DOWN
+            .replace_all(&result, "[[SELECT_DOWN]]")
+            .to_string();
+        result = COMMAND_SELECT_WORD_LEFT
+            .replace_all(&result, "[[SELECT_WORD_LEFT]]")
+            .to_string();
+        result = COMMAND_SELECT_WORD_RIGHT
+            .replace_all(&result, "[[SELECT_WORD_RIGHT]]")
+            .to_string();
+        result = COMMAND_SELECT_TO_START
+            .replace_all(&result, "[[SELECT_TO_START]]")
+            .to_string();
+        result = COMMAND_SELECT_TO_END
+            .replace_all(&result, "[[SELECT_TO_END]]")
             .to_string();
 
         result
@@ -1037,6 +1087,62 @@ mod tests {
             result
         );
 
+        let result = pp.process("copy");
+        println!("Copy result: '{:?}'", result);
+        assert!(
+            result.contains("[[COPY]]"),
+            "Expected COPY marker in '{}'",
+            result
+        );
+
+        let result = pp.process("cut");
+        println!("Cut result: '{:?}'", result);
+        assert!(
+            result.contains("[[CUT]]"),
+            "Expected CUT marker in '{}'",
+            result
+        );
+
+        let result = pp.process("enter");
+        println!("Enter result: '{:?}'", result);
+        assert!(
+            result.contains("[[ENTER]]"),
+            "Expected ENTER marker in '{}'",
+            result
+        );
+
+        let result = pp.process("tab");
+        println!("Tab result: '{:?}'", result);
+        assert!(
+            result.contains("[[TAB]]"),
+            "Expected TAB marker in '{}'",
+            result
+        );
+
+        let result = pp.process("escape");
+        println!("Escape result: '{:?}'", result);
+        assert!(
+            result.contains("[[ESCAPE]]"),
+            "Expected ESCAPE marker in '{}'",
+            result
+        );
+
+        let result = pp.process("forward delete");
+        println!("Forward delete result: '{:?}'", result);
+        assert!(
+            result.contains("[[DELETE_FORWARD]]"),
+            "Expected DELETE_FORWARD marker in '{}'",
+            result
+        );
+
+        let result = pp.process("page down");
+        println!("Page down result: '{:?}'", result);
+        assert!(
+            result.contains("[[PAGE_DOWN]]"),
+            "Expected PAGE_DOWN marker in '{}'",
+            result
+        );
+
         // Test navigation commands
         let result = pp.process("go left");
         println!("Go left result: '{:?}'", result);
@@ -1051,6 +1157,46 @@ mod tests {
         assert!(
             result.contains("[[END]]"),
             "Expected END marker in '{}'",
+            result
+        );
+
+        let result = pp.process("move to start");
+        println!("Move to start result: '{:?}'", result);
+        assert!(
+            result.contains("[[HOME]]"),
+            "Expected HOME marker in '{}'",
+            result
+        );
+
+        let result = pp.process("move word right");
+        println!("Move word right result: '{:?}'", result);
+        assert!(
+            result.contains("[[WORD_RIGHT]]"),
+            "Expected WORD_RIGHT marker in '{}'",
+            result
+        );
+
+        let result = pp.process("select left");
+        println!("Select left result: '{:?}'", result);
+        assert!(
+            result.contains("[[SELECT_LEFT]]"),
+            "Expected SELECT_LEFT marker in '{}'",
+            result
+        );
+
+        let result = pp.process("select next word");
+        println!("Select next word result: '{:?}'", result);
+        assert!(
+            result.contains("[[SELECT_WORD_RIGHT]]"),
+            "Expected SELECT_WORD_RIGHT marker in '{}'",
+            result
+        );
+
+        let result = pp.process("select to end");
+        println!("Select to end result: '{:?}'", result);
+        assert!(
+            result.contains("[[SELECT_TO_END]]"),
+            "Expected SELECT_TO_END marker in '{}'",
             result
         );
     }

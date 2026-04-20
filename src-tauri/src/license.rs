@@ -13,7 +13,11 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::time::Duration;
+
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 
 use crate::security;
 
@@ -279,6 +283,9 @@ pub struct CachedLicense {
 
 const CACHE_VERSION: i32 = 2;
 
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 // =============================================================================
 // Device Identification
 // =============================================================================
@@ -286,6 +293,12 @@ const CACHE_VERSION: i32 = 2;
 /// Generate a unique, stable device fingerprint
 /// Uses hardware identifiers to create a reproducible ID
 pub fn get_device_id() -> String {
+    static DEVICE_ID: OnceLock<String> = OnceLock::new();
+
+    DEVICE_ID.get_or_init(compute_device_id).clone()
+}
+
+fn compute_device_id() -> String {
     let mut hasher = Sha256::new();
 
     // Hostname
@@ -306,10 +319,7 @@ pub fn get_device_id() -> String {
     #[cfg(target_os = "macos")]
     {
         // Get macOS IOPlatformUUID
-        if let Ok(output) = std::process::Command::new("ioreg")
-            .args(["-rd1", "-c", "IOPlatformExpertDevice"])
-            .output()
-        {
+        if let Ok(output) = command_output_hidden("ioreg", &["-rd1", "-c", "IOPlatformExpertDevice"]) {
             let output_str = String::from_utf8_lossy(&output.stdout);
             if let Some(line) = output_str.lines().find(|l| l.contains("IOPlatformUUID")) {
                 hasher.update(line.as_bytes());
@@ -320,10 +330,7 @@ pub fn get_device_id() -> String {
     #[cfg(target_os = "windows")]
     {
         // Get Windows machine UUID
-        if let Ok(output) = std::process::Command::new("wmic")
-            .args(["csproduct", "get", "UUID"])
-            .output()
-        {
+        if let Ok(output) = command_output_hidden("wmic", &["csproduct", "get", "UUID"]) {
             hasher.update(&output.stdout);
         }
     }
@@ -331,6 +338,19 @@ pub fn get_device_id() -> String {
     // Create readable device ID with prefix
     let hash = hasher.finalize();
     format!("WVT-{}", hex::encode(&hash[..12]).to_uppercase())
+}
+
+#[cfg(target_os = "windows")]
+fn command_output_hidden(program: &str, args: &[&str]) -> std::io::Result<std::process::Output> {
+    let mut command = std::process::Command::new(program);
+    command.args(args).creation_flags(CREATE_NO_WINDOW);
+    command.output()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn command_output_hidden(program: &str, args: &[&str]) -> std::io::Result<std::process::Output> {
+    let mut command = std::process::Command::new(program);
+    command.args(args).output()
 }
 
 /// Get a human-readable device label
