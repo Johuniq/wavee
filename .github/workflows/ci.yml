@@ -33,6 +33,50 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
+  macos-bundle:
+    name: macOS Bundle Check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup libclang for bindgen
+        run: |
+          brew install llvm
+          LLVM_PREFIX="$(brew --prefix llvm)"
+          echo "LIBCLANG_PATH=${LLVM_PREFIX}/lib" >> "$GITHUB_ENV"
+          echo "DYLD_LIBRARY_PATH=${LLVM_PREFIX}/lib:${DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
+      - name: Setup CMake
+        run: |
+          brew install cmake
+          echo "CMAKE=$(command -v cmake)" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build macOS app bundle
+        run: pnpm tauri build --bundles app
+
+      - name: Validate macOS app bundle
+        run: |
+          APP_PATH="$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' -type d -print -quit)"
+          test -n "$APP_PATH"
+          plutil -lint "$APP_PATH/Contents/Info.plist"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
   rust:
     name: Rust Tests
     runs-on: windows-latest

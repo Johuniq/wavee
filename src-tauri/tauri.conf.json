@@ -71,7 +71,7 @@
       "entitlements": "Wavee.entitlements",
       "minimumSystemVersion": "13.0",
       "frameworks": [],
-      "hardenedRuntime": true,
+      "hardenedRuntime": false,
       "signingIdentity": null,
       "providerShortName": null,
       "dmg": {
