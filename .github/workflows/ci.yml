@@ -75,6 +75,9 @@ jobs:
           APP_PATH="$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' -type d -print -quit)"
           test -n "$APP_PATH"
           plutil -lint "$APP_PATH/Contents/Info.plist"
+          # Re-sign ad hoc in CI so verification checks the bundle contents
+          # produced by this build instead of any transient partial signature.
+          codesign --force --deep --sign - "$APP_PATH"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
   rust:
