@@ -187,6 +187,12 @@ System requirements vary depending on the transcription model you choose. Larger
 
 ### Windows
 
+**Install via Winget (Recommended):**
+```sh
+winget install Johuniq.Wavee
+```
+
+**Or install manually:**
 1. Download the latest Windows installer from [Releases](https://github.com/johuniq/wavee/releases/latest).
 2. Run the installer.
 3. Open Wavee.
