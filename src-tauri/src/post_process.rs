@@ -486,16 +486,6 @@ impl PostProcessor {
             .to_string();
         result = COMMAND_GO_UP.replace_all(&result, "[[UP]]").to_string();
         result = COMMAND_GO_DOWN.replace_all(&result, "[[DOWN]]").to_string();
-        result = COMMAND_GO_START
-            .replace_all(&result, "[[HOME]]")
-            .to_string();
-        result = COMMAND_GO_END.replace_all(&result, "[[END]]").to_string();
-        result = COMMAND_GO_WORD_LEFT
-            .replace_all(&result, "[[WORD_LEFT]]")
-            .to_string();
-        result = COMMAND_GO_WORD_RIGHT
-            .replace_all(&result, "[[WORD_RIGHT]]")
-            .to_string();
         result = COMMAND_SELECT_LEFT
             .replace_all(&result, "[[SELECT_LEFT]]")
             .to_string();
@@ -514,12 +504,22 @@ impl PostProcessor {
         result = COMMAND_SELECT_WORD_RIGHT
             .replace_all(&result, "[[SELECT_WORD_RIGHT]]")
             .to_string();
+        result = COMMAND_GO_WORD_LEFT
+            .replace_all(&result, "[[WORD_LEFT]]")
+            .to_string();
+        result = COMMAND_GO_WORD_RIGHT
+            .replace_all(&result, "[[WORD_RIGHT]]")
+            .to_string();
         result = COMMAND_SELECT_TO_START
             .replace_all(&result, "[[SELECT_TO_START]]")
             .to_string();
         result = COMMAND_SELECT_TO_END
             .replace_all(&result, "[[SELECT_TO_END]]")
             .to_string();
+        result = COMMAND_GO_START
+            .replace_all(&result, "[[HOME]]")
+            .to_string();
+        result = COMMAND_GO_END.replace_all(&result, "[[END]]").to_string();
 
         result
     }
