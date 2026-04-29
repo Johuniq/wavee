@@ -20,6 +20,16 @@ function AppContent() {
   const [accessState, setAccessState] = useState<AppAccessState | null>(null);
   const [checkingAccess, setCheckingAccess] = useState(true);
 
+  const refreshAccessState = async () => {
+    try {
+      const status = await canUseApp();
+      setAccessState(status);
+    } catch (err) {
+      console.error("Failed to check app access:", err);
+      setAccessState({ canUse: false, reason: "no_license" });
+    }
+  };
+
   // Initialize from database on mount
   useEffect(() => {
     initializeFromDb();
@@ -34,11 +44,7 @@ function AppContent() {
       }
 
       try {
-        const status = await canUseApp();
-        setAccessState(status);
-      } catch (err) {
-        console.error("Failed to check app access:", err);
-        setAccessState({ canUse: false, reason: "no_license" });
+        await refreshAccessState();
       } finally {
         setCheckingAccess(false);
       }
@@ -48,12 +54,7 @@ function AppContent() {
   }, [isInitialized, setupComplete]);
 
   const handleLicenseActivated = async () => {
-    try {
-      const status = await canUseApp();
-      setAccessState(status);
-    } catch {
-      setAccessState({ canUse: false, reason: "no_license" });
-    }
+    await refreshAccessState();
   };
 
   // Show loading while initializing from DB
@@ -93,14 +94,22 @@ function AppContent() {
   if (accessState && !accessState.canUse) {
     return (
       <div className="h-full w-full max-w-md mx-auto">
-        <TrialExpiredView onLicenseActivated={handleLicenseActivated} />
+        <TrialExpiredView
+          onLicenseActivated={handleLicenseActivated}
+          reason={
+            accessState.reason === "trial_expired" ? "trial_expired" : "no_license"
+          }
+        />
       </div>
     );
   }
 
   return (
     <div className="h-full w-full max-w-md mx-auto">
-      <MainView trialDaysRemaining={accessState?.daysRemaining} />
+      <MainView
+        trialDaysRemaining={accessState?.daysRemaining}
+        onLicenseChange={handleLicenseActivated}
+      />
     </div>
   );
 }

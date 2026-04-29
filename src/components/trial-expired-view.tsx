@@ -26,16 +26,19 @@ import { useState } from "react";
 
 interface TrialExpiredViewProps {
   onLicenseActivated: () => void;
+  reason?: "trial_expired" | "no_license";
 }
 
 export function TrialExpiredView({
   onLicenseActivated,
+  reason = "trial_expired",
 }: TrialExpiredViewProps) {
   const [isActivating, setIsActivating] = useState(false);
   const [licenseKey, setLicenseKey] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showActivationForm, setShowActivationForm] = useState(false);
+  const isTrialExpired = reason === "trial_expired";
 
   const handleActivate = async () => {
     if (!licenseKey.trim()) {
@@ -60,7 +63,8 @@ export function TrialExpiredView({
         setError(msg);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to activate license";
+      const msg =
+        err instanceof Error ? err.message : "Failed to activate license";
       toastError("Activation failed", msg);
       setError(msg);
     } finally {
@@ -78,11 +82,12 @@ export function TrialExpiredView({
 
         {/* Title */}
         <h2 className="text-xl font-semibold text-center">
-          Trial Period Ended
+          {isTrialExpired ? "Trial Period Ended" : "License Required"}
         </h2>
         <p className="text-sm text-muted-foreground text-center mt-2">
-          Your 7-day free trial has expired. Purchase a license to continue
-          using Wavee.
+          {isTrialExpired
+            ? "Your 7-day free trial has expired. Purchase a license to continue using Wavee."
+            : "Your license is no longer active on this device. Activate a license to continue using Wavee."}
         </p>
 
         {/* Messages */}
@@ -118,9 +123,7 @@ export function TrialExpiredView({
                       </p>
                       <Button
                         className="mt-3 w-full"
-                        onClick={() =>
-                          openUrl("https://polar.sh/johuniq/wavee")
-                        }
+                        onClick={() => openUrl("https://trywavee.johuniq.tech")}
                       >
                         <ExternalLink className="mr-2 h-4 w-4" />
                         Purchase License
@@ -196,12 +199,14 @@ export function TrialExpiredView({
         </div>
 
         {/* Trial info */}
-        <div className="mt-6 pt-4 border-t w-full">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" />
-            <span>Your trial started 7+ days ago</span>
+        {isTrialExpired && (
+          <div className="mt-6 pt-4 border-t w-full">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              <span>Your trial started 7+ days ago</span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

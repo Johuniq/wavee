@@ -1,46 +1,46 @@
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/errors";
-import { reportError } from "@/lib/voice-api";
 import {
-    activateLicense,
-    deactivateLicense,
-    formatExpirationDate,
-    getLicense,
-    getLicenseStatusMessage,
-    isLicenseActive,
-    maskLicenseKey,
-    validateLicense,
-    type LicenseData,
+  activateLicense,
+  deactivateLicense,
+  formatExpirationDate,
+  getLicense,
+  getLicenseStatusMessage,
+  isLicenseActive,
+  maskLicenseKey,
+  validateLicense,
+  type LicenseData,
 } from "@/lib/license-api";
 import { openUrl } from "@/lib/utils";
+import { reportError } from "@/lib/voice-api";
 import {
-    AlertCircle,
-    ArrowLeft,
-    Check,
-    Clock,
-    ExternalLink,
-    Key,
-    Loader2,
-    RefreshCcw,
-    RefreshCw,
-    Shield,
-    ShieldCheck,
-    ShieldX,
-    Sparkles,
-    Trash2,
+  AlertCircle,
+  ArrowLeft,
+  Check,
+  Clock,
+  ExternalLink,
+  Key,
+  Loader2,
+  RefreshCcw,
+  RefreshCw,
+  Shield,
+  ShieldCheck,
+  ShieldX,
+  Sparkles,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -348,7 +348,7 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
                       </span>
                       <span className="text-sm text-foreground/80">
                         {new Date(
-                          license.last_validated_at
+                          license.last_validated_at,
                         ).toLocaleDateString()}
                       </span>
                     </div>
@@ -468,7 +468,11 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
                     className="glass-button w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium"
                     onClick={handleValidate}
                     disabled={isValidating}
-                    title={isDeactivating ? "Wait for deactivation to finish" : undefined}
+                    title={
+                      isDeactivating
+                        ? "Wait for deactivation to finish"
+                        : undefined
+                    }
                   >
                     {isValidating ? (
                       <>
@@ -547,15 +551,15 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
                         {isTrial
                           ? "Continue using Wavee after your trial ends"
                           : isTrialExpired
-                          ? "Your trial has ended - purchase to continue"
-                          : "Unlock all features with a Pro license"}
+                            ? "Your trial has ended - purchase to continue"
+                            : "Unlock all features with a Pro license"}
                       </p>
                     </div>
                   </div>
 
                   <button
                     className="glass-button w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
-                    onClick={() => openUrl("https://polar.sh/johuniq/wavee")}
+                    onClick={() => openUrl("https://trywavee.johuniq.tech")}
                   >
                     <ExternalLink className="h-4 w-4" />
                     {isTrial || isTrialExpired

@@ -82,9 +82,10 @@ const HOTKEY_DEBOUNCE_MS = 100;
 
 interface MainViewProps {
   trialDaysRemaining?: number;
+  onLicenseChange?: () => void | Promise<void>;
 }
 
-export function MainView({ trialDaysRemaining }: MainViewProps) {
+export function MainView({ trialDaysRemaining, onLicenseChange }: MainViewProps) {
   const {
     recordingStatus,
     setRecordingStatus,
@@ -542,7 +543,12 @@ export function MainView({ trialDaysRemaining }: MainViewProps) {
   if (showLicense) {
     return (
       <Suspense fallback={ViewLoadingFallback}>
-        <LicenseView onClose={() => setShowLicense(false)} />
+        <LicenseView
+          onClose={() => setShowLicense(false)}
+          onLicenseChange={(_isValid) => {
+            void onLicenseChange?.();
+          }}
+        />
       </Suspense>
     );
   }

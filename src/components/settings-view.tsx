@@ -1,50 +1,50 @@
 import { Logo } from "@/components/logo";
 import { Label } from "@/components/ui/label";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { UpdaterView } from "@/components/updater-view";
 import { useToast } from "@/hooks/use-toast";
 import {
-    downloadFile,
-    exportAppData,
-    getStorageStats,
+  downloadFile,
+  exportAppData,
+  getStorageStats,
 } from "@/lib/data-management";
 import { setAutoStart } from "@/lib/preferences-api";
 import { cn } from "@/lib/utils";
 import { reportError } from "@/lib/voice-api";
 import { useAppStore } from "@/store";
 import {
-    AlertCircle,
-    ArrowLeft,
-    ChevronRight,
-    Database,
-    FileDown,
-    Keyboard,
-    Loader2,
-    RefreshCcw,
-    RotateCcw,
-    Sparkles,
-    Volume2,
-    Waves,
+  AlertCircle,
+  ArrowLeft,
+  ChevronRight,
+  Database,
+  FileDown,
+  Keyboard,
+  Loader2,
+  RefreshCcw,
+  RotateCcw,
+  Sparkles,
+  Volume2,
+  Waves,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 interface SettingsViewProps {
@@ -52,11 +52,7 @@ interface SettingsViewProps {
 }
 
 export function SettingsView({ onClose }: SettingsViewProps) {
-  const {
-    settings,
-    updateSettings,
-    resetSettings,
-  } = useAppStore();
+  const { settings, updateSettings, resetSettings } = useAppStore();
   const { success: toastSuccess, error: toastError } = useToast();
 
   const [isExporting, setIsExporting] = useState(false);
@@ -71,7 +67,9 @@ export function SettingsView({ onClose }: SettingsViewProps) {
   const [recordingToggle, setRecordingToggle] = useState(false);
 
   const getErrorMessage = (error: unknown) =>
-    error instanceof Error ? error.message : String(error || "Something went wrong");
+    error instanceof Error
+      ? error.message
+      : String(error || "Something went wrong");
 
   // Load storage stats
   const loadStorageStats = async () => {
@@ -188,7 +186,10 @@ export function SettingsView({ onClose }: SettingsViewProps) {
 
       {/* Glass Header */}
       <div className="border-b border-white/20 dark:border-white/10 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
-        <button onClick={onClose} className="glass-button px-1 py-1 rounded-xl text-xs font-medium text-red-500 hover:text-red-600 flex items-center gap-1">
+        <button
+          onClick={onClose}
+          className="glass-button px-1 py-1 rounded-xl text-xs font-medium text-red-500 hover:text-red-600 flex items-center gap-1"
+        >
           <ArrowLeft className="h-4 w-4 text-foreground/70" />
         </button>
         <div className="flex items-center gap-2">
@@ -257,7 +258,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                   className={cn(
                     "flex-1 px-3 py-2 rounded-xl text-sm font-mono transition-all",
                     "bg-white/50 dark:bg-white/5 border border-white/30 dark:border-white/10",
-                    recordingPushToTalk && "animate-pulse border-blue-500/50"
+                    recordingPushToTalk && "animate-pulse border-blue-500/50",
                   )}
                 >
                   {recordingPushToTalk
@@ -283,7 +284,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                   className={cn(
                     "flex-1 px-3 py-2 rounded-xl text-sm font-mono transition-all",
                     "bg-white/50 dark:bg-white/5 border border-white/30 dark:border-white/10",
-                    recordingToggle && "animate-pulse border-blue-500/50"
+                    recordingToggle && "animate-pulse border-blue-500/50",
                   )}
                 >
                   {recordingToggle ? "Press any key..." : settings.toggleKey}
@@ -414,7 +415,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                     setSettingsError("Could not change Start on Boot.");
                     toastError(
                       "Settings error",
-                      "Failed to change autostart setting"
+                      "Failed to change autostart setting",
                     );
                     await reportError("configuration", message, "error", {
                       userAction: "Change autostart setting",
@@ -481,7 +482,8 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                     Voice Commands
                   </Label>
                   <p className="text-xs text-foreground/60">
-                    Allow spoken editing commands like undo, paste, and delete line
+                    Allow spoken editing commands like undo, paste, and delete
+                    line
                   </p>
                 </div>
               </div>
@@ -567,18 +569,20 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                 </div>
               </div>
             </div>
-          ) : storageStats && (
-            <div className="p-3 rounded-xl bg-white/30 dark:bg-white/10 border border-white/30 dark:border-white/10 mb-3">
-              <p className="text-sm">
-                <span className="font-semibold text-foreground">
-                  {storageStats.historyCount}
-                </span>
-                <span className="text-foreground/60">
-                  {" "}
-                  transcriptions in history
-                </span>
-              </p>
-            </div>
+          ) : (
+            storageStats && (
+              <div className="p-3 rounded-xl bg-white/30 dark:bg-white/10 border border-white/30 dark:border-white/10 mb-3">
+                <p className="text-sm">
+                  <span className="font-semibold text-foreground">
+                    {storageStats.historyCount}
+                  </span>
+                  <span className="text-foreground/60">
+                    {" "}
+                    transcriptions in history
+                  </span>
+                </p>
+              </div>
+            )
           )}
 
           <button
@@ -677,7 +681,7 @@ export function SettingsView({ onClose }: SettingsViewProps) {
             </p>
             <div className="h-px w-16 bg-border/50 my-3" />
             <p className="text-xs text-foreground/60">
-              © {new Date().getFullYear()} Johuniq. Released under the MIT License.
+              © {new Date().getFullYear()} Johuniq. All rights reserved.
             </p>
           </div>
         </div>

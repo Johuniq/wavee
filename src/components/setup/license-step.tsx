@@ -78,7 +78,8 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
         onNext();
       }, 1500);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to activate license";
+      const msg =
+        err instanceof Error ? err.message : "Failed to activate license";
       toastError("Activation failed", msg);
       setError(msg);
     } finally {
@@ -217,7 +218,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
                   "border border-white/50 dark:border-white/10",
                   "hover:bg-white/60 dark:hover:bg-white/10 hover:border-foreground/30",
                   "hover:shadow-lg",
-                  "group"
+                  "group",
                 )}
               >
                 <div className="flex items-start gap-4">
@@ -248,7 +249,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
                   "border border-white/50 dark:border-white/10",
                   "hover:bg-white/60 dark:hover:bg-white/10 hover:border-foreground/30",
                   "hover:shadow-lg",
-                  "group"
+                  "group",
                 )}
               >
                 <div className="flex items-start gap-4">
@@ -269,7 +270,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
               {/* Purchase link */}
               <div className="pt-4 text-center">
                 <button
-                  onClick={() => openUrl("https://polar.sh/johuniq/wavee")}
+                  onClick={() => openUrl("https://  trywavee.johuniq.tech")}
                   className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground transition-colors"
                 >
                   <Sparkles className="h-4 w-4" />
@@ -312,7 +313,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
                         "border border-white/50 dark:border-white/20",
                         "focus:outline-none focus:ring-2 focus:ring-foreground/30 focus:border-foreground/30",
                         "placeholder:text-gray-400 dark:placeholder:text-gray-600",
-                        "disabled:opacity-50"
+                        "disabled:opacity-50",
                       )}
                     />
                   </div>
@@ -326,7 +327,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
                       "text-white shadow-lg shadow-foreground/25",
                       "disabled:opacity-50 disabled:cursor-not-allowed",
                       "transition-all duration-200",
-                      "flex items-center justify-center gap-2"
+                      "flex items-center justify-center gap-2",
                     )}
                   >
                     {isActivating ? (
@@ -352,7 +353,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
                   "border border-white/50 dark:border-white/10",
                   "text-foreground/80",
                   "hover:bg-white/50 dark:hover:bg-white/15",
-                  "transition-all duration-200"
+                  "transition-all duration-200",
                 )}
               >
                 Back to options
@@ -372,7 +373,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
               "text-foreground/80",
               "hover:bg-white/50 dark:hover:bg-white/15",
               "transition-all duration-200",
-              "flex items-center justify-center gap-2"
+              "flex items-center justify-center gap-2",
             )}
           >
             <ArrowLeft className="h-4 w-4" />
@@ -386,7 +387,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
                 "bg-foreground/90 hover:bg-foreground",
                 "text-white shadow-lg shadow-foreground/25",
                 "transition-all duration-200",
-                "flex items-center justify-center gap-2"
+                "flex items-center justify-center gap-2",
               )}
             >
               Continue
