@@ -36,7 +36,6 @@ export interface AppSettings {
   selectedModelId: string;
 
   // UI preferences
-  showRecordingIndicator: boolean;
   playAudioFeedback: boolean;
   showRecordingOverlay: boolean; // Show recording overlay when recording
   recordingOverlayPosition: "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-center" | "bottom-right";
@@ -125,7 +124,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hotkeyMode: "push-to-talk",
   language: "en",
   selectedModelId: "base",
-  showRecordingIndicator: true,
   playAudioFeedback: true,
   showRecordingOverlay: true,
   recordingOverlayPosition: "top-center",

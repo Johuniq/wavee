@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { setAutoStart } from "@/lib/preferences-api";
 import { cn } from "@/lib/utils";
-import { reportError } from "@/lib/voice-api";
+import { hideRecordingOverlay, reportError } from "@/lib/voice-api";
 import { useAppStore } from "@/store";
 import {
   AlertCircle,
@@ -148,7 +148,6 @@ export function SettingsView(_props: SettingsViewProps) {
   };
 
   const activeCount =
-    Number(settings.showRecordingIndicator) +
     Number(settings.showRecordingOverlay) +
     Number(settings.playAudioFeedback) +
     Number(settings.postProcessingEnabled) +
@@ -301,20 +300,19 @@ export function SettingsView(_props: SettingsViewProps) {
 
             <div className="divide-y divide-hairline-soft">
               <SettingRow
-                icon={<Circle className="h-3 w-3 fill-current" />}
-                iconClass={settings.showRecordingIndicator ? "bg-primary/10 text-primary" : ""}
-                title="Recording indicator"
-                description="Show visual feedback when recording"
-                checked={settings.showRecordingIndicator}
-                onChange={(checked) => updateSettings({ showRecordingIndicator: checked })}
-              />
-              <SettingRow
                 icon={<Waves className="h-3.5 w-3.5" />}
                 iconClass={settings.showRecordingOverlay ? "bg-primary/10 text-primary" : ""}
                 title="Recording overlay"
                 description="Show animated pill while recording"
                 checked={settings.showRecordingOverlay}
-                onChange={(checked) => updateSettings({ showRecordingOverlay: checked })}
+                onChange={async (checked) => {
+                  if (!checked) {
+                    hideRecordingOverlay().catch((err) => {
+                      console.warn("Failed to hide recording overlay:", err);
+                    });
+                  }
+                  updateSettings({ showRecordingOverlay: checked });
+                }}
               />
               {settings.showRecordingOverlay && (
                 <div className="grid grid-cols-[auto_1fr_auto] gap-2.5 sm:gap-3 items-center py-2.5">
@@ -332,7 +330,7 @@ export function SettingsView(_props: SettingsViewProps) {
                     }
                   >
                     <SelectTrigger className="paper-input border border-hairline h-9 w-[140px] cursor-pointer" style={{ background: '#ffffff', borderRadius: '8px' }}>
-                      <SelectValue />
+                    <SelectValue placeholder="Top center" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="top-left">Top left</SelectItem>

@@ -2,6 +2,7 @@ import { getLicense, type LicenseData } from "@/lib/license-api";
 import { cn } from "@/lib/utils";
 import { getTranscriptionHistory, getTranscriptionHistoryCount, type TranscriptionHistoryItem } from "@/lib/voice-api";
 import { useAppStore } from "@/store";
+import { useToast } from "@/hooks/use-toast";
 import {
   Activity,
   ArrowRight,
@@ -14,6 +15,7 @@ import {
   Loader2,
   Mic,
   RefreshCw,
+  Share2,
   Sparkles,
   Timer,
   Type,
@@ -33,6 +35,7 @@ export function OverviewView({ onNavigate, trialDaysRemaining }: OverviewViewPro
     selectedModel,
     modelReady,
   } = useAppStore();
+  const { success: toastSuccess } = useToast();
 
   const [history, setHistory] = useState<TranscriptionHistoryItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -181,6 +184,31 @@ export function OverviewView({ onNavigate, trialDaysRemaining }: OverviewViewPro
     : `${stats.minutesSaved}m`;
 
   const weeklyMax = Math.max(1, ...stats.weeklyBars.map(b => b.value));
+
+  const handleShareStats = useCallback(async () => {
+    const snapshot = [
+      "📊 My Wavee Weekly Stats",
+      "",
+      `🎙️ ${stats.transcriptionsThisWeek} transcriptions this week`,
+      `💬 ${stats.totalWords.toLocaleString()} words spoken total`,
+      `⏰ ${timeSavedLabel} saved vs typing`,
+      `🔥 ${stats.streak} ${stats.streak === 1 ? "day" : "days"} streak`,
+      "",
+      "Dictate with your voice. Get text at your cursor.",
+      "https://wavee.app",
+    ].join("\n");
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Wavee Weekly Stats", text: snapshot });
+      } catch (err) {
+        console.warn("Share failed:", err);
+      }
+    } else {
+      await navigator.clipboard.writeText(snapshot);
+      toastSuccess("Stats copied to clipboard", "Share your weekly progress!");
+    }
+  }, [stats, timeSavedLabel, toastSuccess]);
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-canvas">
@@ -454,14 +482,23 @@ export function OverviewView({ onNavigate, trialDaysRemaining }: OverviewViewPro
                   Your activity, decoded.
                 </h2>
               </div>
-              <button
-                onClick={refreshData}
-                disabled={isRefreshing}
-                aria-label="Refresh data"
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-ink bg-canvas text-ink hover:bg-canvas-soft transition-colors disabled:opacity-50 shrink-0"
-              >
-                <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
-              </button>
+              <div className="flex items-end gap-2">
+                <button
+                  onClick={refreshData}
+                  disabled={isRefreshing}
+                  aria-label="Refresh data"
+                  className="flex h-8 w-8 items-center justify-center rounded-md border border-ink bg-canvas text-ink hover:bg-canvas-soft transition-colors disabled:opacity-50 shrink-0"
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
+                </button>
+                <button
+                  onClick={handleShareStats}
+                  aria-label="Share weekly stats"
+                  className="flex h-8 w-8 items-center justify-center rounded-md border border-ink bg-canvas text-ink hover:bg-canvas-soft transition-colors shrink-0"
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 min-[520px]:grid-cols-2 @3xl:grid-cols-4 gap-3 sm:gap-4">
