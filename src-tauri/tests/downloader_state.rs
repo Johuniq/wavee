@@ -1,5 +1,5 @@
-use vox_ai_lib::downloader::ModelDownloader;
-use vox_ai_lib::transcription::{get_model_filename, get_parakeet_files};
+use wavee_lib::downloader::ModelDownloader;
+use wavee_lib::transcription::{get_model_filename, get_parakeet_files};
 
 #[test]
 fn downloader_resolves_model_paths_from_metadata() {

@@ -1,4 +1,4 @@
-use vox_ai_lib::license::LicenseStatus;
+use wavee_lib::license::LicenseStatus;
 
 #[test]
 fn license_status_display_matches_polar_status_names() {

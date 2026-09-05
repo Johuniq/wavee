@@ -60,6 +60,7 @@ interface AppStore extends AppState {
 const initialState: AppState & {
   availableModels: WhisperModel[];
   isInitialized: boolean;
+  modelReady: boolean;
 } = {
   isInitialized: false,
   isFirstLaunch: true,

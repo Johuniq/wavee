@@ -1,4 +1,4 @@
-use vox_ai_lib::post_process::{PostProcessor, VocabularyEntry};
+use wavee_lib::post_process::{PostProcessor, VocabularyEntry};
 
 fn processor() -> PostProcessor {
     PostProcessor::new()

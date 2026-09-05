@@ -1,4 +1,4 @@
-use vox_ai_lib::security::{decrypt_data, derive_encryption_key, encrypt_data, mask_license_key};
+use wavee_lib::security::{decrypt_data, derive_encryption_key, encrypt_data, mask_license_key};
 
 #[test]
 fn encryption_key_is_stable_and_256_bit() {

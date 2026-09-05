@@ -1,11 +1,11 @@
 use chrono::{Duration, Utc};
 use httpmock::prelude::*;
 use serde_json::json;
-use vox_ai_lib::database::{Database, LicenseData};
-use vox_ai_lib::downloader::ModelDownloader;
-use vox_ai_lib::license::{clear_cache, LicenseManager, LicenseStatus};
-use vox_ai_lib::post_process::PostProcessor;
-use vox_ai_lib::{calculate_trial_integrity_hash, db_license_allows_usage, has_active_trial_core};
+use wavee_lib::database::{Database, LicenseData};
+use wavee_lib::downloader::ModelDownloader;
+use wavee_lib::license::{clear_cache, LicenseManager, LicenseStatus};
+use wavee_lib::post_process::PostProcessor;
+use wavee_lib::{calculate_trial_integrity_hash, db_license_allows_usage, has_active_trial_core};
 
 fn test_database() -> (tempfile::TempDir, Database) {
     let dir = tempfile::tempdir().unwrap();

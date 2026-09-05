@@ -1,5 +1,5 @@
 use serde_json;
-use vox_ai_lib::CommandError;
+use wavee_lib::CommandError;
 
 #[test]
 fn test_license_error_serialization_sanitizes_messages() {

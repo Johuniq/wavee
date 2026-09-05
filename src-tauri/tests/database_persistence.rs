@@ -1,5 +1,5 @@
 use rusqlite::Connection;
-use vox_ai_lib::database::{AppSettings, AppState, Database, LicenseData};
+use wavee_lib::database::{AppSettings, AppState, Database, LicenseData};
 
 #[test]
 fn database_state_survives_reopen() {

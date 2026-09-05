@@ -1,6 +1,6 @@
 use httpmock::prelude::*;
 use serde_json::json;
-use vox_ai_lib::license::{clear_cache, LicenseManager, LicenseStatus};
+use wavee_lib::license::{clear_cache, LicenseManager, LicenseStatus};
 
 #[tokio::test]
 async fn license_manager_activation_success() {

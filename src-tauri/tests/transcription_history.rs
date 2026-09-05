@@ -1,4 +1,4 @@
-use vox_ai_lib::database::Database;
+use wavee_lib::database::Database;
 
 fn test_database() -> (tempfile::TempDir, Database) {
     let dir = tempfile::tempdir().unwrap();

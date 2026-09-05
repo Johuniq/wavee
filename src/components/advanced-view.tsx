@@ -1,4 +1,3 @@
-import { Logo } from "@/components/logo";
 import { Switch } from "@/components/ui/switch";
 import { UpdaterView } from "@/components/updater-view";
 import { useToast } from "@/hooks/use-toast";
@@ -19,10 +18,6 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
@@ -38,11 +33,6 @@ export function AdvancedView(_props: AdvancedViewProps) {
   const [isResettingOnboarding, setIsResettingOnboarding] = useState(false);
   const [isResettingApp, setIsResettingApp] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
-
-  const getErrorMessage = (error: unknown) =>
-    error instanceof Error
-      ? error.message
-      : String(error || "Something went wrong");
 
   const handleDiagnosticsChange = (enabled: boolean) => {
     updateSettings({ diagnosticsEnabled: enabled });
@@ -60,7 +50,6 @@ export function AdvancedView(_props: AdvancedViewProps) {
       setSetupComplete(false);
       toastSuccess?.("Setup will run again", "Restart the app to see the setup wizard.");
     } catch (e) {
-      const message = getErrorMessage(e);
       setResetError("Could not reset onboarding.");
       toastError?.("Failed to reset onboarding");
     } finally {
@@ -77,7 +66,6 @@ export function AdvancedView(_props: AdvancedViewProps) {
       setSetupComplete(false);
       toastSuccess?.("App reset to initial state", "Restart the app to complete the reset.");
     } catch (e) {
-      const message = getErrorMessage(e);
       setResetError("Could not reset app data.");
       toastError?.("Failed to reset app data");
     } finally {

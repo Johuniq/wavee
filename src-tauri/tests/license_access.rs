@@ -1,4 +1,4 @@
-use vox_ai_lib::{database, db_license_allows_usage, CommandError};
+use wavee_lib::{database, db_license_allows_usage, CommandError};
 
 fn active_license() -> database::LicenseData {
     database::LicenseData {

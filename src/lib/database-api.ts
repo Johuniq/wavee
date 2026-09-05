@@ -30,6 +30,7 @@ export interface DbAppSettings {
   clipboard_mode: boolean;
   auto_check_for_updates: boolean;
   recording_overlay_position: string;
+  diagnostics_enabled: boolean;
   custom_vocabulary: DbVocabularyEntry[];
 }
 
@@ -200,6 +201,7 @@ export function dbSettingsToFrontend(db: DbAppSettings): AppSettings {
     customVocabulary: Array.isArray(db.custom_vocabulary)
       ? db.custom_vocabulary
       : [],
+    diagnosticsEnabled: db.diagnostics_enabled,
   };
 }
 
@@ -219,6 +221,7 @@ export function frontendSettingsToDb(settings: AppSettings): DbAppSettings {
     auto_start_on_boot: settings.autoStartOnBoot,
     minimize_to_tray: settings.minimizeToTray,
     auto_check_for_updates: settings.autoCheckForUpdates,
+    diagnostics_enabled: settings.diagnosticsEnabled,
     recording_overlay_position: settings.recordingOverlayPosition,
     custom_vocabulary: (settings.customVocabulary ?? []).map((entry) => ({
       spoken: entry.spoken,

@@ -36,7 +36,7 @@ interface SettingsViewProps {
 
 export function SettingsView(_props: SettingsViewProps) {
   const { settings, updateSettings } = useAppStore();
-  const { error: toastError, success: toastSuccess } = useToast();
+  const { error: toastError } = useToast();
 
   const [recordingPushToTalk, setRecordingPushToTalk] = useState(false);
   const [recordingToggle, setRecordingToggle] = useState(false);

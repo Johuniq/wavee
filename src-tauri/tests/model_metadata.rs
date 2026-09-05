@@ -1,4 +1,4 @@
-use vox_ai_lib::transcription::{
+use wavee_lib::transcription::{
     get_model_filename, get_model_url, get_parakeet_files, get_qwen3_asr_files,
 };
 

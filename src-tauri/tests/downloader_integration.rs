@@ -2,7 +2,7 @@ use httpmock::prelude::*;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::fs;
-use vox_ai_lib::downloader::{DownloadProgress, ModelDownloader};
+use wavee_lib::downloader::{DownloadProgress, ModelDownloader};
 
 #[tokio::test]
 async fn downloader_fetches_file_and_updates_progress() {

@@ -687,31 +687,6 @@ function greeting() {
   return "Good evening";
 }
 
-function MiniMetric({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex flex-col gap-1 min-w-0">
-      <div className="flex items-center gap-1.5 text-body-muted">
-        {icon}
-        <span className="caption-strong text-ink-mid">{label}</span>
-      </div>
-      <span
-        className="number-display text-ink"
-        style={{ fontSize: 'var(--type-xs)' }}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
 function LegendDot({ color, label }: { color: string; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">

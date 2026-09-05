@@ -1,6 +1,6 @@
 use chrono::{Duration, Utc};
-use vox_ai_lib::database::LicenseData;
-use vox_ai_lib::{
+use wavee_lib::database::LicenseData;
+use wavee_lib::{
     calculate_trial_integrity_hash, db_license_allows_usage_core, has_active_trial_core,
 };
 
