@@ -2,6 +2,26 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::collections::HashMap;
 
+/// A single user-defined custom vocabulary entry used by the post-processor.
+///
+/// `spoken` is the phrase the user expects Whisper to output (or the
+/// misheard form they want to correct) and `written` is the canonical
+/// replacement text that should appear in the final output.
+#[derive(Debug, Clone, Default)]
+pub struct VocabularyEntry {
+    pub spoken: String,
+    pub written: String,
+}
+
+impl VocabularyEntry {
+    pub fn new(spoken: impl Into<String>, written: impl Into<String>) -> Self {
+        Self {
+            spoken: spoken.into(),
+            written: written.into(),
+        }
+    }
+}
+
 /// Post-processor for transcribed text
 /// Handles proper casing, file paths, function names, and programming patterns
 pub struct PostProcessor {
@@ -9,6 +29,9 @@ pub struct PostProcessor {
     keywords: HashMap<String, String>,
     /// File extensions for path detection
     file_extensions: Vec<&'static str>,
+    /// Compiled vocabulary replacement regexes, longest-spoken-first so
+    /// multi-word terms win over single-word substrings.
+    vocabulary: Vec<(regex::Regex, String)>,
 }
 
 lazy_static! {
@@ -329,10 +352,60 @@ impl PostProcessor {
                 "swift", "kt", "scala", "ex", "exs", "erl", "hs", "ml", "fs", "clj", "lisp", "r",
                 "jl", "lua", "pl", "pm",
             ],
+            vocabulary: Vec::new(),
         }
     }
 
-    /// Main post-processing function
+    /// Create a post-processor preloaded with the given custom vocabulary
+    /// entries. Entries with empty `spoken` or `written` fields are
+    /// silently ignored.
+    pub fn with_vocabulary(entries: &[VocabularyEntry]) -> Self {
+        let mut pp = Self::new();
+        pp.set_vocabulary(entries);
+        pp
+    }
+
+    /// Replace the active vocabulary with the provided entries. Invalid
+    /// entries (empty or unparseable) are silently skipped so a single
+    /// malformed term cannot disable the whole pipeline.
+    pub fn set_vocabulary(&mut self, entries: &[VocabularyEntry]) {
+        let mut compiled: Vec<(regex::Regex, String)> = entries
+            .iter()
+            .filter(|e| !e.spoken.trim().is_empty() && !e.written.is_empty())
+            .filter_map(|e| {
+                let escaped = regex::escape(e.spoken.trim());
+                // Word boundaries: keep alphanumeric/underscore characters
+                // on either side. This stops "go" inside "google" from
+                // triggering a replacement while still matching
+                // "go to start".
+                let pattern = format!(r"(?i)\b{}\b", escaped);
+                Regex::new(&pattern).ok().map(|re| (re, e.written.clone()))
+            })
+            .collect();
+
+        // Longest spoken form first so multi-word terms win over their
+        // single-word substrings (e.g. "next js" before "js").
+        compiled.sort_by(|a, b| b.0.as_str().len().cmp(&a.0.as_str().len()));
+
+        self.vocabulary = compiled;
+    }
+
+    /// Apply the active vocabulary to a string, replacing every spoken
+    /// term with its canonical written form using case-insensitive
+    /// word-boundary matching. Applied first so that all downstream
+    /// transformations operate on the user's canonical text.
+    fn apply_vocabulary(&self, text: &str) -> String {
+        if self.vocabulary.is_empty() {
+            return text.to_string();
+        }
+        let mut result = text.to_string();
+        for (pattern, replacement) in &self.vocabulary {
+            result = pattern.replace_all(&result, replacement.as_str()).to_string();
+        }
+        result
+    }
+
+/// Main post-processing function
     pub fn process(&self, text: &str) -> String {
         let mut result = text.to_string();
 
@@ -342,6 +415,10 @@ impl PostProcessor {
 
         // First, process voice commands (these take highest priority)
         result = self.process_voice_commands(&result);
+
+        // Apply user-defined custom vocabulary next so the rest of the
+        // pipeline operates on the user's canonical domain terms.
+        result = self.apply_vocabulary(&result);
 
         // Then apply code-specific transformations that involve "dot"
         result = self.process_explicit_casing(&result);
@@ -364,10 +441,14 @@ impl PostProcessor {
         result
     }
 
-    /// Process only voice-command markers without applying the rest of the
+/// Process only voice-command markers without applying the rest of the
     /// smart text formatting pipeline.
     pub fn extract_voice_commands(&self, text: &str) -> String {
-        self.process_voice_commands(text)
+        let mut result = self.process_voice_commands(text);
+        // Still honour the user's custom vocabulary so they get consistent
+        // domain terms even when voice-command-only mode is active.
+        result = self.apply_vocabulary(&result);
+        result
     }
 
     /// Process voice commands like punctuation, new line, delete, etc.

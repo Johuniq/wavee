@@ -11,7 +11,7 @@ mod text_inject;
 pub mod transcription;
 
 use audio::{AudioCaptureSource, AudioInputDevice, AudioOutputDevice, AudioRecorder};
-use database::{AppSettings, AppState, Database, LicenseData, TranscriptionHistory, WhisperModel};
+use database::{AppSettings, AppState, Database, LicenseData, TranscriptionHistory, VocabularyEntry, WhisperModel};
 use downloader::{DownloadProgress, ModelDownloader};
 use error_reporting::{ErrorCategory, ErrorReport, ErrorReporter, ErrorSeverity, ErrorStats};
 use license::{
@@ -161,6 +161,17 @@ fn is_valid_language_code(language: &str) -> bool {
         || ((2..=4).contains(&language.len()) && language.chars().all(|c| c.is_ascii_lowercase()))
 }
 
+const PARAKEET_V3_LANGUAGES: &[&str] = &[
+    "bg", "hr", "cs", "da", "nl", "en", "et", "fi", "fr", "de", "el", "hu", "it",
+    "lv", "lt", "mt", "pl", "pt", "ro", "sk", "sl", "es", "sv", "ru", "uk",
+];
+
+const QWEN3_ASR_LANGUAGES: &[&str] = &[
+    "zh", "en", "yue", "ar", "de", "fr", "es", "pt", "id", "it", "ko", "ru",
+    "th", "vi", "ja", "tr", "hi", "ms", "nl", "sv", "da", "fi", "pl", "cs",
+    "fil", "fa", "el", "hu", "mk", "ro",
+];
+
 fn is_model_language_supported(model_id: &str, language: &str) -> bool {
     match model_id {
         // English-only models
@@ -169,73 +180,16 @@ fn is_model_language_supported(model_id: &str, language: &str) -> bool {
         }
 
         // Parakeet v3 supported languages
-        "parakeet-v3" => matches!(
-            language,
-            "auto"
-                | "bg"
-                | "hr"
-                | "cs"
-                | "da"
-                | "nl"
-                | "en"
-                | "et"
-                | "fi"
-                | "fr"
-                | "de"
-                | "el"
-                | "hu"
-                | "it"
-                | "lv"
-                | "lt"
-                | "mt"
-                | "pl"
-                | "pt"
-                | "ro"
-                | "sk"
-                | "sl"
-                | "es"
-                | "sv"
-                | "ru"
-                | "uk"
-        ),
+        "parakeet-v3" => {
+            language == "auto" || PARAKEET_V3_LANGUAGES.contains(&language)
+        }
 
         // Qwen3-ASR supported languages
-        "qwen3-asr-0.6b" => matches!(
-            language,
-            "auto"
-                | "zh"
-                | "en"
-                | "yue"
-                | "ar"
-                | "de"
-                | "fr"
-                | "es"
-                | "pt"
-                | "id"
-                | "it"
-                | "ko"
-                | "ru"
-                | "th"
-                | "vi"
-                | "ja"
-                | "tr"
-                | "hi"
-                | "ms"
-                | "nl"
-                | "sv"
-                | "da"
-                | "fi"
-                | "pl"
-                | "cs"
-                | "fil"
-                | "fa"
-                | "el"
-                | "hu"
-                | "mk"
-                | "ro"
-        ),
+        "qwen3-asr-0.6b" => {
+            language == "auto" || QWEN3_ASR_LANGUAGES.contains(&language)
+        }
 
-        // Multilingual Whisper models
+        // Multilingual Whisper models (tiny, base, small, medium, large-v3, large-v3-turbo)
         _ => language == "auto" || is_valid_language_code(language),
     }
 }
@@ -333,11 +287,13 @@ fn license_status_to_response(status: &LicenseStatus) -> String {
 
 #[allow(unused_variables)]
 async fn has_valid_license_verified(license_manager: &LicenseManager) -> bool {
-    if load_cache().is_none() {
-        return false;
+    // Fast path: trust the local cache so hotkey-driven calls don't hit
+    // Polar on every push-to-talk and dictation still works offline.
+    if license_manager.is_cached_license_valid() {
+        return true;
     }
 
-    match license_manager.validate().await {
+    match license_manager.validate_throttled().await {
         Ok(info) => info.status.allows_usage(),
         Err(error) => {
             debug!("Verified license check failed: {}", error);
@@ -726,17 +682,15 @@ fn is_recording(recorder: State<RecorderState>) -> bool {
 // ==================== Recording Overlay Commands ====================
 
 #[tauri::command]
-async fn show_recording_overlay(app: tauri::AppHandle) -> CommandResult<()> {
+async fn show_recording_overlay(app: tauri::AppHandle, position: Option<String>) -> CommandResult<()> {
     use tauri::Manager;
 
     if let Some(overlay_window) = app.get_webview_window("recording-overlay") {
-        // Show the overlay window
         overlay_window.show().map_err(|e| {
             error!("Failed to show overlay window: {}", e);
             CommandError::Recording(format!("Failed to show overlay: {}", e))
         })?;
 
-        // Set it to fullscreen and always on top
         overlay_window.set_fullscreen(true).map_err(|e| {
             warn!("Failed to set fullscreen: {}", e);
             CommandError::Recording(format!("Failed to set fullscreen: {}", e))
@@ -747,9 +701,13 @@ async fn show_recording_overlay(app: tauri::AppHandle) -> CommandResult<()> {
             CommandError::Recording(format!("Failed to set always on top: {}", e))
         })?;
 
+        if let Some(pos) = position {
+            let _ = app.emit("overlay-position", pos);
+        }
+
         debug!("Recording overlay shown");
     } else {
-        warn!("Recording overlay window not found");
+        warn!("Recording window not found");
     }
 
     Ok(())
@@ -812,6 +770,22 @@ async fn load_model(
         )));
     }
 
+    // Fast path: the same model + language is already loaded, so we don't
+    // need to pay the multi-second reload cost. Loading from ONNX disk
+    // takes 3-4s on Parakeet, so this is critical for the hotkey latency.
+    {
+        let transcriber_guard = transcriber.lock().unwrap();
+        if let Some(existing) = transcriber_guard.as_ref() {
+            if existing.model_id() == model_id && existing.language() == language {
+                debug!(
+                    "Model already loaded: {} (language: {}) — skipping reload",
+                    model_id, language
+                );
+                return Ok(());
+            }
+        }
+    }
+
     // Drop existing model first to free memory before loading new one
     {
         let mut transcriber_guard = transcriber.lock().unwrap();
@@ -838,6 +812,23 @@ fn unload_model(transcriber: State<TranscriberState>) -> CommandResult<()> {
     *transcriber_guard = None;
     info!("Model unloaded");
     Ok(())
+}
+
+#[derive(serde::Serialize, Clone)]
+struct LoadedModelInfo {
+    model_id: String,
+    language: String,
+}
+
+#[tauri::command]
+fn get_loaded_model(transcriber: State<TranscriberState>) -> Option<LoadedModelInfo> {
+    let transcriber_guard = transcriber.0.lock().unwrap();
+    transcriber_guard
+        .as_ref()
+        .map(|t| LoadedModelInfo {
+            model_id: t.model_id().to_string(),
+            language: t.language().to_string(),
+        })
 }
 
 #[tauri::command]
@@ -1246,31 +1237,43 @@ fn get_model_path(downloader: State<DownloaderState>, model_id: String) -> Comma
 // ==================== Post-Processing Commands ====================
 
 #[tauri::command]
-fn post_process_text(text: String) -> CommandResult<String> {
+fn post_process_text(db: State<DbState>, text: String) -> CommandResult<String> {
     let sanitized = sanitize_text(&text, 100_000).map_err(CommandError::PostProcessing)?;
 
     if sanitized.is_empty() {
         return Ok(String::new());
     }
 
-    let processor = PostProcessor::new();
+    let processor = build_processor(&db)?;
     let processed = processor.process(&sanitized);
 
     Ok(processed)
 }
 
 #[tauri::command]
-fn extract_voice_commands(text: String) -> CommandResult<String> {
+fn extract_voice_commands(db: State<DbState>, text: String) -> CommandResult<String> {
     let sanitized = sanitize_text(&text, 100_000).map_err(CommandError::PostProcessing)?;
 
     if sanitized.is_empty() {
         return Ok(String::new());
     }
 
-    let processor = PostProcessor::new();
+    let processor = build_processor(&db)?;
     let processed = processor.extract_voice_commands(&sanitized);
 
     Ok(processed)
+}
+
+/// Build a PostProcessor seeded with the user's custom vocabulary so
+/// post-processing and voice-command extraction both honour domain terms.
+fn build_processor(db: &State<DbState>) -> CommandResult<PostProcessor> {
+    let settings = db.0.get_settings().map_err(CommandError::Database)?;
+    let entries: Vec<post_process::VocabularyEntry> = settings
+        .custom_vocabulary
+        .into_iter()
+        .map(|e: VocabularyEntry| post_process::VocabularyEntry::new(e.spoken, e.written))
+        .collect();
+    Ok(PostProcessor::with_vocabulary(&entries))
 }
 
 // ==================== Text Injection Commands ====================
@@ -2396,6 +2399,7 @@ pub fn run() {
             // Transcription
             load_model,
             unload_model,
+            get_loaded_model,
             transcribe_audio,
             record_and_transcribe,
             transcribe_file,

@@ -1,42 +1,53 @@
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
 import { AlertTriangle, Clipboard, Keyboard, Type } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface HotkeyStepProps {
   onNext: () => void;
   onBack: () => void;
 }
 
+const STEPS_TOTAL = 4;
+const STEP_INDEX = 4;
+
 type HotkeyMode = "push-to-talk" | "toggle";
 type OutputMode = "inject" | "clipboard";
 
-const hotkeyOptions = [
+const hotkeyOptions: {
+  mode: HotkeyMode;
+  title: string;
+  description: string;
+  defaultKey: string;
+}[] = [
   {
-    mode: "push-to-talk" as const,
+    mode: "push-to-talk",
     title: "Push to Talk",
     description: "Hold key to record, release to transcribe",
     defaultKey: "Alt+Shift+S",
   },
   {
-    mode: "toggle" as const,
+    mode: "toggle",
     title: "Toggle Mode",
     description: "Press to start/stop recording",
     defaultKey: "Alt+Shift+D",
   },
 ];
 
-const outputOptions = [
+const outputOptions: {
+  mode: OutputMode;
+  title: string;
+  description: string;
+  icon: typeof Type;
+}[] = [
   {
-    mode: "inject" as const,
+    mode: "inject",
     title: "Type Text",
     description: "Automatically type text where your cursor is",
     icon: Type,
   },
   {
-    mode: "clipboard" as const,
+    mode: "clipboard",
     title: "Copy to Clipboard",
     description: "Copy text to clipboard for manual pasting",
     icon: Clipboard,
@@ -45,9 +56,7 @@ const outputOptions = [
 
 export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
   const { settings, updateSettings } = useAppStore();
-  const [selectedMode, setSelectedMode] = useState<HotkeyMode>(
-    settings.hotkeyMode
-  );
+  const [selectedMode, setSelectedMode] = useState<HotkeyMode>(settings.hotkeyMode);
   const [selectedOutputMode, setSelectedOutputMode] = useState<OutputMode>(
     settings.clipboardMode ? "clipboard" : "inject"
   );
@@ -58,9 +67,7 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
 
   const currentHotkey =
     customHotkey ||
-    (selectedMode === "push-to-talk"
-      ? settings.pushToTalkKey
-      : settings.toggleKey);
+    (selectedMode === "push-to-talk" ? settings.pushToTalkKey : settings.toggleKey);
 
   const startRecordingHotkey = () => {
     setIsRecordingHotkey(true);
@@ -68,56 +75,59 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
     setConflict(null);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  // Document-level keydown listener while recording, so the user doesn't
+  // need to keep the button focused.
+  useEffect(() => {
     if (!isRecordingHotkey) return;
 
-    e.preventDefault();
-    e.stopPropagation();
+    const handler = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-    const key = e.key;
-    const modifiers: string[] = [];
+      const key = e.key;
+      const modifiers: string[] = [];
+      if (e.ctrlKey) modifiers.push("Ctrl");
+      if (e.altKey) modifiers.push("Alt");
+      if (e.shiftKey) modifiers.push("Shift");
+      if (e.metaKey) modifiers.push("Meta");
 
-    if (e.ctrlKey) modifiers.push("Ctrl");
-    if (e.altKey) modifiers.push("Alt");
-    if (e.shiftKey) modifiers.push("Shift");
-    if (e.metaKey) modifiers.push("Meta");
+      if (["Control", "Alt", "Shift", "Meta"].includes(key)) {
+        setRecordedKeys(modifiers);
+        return;
+      }
 
-    if (["Control", "Alt", "Shift", "Meta"].includes(key)) {
-      setRecordedKeys(modifiers);
-      return;
-    }
+      const displayKey = key.length === 1 ? key.toUpperCase() : key;
+      const fullHotkey = [...modifiers, displayKey].join("+");
+      setRecordedKeys([...modifiers, displayKey]);
 
-    const displayKey = key.length === 1 ? key.toUpperCase() : key;
-    const fullHotkey = [...modifiers, displayKey].join("+");
+      const conflictingShortcuts: Record<string, string> = {
+        "Ctrl+C": "Copy",
+        "Ctrl+V": "Paste",
+        "Ctrl+X": "Cut",
+        "Ctrl+Z": "Undo",
+        "Ctrl+S": "Save",
+        "Alt+Tab": "Switch Window",
+        "Alt+F4": "Close Window",
+      };
 
-    setRecordedKeys([...modifiers, displayKey]);
-
-    const conflictingShortcuts: Record<string, string> = {
-      "Ctrl+C": "Copy",
-      "Ctrl+V": "Paste",
-      "Ctrl+X": "Cut",
-      "Ctrl+Z": "Undo",
-      "Ctrl+S": "Save",
-      "Alt+Tab": "Switch Window",
-      "Alt+F4": "Close Window",
+      if (conflictingShortcuts[fullHotkey]) {
+        setConflict(`Conflicts with "${conflictingShortcuts[fullHotkey]}"`);
+      } else {
+        setConflict(null);
+        setCustomHotkey(fullHotkey);
+      }
+      setIsRecordingHotkey(false);
     };
 
-    if (conflictingShortcuts[fullHotkey]) {
-      setConflict(`Conflicts with "${conflictingShortcuts[fullHotkey]}"`);
-    } else {
-      setConflict(null);
-      setCustomHotkey(fullHotkey);
-    }
-
-    setIsRecordingHotkey(false);
-  };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isRecordingHotkey]);
 
   const handleContinue = () => {
     const newSettings: Partial<typeof settings> = {
       hotkeyMode: selectedMode,
       clipboardMode: selectedOutputMode === "clipboard",
     };
-
     if (customHotkey) {
       if (selectedMode === "push-to-talk") {
         newSettings.pushToTalkKey = customHotkey;
@@ -125,175 +135,249 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
         newSettings.toggleKey = customHotkey;
       }
     }
-
     updateSettings(newSettings);
     onNext();
   };
 
   return (
-    <div className="flex flex-col h-full relative overflow-hidden">
-      {/* Background mesh gradient */}
-      <div className="glass-mesh-bg" />
-
-      <div className="flex flex-col h-full min-h-0 px-6 py-8">
-        <div className="space-y-1.5 mb-6">
-          <p className="text-xs text-foreground/60 px-2 py-1 rounded-full bg-white/50 dark:bg-white/10 w-fit">
-            Step 3 of 3
-          </p>
-          <h2 className="text-lg font-semibold text-foreground">
-            Configure Hotkey
-          </h2>
-          <p className="text-sm text-foreground/60">
-            Choose how to activate voice typing
-          </p>
-        </div>
-
-        <div className="flex-1 overflow-auto min-h-0 space-y-4">
-          <RadioGroup
-            value={selectedMode}
-            onValueChange={(v) => {
-              setSelectedMode(v as HotkeyMode);
-              setCustomHotkey(null);
-              setConflict(null);
-            }}
-            className="space-y-2"
-          >
-            {hotkeyOptions.map((option) => (
-              <Label
-                key={option.mode}
-                htmlFor={option.mode}
-                className={cn(
-                  "flex items-start gap-3 p-4 rounded-2xl cursor-pointer transition-all glass-card",
-                  selectedMode === option.mode &&
-                    "ring-2 ring-foreground/30 border-foreground/20 bg-foreground/5"
-                )}
+    <div className="flex h-full flex-col overflow-hidden bg-canvas">
+      <div className="flex-1 overflow-y-auto">
+        <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-6 xl:py-10 space-y-6">
+          {/* HERO — Dark band */}
+          <section className="hero-band-dark">
+            <div className="flex flex-col items-center text-center gap-4 p-8 sm:p-10">
+              <p className="eyebrow-uppercase text-primary">
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-1 w-1 rounded-full bg-primary" />
+                  Step {STEP_INDEX} of {STEPS_TOTAL}
+                </span>
+              </p>
+              <h2
+                className="display-lg text-on-dark"
               >
-                <RadioGroupItem
-                  value={option.mode}
-                  id={option.mode}
-                  className="mt-0.5"
-                />
-                <div>
-                  <span className="font-medium text-sm text-foreground">
-                    {option.title}
-                  </span>
-                  <p className="text-xs text-foreground/60 mt-0.5">
-                    {option.description}
-                  </p>
-                </div>
-              </Label>
-            ))}
-          </RadioGroup>
+                Set your <span className="text-primary">shortcut</span>.
+              </h2>
+              <p className="body-md text-on-dark-soft max-w-md">
+                Pick how Wavee activates, where the text goes, and your key combo.
+              </p>
+            </div>
+          </section>
 
-          <div className="glass-card p-4 rounded-2xl space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">
-                Hotkey
-              </span>
-              <span className="text-xs text-foreground/60">
-                Click to change
-              </span>
+          {/* ACTIVATION MODE */}
+          <section className="card-feature-cream">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="icon-plate">
+                <Keyboard className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="eyebrow-uppercase text-ink-mid">Activation</p>
+                <h3
+                  className="title-lg text-ink mt-1"
+                >
+                  Choose a mode
+                </h3>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {hotkeyOptions.map((option) => {
+                const isSelected = selectedMode === option.mode;
+                return (
+                  <button
+                    key={option.mode}
+                    type="button"
+                    onClick={() => {
+                      setSelectedMode(option.mode);
+                      setCustomHotkey(null);
+                      setConflict(null);
+                    }}
+                    className={cn(
+                      "w-full text-left rounded-md border p-4 transition-all cursor-pointer",
+                      isSelected
+                        ? "border-primary bg-canvas"
+                        : "border-hairline bg-canvas hover:border-ink",
+                    )}
+                    style={isSelected ? { boxShadow: "0 0 0 1px #ff4f00" } : undefined}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={cn(
+                          "flex h-5 w-5 items-center justify-center rounded-full border-2 shrink-0 mt-0.5",
+                          isSelected ? "border-primary" : "border-mute",
+                        )}
+                      >
+                        {isSelected && (
+                          <div className="h-2.5 w-2.5 rounded-full bg-primary" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span
+                          className="title-sm text-ink"
+                        >
+                          {option.title}
+                        </span>
+                        <p className="body-sm text-body-muted mt-1">
+                          {option.description}
+                        </p>
+                        <p className="caption text-body mt-2 font-mono">
+                          Default: {option.defaultKey}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* HOTKEY RECORDER */}
+          <section className="card-feature-cream">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="icon-plate">
+                <Type className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="eyebrow-uppercase text-ink-mid">Hotkey</p>
+                <h3
+                  className="title-lg text-ink mt-1"
+                >
+                  Capture a key combination
+                </h3>
+              </div>
             </div>
 
             <button
               type="button"
               onClick={startRecordingHotkey}
-              onKeyDown={handleKeyDown}
               onBlur={() => setIsRecordingHotkey(false)}
               className={cn(
-                "w-full p-3 rounded-xl border-2 border-dashed text-center transition-all focus:outline-none",
-                "bg-white/30 dark:bg-white/10",
+                "w-full p-5 rounded-md border-2 border-dashed text-center transition-all focus:outline-none cursor-pointer",
                 isRecordingHotkey
-                  ? "border-foreground/50 bg-foreground/5"
-                  : "border-white/30 dark:border-white/10 hover:border-foreground/30"
+                  ? "border-primary bg-primary/5"
+                  : "border-hairline bg-canvas hover:border-ink",
               )}
             >
               {isRecordingHotkey ? (
-                <span className="text-sm text-foreground/60">
-                  {recordedKeys.length > 0
-                    ? recordedKeys.join(" + ") + " ..."
-                    : "Press a key combination..."}
-                </span>
+                <div className="space-y-2">
+                  <p className="body-sm-strong text-primary">
+                    {recordedKeys.length > 0
+                      ? `${recordedKeys.join(" + ")} + ...`
+                      : "Press a key combination..."}
+                  </p>
+                  <p className="caption text-body-muted">Press a key to finish</p>
+                </div>
               ) : (
-                <span className="text-sm font-mono font-medium text-foreground">
-                  {currentHotkey}
-                </span>
+                <div className="space-y-1">
+                  <p className="caption eyebrow-uppercase text-ink-mid">Current</p>
+                  <p className="font-mono title-lg text-ink mt-1">
+                    {currentHotkey}
+                  </p>
+                </div>
               )}
             </button>
 
             {conflict && (
-              <div className="flex items-center gap-2 text-sm text-amber-600 p-2 rounded-lg bg-amber-500/10">
-                <AlertTriangle className="h-4 w-4" />
-                <span>{conflict}</span>
+              <div
+                className="mt-4 p-3.5 rounded-md border flex items-start gap-2.5"
+                style={{ borderColor: "rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.05)" }}
+              >
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "#d97706" }} />
+                <p className="body-sm" style={{ color: "#d97706" }}>{conflict}</p>
               </div>
             )}
-          </div>
 
-          <div className="glass-card p-4 rounded-2xl">
-            <div className="flex items-start gap-2">
-              <Keyboard className="h-4 w-4 text-foreground/60 mt-0.5" />
-              <div className="text-xs text-foreground/60 space-y-1">
-                <p>Use modifier keys (Ctrl, Alt, Shift) + a letter</p>
-                <p>Avoid common shortcuts like Ctrl+C or Ctrl+V</p>
+            <div className="mt-4 p-3.5 rounded-md border border-hairline bg-canvas-soft flex items-start gap-2.5">
+              <Keyboard className="h-4 w-4 text-body-muted shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <p className="body-sm text-ink">Combine modifiers + a letter</p>
+                <p className="caption text-body-muted">Avoid Ctrl+C, Ctrl+V, etc.</p>
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* Output Mode Selection */}
-          <div className="space-y-2">
-            <span className="text-sm mb-2 font-medium text-foreground">
-              Output Mode
-            </span>
-            <RadioGroup
-              value={selectedOutputMode}
-              onValueChange={(v) => setSelectedOutputMode(v as OutputMode)}
-              className="space-y-2 mt-2"
-            >
-              {outputOptions.map((option) => (
-                <Label
-                  key={option.mode}
-                  htmlFor={`output-${option.mode}`}
-                  className={cn(
-                    "flex items-start gap-3 p-4 rounded-2xl cursor-pointer transition-all glass-card",
-                    selectedOutputMode === option.mode &&
-                      "ring-2 ring-foreground/30 border-foreground/20 bg-foreground/5"
-                  )}
+          {/* OUTPUT MODE */}
+          <section className="card-feature-cream">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="icon-plate">
+                <Clipboard className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="eyebrow-uppercase text-ink-mid">Output</p>
+                <h3
+                  className="title-lg text-ink mt-1"
                 >
-                  <RadioGroupItem
-                    value={option.mode}
-                    id={`output-${option.mode}`}
-                    className="mt-0.5"
-                  />
-                  <div className="p-2 rounded-lg bg-white/30 dark:bg-white/10">
-                    <option.icon className="h-4 w-4 text-foreground/60" />
-                  </div>
-                  <div>
-                    <span className="font-medium text-sm text-foreground">
-                      {option.title}
-                    </span>
-                    <p className="text-xs text-foreground/60 mt-0.5">
-                      {option.description}
-                    </p>
-                  </div>
-                </Label>
-              ))}
-            </RadioGroup>
-          </div>
-        </div>
+                  Where does the text go?
+                </h3>
+              </div>
+            </div>
 
-        <div className="flex gap-3 pt-4 border-t border-white/10 mt-4">
-          <button
-            className="glass-button py-2.5 px-4 rounded-xl text-sm font-medium"
-            onClick={onBack}
-          >
+            <div className="space-y-3">
+              {outputOptions.map((option) => {
+                const isSelected = selectedOutputMode === option.mode;
+                const Icon = option.icon;
+                return (
+                  <button
+                    key={option.mode}
+                    type="button"
+                    onClick={() => setSelectedOutputMode(option.mode)}
+                    className={cn(
+                      "w-full text-left rounded-md border p-4 transition-all cursor-pointer",
+                      isSelected
+                        ? "border-primary bg-canvas"
+                        : "border-hairline bg-canvas hover:border-ink",
+                    )}
+                    style={isSelected ? { boxShadow: "0 0 0 1px #ff4f00" } : undefined}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={cn(
+                          "flex h-5 w-5 items-center justify-center rounded-full border-2 shrink-0 mt-0.5",
+                          isSelected ? "border-primary" : "border-mute",
+                        )}
+                      >
+                        {isSelected && (
+                          <div className="h-2.5 w-2.5 rounded-full bg-primary" />
+                        )}
+                      </div>
+                      <div
+                        className={cn(
+                          "flex h-9 w-9 items-center justify-center rounded-md shrink-0",
+                          isSelected ? "bg-primary/10 text-primary" : "bg-canvas-soft text-ink",
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span
+                          className="title-sm text-ink"
+                        >
+                          {option.title}
+                        </span>
+                        <p className="body-sm text-body-muted mt-1">
+                          {option.description}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+      </div>
+
+      {/* STICKY FOOTER */}
+      <div className="shrink-0 border-t border-hairline bg-canvas-soft">
+        <div className="max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-4 flex items-center justify-between gap-3 flex-wrap">
+          <button onClick={onBack} className="paper-button-outline cursor-pointer">
             Back
           </button>
           <button
             onClick={handleContinue}
             disabled={conflict !== null}
-            className="glass-button flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25 disabled:opacity-50"
+            className="paper-button-primary cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Complete Setup
+            Complete setup
           </button>
         </div>
       </div>

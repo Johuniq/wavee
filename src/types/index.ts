@@ -8,12 +8,21 @@ export interface WhisperModel {
   sizeBytes: number;
   description: string;
   languages: string[];
+  defaultLanguage?: string;
+  autoDetect?: boolean;
   recommended?: boolean;
   downloaded?: boolean;
   downloadProgress?: number; // 0-100
 }
 
 // App settings
+export interface VocabularyEntry {
+  /** The phrase the user expects to say / what Whisper commonly outputs */
+  spoken: string;
+  /** The canonical text that should appear in the final output */
+  written: string;
+}
+
 export interface AppSettings {
   // Hotkey configuration
   pushToTalkKey: string;
@@ -29,7 +38,8 @@ export interface AppSettings {
   // UI preferences
   showRecordingIndicator: boolean;
   playAudioFeedback: boolean;
-  showRecordingOverlay: boolean; // Show fullscreen wave overlay when recording
+  showRecordingOverlay: boolean; // Show recording overlay when recording
+  recordingOverlayPosition: "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-center" | "bottom-right";
 
   // Post-processing
   postProcessingEnabled: boolean;
@@ -41,6 +51,15 @@ export interface AppSettings {
   // Advanced
   autoStartOnBoot: boolean;
   minimizeToTray: boolean;
+
+  // Diagnostics
+  diagnosticsEnabled: boolean;
+
+  // Updates
+  autoCheckForUpdates: boolean;
+
+  // Custom vocabulary
+  customVocabulary: VocabularyEntry[];
 }
 
 // Recording state
@@ -109,16 +128,24 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showRecordingIndicator: true,
   playAudioFeedback: true,
   showRecordingOverlay: true,
+  recordingOverlayPosition: "top-center",
   postProcessingEnabled: true,
   voiceCommandsEnabled: false,
   clipboardMode: false,
   autoStartOnBoot: false,
   minimizeToTray: true,
+  diagnosticsEnabled: true,
+  autoCheckForUpdates: true,
+  customVocabulary: [
+    { spoken: "wave e", written: "Wavee" },
+    { spoken: "t a u r i", written: "Tauri" },
+    { spoken: "next js", written: "Next.js" },
+    { spoken: "rust lang", written: "Rust" },
+    { spoken: "k eight s", written: "k8s" },
+  ],
 };
 
-// Model categories for UI grouping
-export type ModelCategory = "standard" | "english" | "distil" | "large";
-
+// Whisper language lists (must be defined before MODEL_CAPABILITIES)
 export const PARAKEET_V3_LANGUAGES = [
   "bg",
   "hr",
@@ -386,47 +413,146 @@ export const LANGUAGE_NAMES: Record<string, string> = {
   zh: "Chinese",
 };
 
+// Model categories for UI grouping
+export type ModelCategory = "standard" | "english" | "distil" | "large";
+
+// Model capabilities - single source of truth for language support
+export interface ModelCapabilities {
+  supportedLanguages: string[];
+  defaultLanguage: string;
+  autoDetect: boolean;
+}
+
+export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
+  tiny: {
+    supportedLanguages: WHISPER_MULTILINGUAL_LANGUAGES,
+    defaultLanguage: "en",
+    autoDetect: true,
+  },
+  base: {
+    supportedLanguages: WHISPER_MULTILINGUAL_LANGUAGES,
+    defaultLanguage: "en",
+    autoDetect: true,
+  },
+  small: {
+    supportedLanguages: WHISPER_MULTILINGUAL_LANGUAGES,
+    defaultLanguage: "en",
+    autoDetect: true,
+  },
+  medium: {
+    supportedLanguages: WHISPER_MULTILINGUAL_LANGUAGES,
+    defaultLanguage: "en",
+    autoDetect: true,
+  },
+  "large-v3": {
+    supportedLanguages: WHISPER_MULTILINGUAL_LANGUAGES,
+    defaultLanguage: "en",
+    autoDetect: true,
+  },
+  "large-v3-turbo": {
+    supportedLanguages: WHISPER_MULTILINGUAL_LANGUAGES,
+    defaultLanguage: "en",
+    autoDetect: true,
+  },
+  "tiny.en": {
+    supportedLanguages: ["en"],
+    defaultLanguage: "en",
+    autoDetect: false,
+  },
+  "base.en": {
+    supportedLanguages: ["en"],
+    defaultLanguage: "en",
+    autoDetect: false,
+  },
+  "small.en": {
+    supportedLanguages: ["en"],
+    defaultLanguage: "en",
+    autoDetect: false,
+  },
+  "medium.en": {
+    supportedLanguages: ["en"],
+    defaultLanguage: "en",
+    autoDetect: false,
+  },
+  "distil-small.en": {
+    supportedLanguages: ["en"],
+    defaultLanguage: "en",
+    autoDetect: false,
+  },
+  "parakeet-v3": {
+    supportedLanguages: PARAKEET_V3_LANGUAGES,
+    defaultLanguage: "en",
+    autoDetect: true,
+  },
+  "parakeet-v2": {
+    supportedLanguages: ["en"],
+    defaultLanguage: "en",
+    autoDetect: false,
+  },
+  "qwen3-asr-0.6b": {
+    supportedLanguages: QWEN3_ASR_LANGUAGES,
+    defaultLanguage: "zh",
+    autoDetect: true,
+  },
+};
+
+export function getModelCapabilities(
+  model: Pick<WhisperModel, "id" | "languages">,
+): ModelCapabilities {
+  const caps = MODEL_CAPABILITIES[model.id];
+  if (caps) return caps;
+
+  const languages = model.languages.includes("multilingual")
+    ? WHISPER_MULTILINGUAL_LANGUAGES
+    : model.languages;
+
+  return {
+    supportedLanguages: languages,
+    defaultLanguage: languages[0] ?? "en",
+    autoDetect: model.languages.includes("multilingual") || languages.length > 1,
+  };
+}
+
 export interface LanguageOption {
   code: string;
   name: string;
 }
 
-export function getModelLanguageLabel(model: Pick<WhisperModel, "languages">) {
-  if (model.languages.includes("multilingual")) {
-    return "Multilingual";
+export function getModelLanguageLabel(
+  model: Pick<WhisperModel, "id" | "languages">,
+) {
+  const caps = getModelCapabilities(model);
+  const count = caps.supportedLanguages.length;
+
+  if (count === 0) {
+    return "No languages";
   }
 
-  if (model.languages.length === 1 && model.languages[0] === "en") {
-    return "English";
+  if (count === 1) {
+    return LANGUAGE_NAMES[caps.supportedLanguages[0]] ?? caps.supportedLanguages[0].toUpperCase();
   }
 
-  if (model.languages.length === PARAKEET_V3_LANGUAGES.length) {
-    return "25 languages";
+  if (caps.autoDetect && count > 10) {
+    return `${count}+ languages`;
   }
 
-  if (model.languages.length === QWEN3_ASR_LANGUAGES.length) {
-    return "30 languages";
+  if (count <= 3) {
+    return caps.supportedLanguages.map((code) => LANGUAGE_NAMES[code] ?? code.toUpperCase()).join(", ");
   }
 
-  return model.languages.map((language) => language.toUpperCase()).join(", ");
+  return `${count} languages`;
 }
 
 export function getModelLanguageOptions(
-  model: Pick<WhisperModel, "id" | "languages">
+  model: Pick<WhisperModel, "id" | "languages">,
 ): LanguageOption[] {
-  const languageCodes = model.languages.includes("multilingual")
-    ? WHISPER_MULTILINGUAL_LANGUAGES
-    : model.languages;
-  const options = languageCodes.map((code) => ({
+  const caps = getModelCapabilities(model);
+  const options = caps.supportedLanguages.map((code) => ({
     code,
     name: LANGUAGE_NAMES[code] ?? code.toUpperCase(),
   }));
 
-  if (
-    model.languages.includes("multilingual") ||
-    model.id === "parakeet-v3" ||
-    model.id.startsWith("qwen3-asr-")
-  ) {
+  if (caps.autoDetect) {
     return [{ code: "auto", name: "Auto detect" }, ...options];
   }
 
@@ -435,16 +561,16 @@ export function getModelLanguageOptions(
 
 export function isLanguageSupportedByModel(
   model: Pick<WhisperModel, "id" | "languages">,
-  language: string
+  language: string,
 ) {
   return getModelLanguageOptions(model).some((option) => option.code === language);
 }
 
 export function getDefaultLanguageForModel(
-  model: Pick<WhisperModel, "id" | "languages">
+  model: Pick<WhisperModel, "id" | "languages">,
 ) {
-  const options = getModelLanguageOptions(model);
-  return options[0]?.code ?? "en";
+  const caps = getModelCapabilities(model);
+  return caps.defaultLanguage;
 }
 
 export type ModelBadgeCategory = "recommended" | "accurate" | "fast" | "compact";
@@ -491,7 +617,9 @@ export const WHISPER_MODELS: WhisperModel[] = [
     sizeBytes: 75 * 1024 * 1024,
     description:
       "Fastest Whisper model. Best for quick notes and low-resource devices.",
-    languages: ["multilingual"],
+    languages: MODEL_CAPABILITIES["tiny"].supportedLanguages,
+    defaultLanguage: MODEL_CAPABILITIES["tiny"].defaultLanguage,
+    autoDetect: MODEL_CAPABILITIES["tiny"].autoDetect,
   },
   {
     id: "base",
@@ -499,7 +627,9 @@ export const WHISPER_MODELS: WhisperModel[] = [
     size: "142 MB",
     sizeBytes: 142 * 1024 * 1024,
     description: "Balanced Whisper model for everyday transcription.",
-    languages: ["multilingual"],
+    languages: MODEL_CAPABILITIES["base"].supportedLanguages,
+    defaultLanguage: MODEL_CAPABILITIES["base"].defaultLanguage,
+    autoDetect: MODEL_CAPABILITIES["base"].autoDetect,
   },
   {
     id: "small",
@@ -508,7 +638,9 @@ export const WHISPER_MODELS: WhisperModel[] = [
     sizeBytes: 466 * 1024 * 1024,
     description:
       "Improved accuracy for longer dictation, meetings, and focused writing.",
-    languages: ["multilingual"],
+    languages: MODEL_CAPABILITIES["small"].supportedLanguages,
+    defaultLanguage: MODEL_CAPABILITIES["small"].defaultLanguage,
+    autoDetect: MODEL_CAPABILITIES["small"].autoDetect,
   },
   {
     id: "medium",
@@ -516,7 +648,9 @@ export const WHISPER_MODELS: WhisperModel[] = [
     size: "1.5 GB",
     sizeBytes: 1.5 * 1024 * 1024 * 1024,
     description: "High-accuracy multilingual transcription for demanding audio.",
-    languages: ["multilingual"],
+    languages: MODEL_CAPABILITIES["medium"].supportedLanguages,
+    defaultLanguage: MODEL_CAPABILITIES["medium"].defaultLanguage,
+    autoDetect: MODEL_CAPABILITIES["medium"].autoDetect,
   },
 
   // ========== ENGLISH-ONLY (Faster) ==========
@@ -526,7 +660,9 @@ export const WHISPER_MODELS: WhisperModel[] = [
     size: "75 MB",
     sizeBytes: 75 * 1024 * 1024,
     description: "Fastest English-only Whisper model. Great for quick notes.",
-    languages: ["en"],
+    languages: MODEL_CAPABILITIES["tiny.en"].supportedLanguages,
+    defaultLanguage: MODEL_CAPABILITIES["tiny.en"].defaultLanguage,
+    autoDetect: MODEL_CAPABILITIES["tiny.en"].autoDetect,
   },
   {
     id: "base.en",
@@ -534,7 +670,9 @@ export const WHISPER_MODELS: WhisperModel[] = [
     size: "142 MB",
     sizeBytes: 142 * 1024 * 1024,
     description: "Fast English-only Whisper model with good accuracy.",
-    languages: ["en"],
+    languages: MODEL_CAPABILITIES["base.en"].supportedLanguages,
+    defaultLanguage: MODEL_CAPABILITIES["base.en"].defaultLanguage,
+    autoDetect: MODEL_CAPABILITIES["base.en"].autoDetect,
   },
   {
     id: "small.en",
@@ -542,7 +680,9 @@ export const WHISPER_MODELS: WhisperModel[] = [
     size: "466 MB",
     sizeBytes: 466 * 1024 * 1024,
     description: "Accurate English-only Whisper model for longer dictation.",
-    languages: ["en"],
+    languages: MODEL_CAPABILITIES["small.en"].supportedLanguages,
+    defaultLanguage: MODEL_CAPABILITIES["small.en"].defaultLanguage,
+    autoDetect: MODEL_CAPABILITIES["small.en"].autoDetect,
   },
   {
     id: "medium.en",
@@ -550,7 +690,9 @@ export const WHISPER_MODELS: WhisperModel[] = [
     size: "1.5 GB",
     sizeBytes: 1.5 * 1024 * 1024 * 1024,
     description: "High-accuracy English-only Whisper model.",
-    languages: ["en"],
+    languages: MODEL_CAPABILITIES["medium.en"].supportedLanguages,
+    defaultLanguage: MODEL_CAPABILITIES["medium.en"].defaultLanguage,
+    autoDetect: MODEL_CAPABILITIES["medium.en"].autoDetect,
   },
 
   // ========== DISTIL-WHISPER (Faster) ==========
@@ -560,7 +702,9 @@ export const WHISPER_MODELS: WhisperModel[] = [
     size: "166 MB",
     sizeBytes: 166 * 1024 * 1024,
     description: "Fast English transcription with accuracy close to Whisper Small.",
-    languages: ["en"],
+    languages: MODEL_CAPABILITIES["distil-small.en"].supportedLanguages,
+    defaultLanguage: MODEL_CAPABILITIES["distil-small.en"].defaultLanguage,
+    autoDetect: MODEL_CAPABILITIES["distil-small.en"].autoDetect,
   },
   // ========== LARGE MODELS (Best Accuracy) ==========
   {
@@ -569,7 +713,9 @@ export const WHISPER_MODELS: WhisperModel[] = [
     size: "2.9 GB",
     sizeBytes: 2.9 * 1024 * 1024 * 1024,
     description: "Highest-accuracy Whisper model for professional workflows.",
-    languages: ["multilingual"],
+    languages: MODEL_CAPABILITIES["large-v3"].supportedLanguages,
+    defaultLanguage: MODEL_CAPABILITIES["large-v3"].defaultLanguage,
+    autoDetect: MODEL_CAPABILITIES["large-v3"].autoDetect,
   },
   {
     id: "large-v3-turbo",
@@ -578,7 +724,9 @@ export const WHISPER_MODELS: WhisperModel[] = [
     sizeBytes: 1.6 * 1024 * 1024 * 1024,
     description:
       "Fast large Whisper model with a strong speed and accuracy balance.",
-    languages: ["multilingual"],
+    languages: MODEL_CAPABILITIES["large-v3-turbo"].supportedLanguages,
+    defaultLanguage: MODEL_CAPABILITIES["large-v3-turbo"].defaultLanguage,
+    autoDetect: MODEL_CAPABILITIES["large-v3-turbo"].autoDetect,
   },
 ];
 
@@ -590,7 +738,9 @@ export const PARAKEET_MODELS: WhisperModel[] = [
     sizeBytes: 670 * 1024 * 1024,
     description:
       "Fast multilingual Parakeet model with automatic language detection.",
-    languages: PARAKEET_V3_LANGUAGES,
+    languages: MODEL_CAPABILITIES["parakeet-v3"].supportedLanguages,
+    defaultLanguage: MODEL_CAPABILITIES["parakeet-v3"].defaultLanguage,
+    autoDetect: MODEL_CAPABILITIES["parakeet-v3"].autoDetect,
     recommended: true,
   },
   {
@@ -599,7 +749,9 @@ export const PARAKEET_MODELS: WhisperModel[] = [
     size: "661 MB",
     sizeBytes: 661 * 1024 * 1024,
     description: "Previous Parakeet English model with stable transcription quality.",
-    languages: ["en"],
+    languages: MODEL_CAPABILITIES["parakeet-v2"].supportedLanguages,
+    defaultLanguage: MODEL_CAPABILITIES["parakeet-v2"].defaultLanguage,
+    autoDetect: MODEL_CAPABILITIES["parakeet-v2"].autoDetect,
   },
 ];
 
@@ -611,7 +763,9 @@ export const QWEN3_ASR_MODELS: WhisperModel[] = [
     sizeBytes: 1880 * 1024 * 1024,
     description:
       "Qwen3-ASR speech recognition model for accurate multilingual transcription.",
-    languages: QWEN3_ASR_LANGUAGES,
+    languages: MODEL_CAPABILITIES["qwen3-asr-0.6b"].supportedLanguages,
+    defaultLanguage: MODEL_CAPABILITIES["qwen3-asr-0.6b"].defaultLanguage,
+    autoDetect: MODEL_CAPABILITIES["qwen3-asr-0.6b"].autoDetect,
   },
 ];
 

@@ -147,23 +147,22 @@ function signAsset(fileName, platformKey) {
   };
 }
 
-const windowsExe = findAsset([/^Wavee_.*_x64-setup\.exe$/]);
-const windowsMsi = findAsset([/^Wavee_.*_x64.*\.msi$/]);
-const darwinAarch64 = findAsset([/^Wavee_.*_aarch64\.app\.tar\.gz$/]);
-const darwinX64 = findAsset([/^Wavee_.*_x64\.app\.tar\.gz$/]) || findAsset([/^Wavee_.*_x86_64\.app\.tar\.gz$/]);
+const windowsExe = findAsset([/\.exe$/i, /(x64|setup)/i]);
+const windowsMsi = findAsset([/\.msi$/i]);
+const darwinAarch64 = findAsset([/aarch64.*\.app\.tar\.gz$/i]) || findAsset([/aarch64.*\.tar\.gz$/i]);
+const darwinX64 = findAsset([/(x64|x86_64).*\.app\.tar\.gz$/i]) || findAsset([/(x64|x86_64).*\.tar\.gz$/i]);
 
 if (requireAllPlatforms) {
   const missing = [
-    ["Windows NSIS setup", windowsExe],
-    ["Windows MSI", windowsMsi],
-    ["macOS Apple Silicon app archive", darwinAarch64],
-    ["macOS Intel app archive", darwinX64],
+    ["Windows installer (.exe)", windowsExe],
+    ["macOS Apple Silicon (.app.tar.gz)", darwinAarch64],
+    ["macOS Intel (.app.tar.gz)", darwinX64],
   ]
     .filter(([, fileName]) => !fileName)
     .map(([label]) => label);
 
   if (missing.length > 0) {
-    console.error(`Missing release assets: ${missing.join(", ")}`);
+    console.error(`Missing required release assets for updater: ${missing.join(", ")}`);
     console.error(`Available assets: ${files.join(", ")}`);
     process.exit(1);
   }

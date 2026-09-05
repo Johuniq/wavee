@@ -43,6 +43,8 @@ interface AppStore extends AppState {
   setDownloadProgress: (progress: number) => void;
   setAvailableModels: (models: WhisperModel[]) => void;
   markModelDownloaded: (modelId: string, path?: string) => void;
+  setModelReady: (ready: boolean) => void;
+  modelReady: boolean;
 
   // Settings actions
   updateSettings: (settings: Partial<AppSettings>) => void;
@@ -67,6 +69,7 @@ const initialState: AppState & {
   lastTranscription: "",
   errorMessage: null,
   modelStatus: "not-downloaded",
+  modelReady: false,
   selectedModel: null,
   downloadProgress: 0,
   settings: DEFAULT_SETTINGS,
@@ -78,11 +81,20 @@ export const useAppStore = create<AppStore>()((set, get) => ({
 
   // Initialize from SQLite database
   initializeFromDb: async () => {
+    console.log("[Store] Starting initialization from database...");
     try {
       // Load app state from database
+      console.log("[Store] Fetching app state...");
       const dbState = await dbGetAppState();
+      console.log("[Store] App state:", dbState);
+      
+      console.log("[Store] Fetching settings...");
       const dbSettings = await dbGetSettings();
+      console.log("[Store] Settings:", dbSettings);
+      
+      console.log("[Store] Fetching models...");
       const dbModels = await dbGetModels();
+      console.log("[Store] Models:", dbModels);
 
       const settings = dbSettingsToFrontend(dbSettings);
       const models = dbModelsToFrontend(dbModels);
@@ -98,6 +110,15 @@ export const useAppStore = create<AppStore>()((set, get) => ({
         modelStatus = "downloaded";
       }
 
+      console.log("[Store] Setting state with:", {
+        isFirstLaunch: dbState.is_first_launch,
+        setupComplete: dbState.setup_complete,
+        currentSetupStep: dbState.current_setup_step,
+        selectedModel,
+        modelStatus,
+        availableModels: models.length,
+      });
+
       set({
         isInitialized: true,
         isFirstLaunch: dbState.is_first_launch,
@@ -108,6 +129,8 @@ export const useAppStore = create<AppStore>()((set, get) => ({
         settings,
         availableModels: models,
       });
+      
+      console.log("[Store] Initialization complete!");
     } catch (error) {
       console.error("Failed to initialize from database:", error);
       // Keep default state if DB fails (for dev mode in browser)
@@ -151,6 +174,7 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   setSelectedModel: (model) => {
     set({
       selectedModel: model,
+      modelReady: false, // require a fresh preload for the new model
       settings: { ...get().settings, selectedModelId: model?.id || "" },
     });
     // Sync to database
@@ -179,6 +203,8 @@ export const useAppStore = create<AppStore>()((set, get) => ({
     // Sync to database
     dbSetModelDownloaded(modelId, true, path).catch(console.error);
   },
+
+  setModelReady: (ready) => set({ modelReady: ready }),
 
   // Settings actions
   updateSettings: (newSettings) => {

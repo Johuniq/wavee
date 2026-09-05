@@ -1,11 +1,9 @@
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import {
-    downloadModel,
-    isModelDownloaded,
-    onDownloadProgress,
-    type DownloadProgress,
+  downloadModel,
+  isModelDownloaded,
+  onDownloadProgress,
+  type DownloadProgress,
 } from "@/lib/voice-api";
 import { useAppStore, useAvailableModels } from "@/store";
 import {
@@ -15,7 +13,7 @@ import {
   isLanguageSupportedByModel,
   type WhisperModel,
 } from "@/types";
-import { Check, Download, HardDrive, Loader2, Sparkles } from "lucide-react";
+import { Check, Cpu, HardDrive, Loader2, Sparkles, Star } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 interface ModelSelectStepProps {
@@ -23,6 +21,8 @@ interface ModelSelectStepProps {
   onBack: () => void;
 }
 
+const STEPS_TOTAL = 4;
+const STEP_INDEX = 3;
 const ONBOARDING_RECOMMENDED_MODEL_ID = "parakeet-v3";
 
 export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
@@ -38,7 +38,6 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
     markModelDownloaded,
   } = useAppStore();
 
-  // Get models from database, fallback to static list
   const dbModels = useAvailableModels();
   const sourceModels: WhisperModel[] =
     dbModels.length > 0 ? dbModels : ALL_MODELS;
@@ -52,41 +51,24 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
     [sourceModels]
   );
 
-  const [downloadingModelId, setDownloadingModelId] = useState<string | null>(
-    null
-  );
+  const [downloadingModelId, setDownloadingModelId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedModel || models.length === 0) return;
-
     const defaultModel =
-      models.find((model) => model.id === ONBOARDING_RECOMMENDED_MODEL_ID) ||
-      models[0];
-
+      models.find((model) => model.id === ONBOARDING_RECOMMENDED_MODEL_ID) || models[0];
     setSelectedModel(defaultModel);
     if (!isLanguageSupportedByModel(defaultModel, settings.language)) {
       updateSettings({ language: getDefaultLanguageForModel(defaultModel) });
     }
-
     isModelDownloaded(defaultModel.id)
-      .then((downloaded) => {
-        setModelStatus(downloaded ? "downloaded" : "not-downloaded");
-      })
+      .then((downloaded) => setModelStatus(downloaded ? "downloaded" : "not-downloaded"))
       .catch(console.error);
-  }, [
-    selectedModel,
-    models,
-    settings.language,
-    setSelectedModel,
-    updateSettings,
-    setModelStatus,
-  ]);
+  }, [selectedModel, models, settings.language, setSelectedModel, updateSettings, setModelStatus]);
 
-  // Listen for download progress events
   useEffect(() => {
     let unlisten: (() => void) | null = null;
-
     onDownloadProgress((progress: DownloadProgress) => {
       if (progress.model_id === downloadingModelId) {
         setDownloadProgress(progress.percentage);
@@ -94,20 +76,16 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
     }).then((unlistenFn) => {
       unlisten = unlistenFn;
     });
-
     return () => {
       if (unlisten) unlisten();
     };
   }, [downloadingModelId, setDownloadProgress]);
 
-  // Check if selected model is already downloaded
   useEffect(() => {
     if (selectedModel) {
       isModelDownloaded(selectedModel.id)
         .then((downloaded) => {
-          if (downloaded) {
-            setModelStatus("downloaded");
-          }
+          if (downloaded) setModelStatus("downloaded");
         })
         .catch(console.error);
     }
@@ -115,29 +93,23 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
 
   const handleSelectModel = (modelId: string) => {
     if (modelStatus === "downloading") return;
-    const model = models.find((m: WhisperModel) => m.id === modelId);
+    const model = models.find((m) => m.id === modelId);
     if (model) {
       setSelectedModel(model);
       if (!isLanguageSupportedByModel(model, settings.language)) {
         updateSettings({ language: getDefaultLanguageForModel(model) });
       }
       setDownloadError(null);
-      // Check if already downloaded
       isModelDownloaded(modelId)
-        .then((downloaded) => {
-          if (downloaded) {
-            setModelStatus("downloaded");
-          } else {
-            setModelStatus("not-downloaded");
-          }
-        })
+        .then((downloaded) =>
+          setModelStatus(downloaded ? "downloaded" : "not-downloaded")
+        )
         .catch(console.error);
     }
   };
 
   const handleDownload = async () => {
     if (!selectedModel) return;
-
     setDownloadingModelId(selectedModel.id);
     setModelStatus("downloading");
     setDownloadProgress(0);
@@ -148,15 +120,12 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
       setDownloadProgress(100);
       setModelStatus("downloaded");
       setDownloadingModelId(null);
-      // Mark model as downloaded in store and database
       markModelDownloaded(selectedModel.id, modelPath);
     } catch (error) {
       console.error("Download failed:", error);
       setModelStatus("error");
       setDownloadingModelId(null);
-      setDownloadError(
-        error instanceof Error ? error.message : "Download failed"
-      );
+      setDownloadError(error instanceof Error ? error.message : "Download failed");
     }
   };
 
@@ -168,145 +137,181 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
   const canContinue = selectedModel && isDownloaded;
 
   return (
-    <div className="flex flex-col h-full relative overflow-hidden">
-      {/* Background mesh gradient */}
-      <div className="glass-mesh-bg" />
+    <div className="flex h-full flex-col overflow-hidden bg-canvas">
+      <div className="flex-1 overflow-y-auto">
+        <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-6 xl:py-10 space-y-6">
+          {/* HERO — Dark band */}
+          <section className="hero-band-dark">
+            <div className="flex flex-col items-center text-center gap-4 p-8 sm:p-10">
+              <p className="eyebrow-uppercase text-primary">
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-1 w-1 rounded-full bg-primary" />
+                  Step {STEP_INDEX} of {STEPS_TOTAL}
+                </span>
+              </p>
+              <h2
+                className="display-lg text-on-dark"
+              >
+                Choose your <span className="text-primary">engine</span>.
+              </h2>
+              <p className="body-md text-on-dark-soft max-w-md">
+                Larger models are more accurate but need more storage. Pick one to get started.
+              </p>
+            </div>
+          </section>
 
-      <div className="flex flex-col h-full px-6 py-8">
-        <div className="space-y-1.5 mb-6">
-          <p className="text-xs text-foreground/60 px-2 py-1 rounded-full bg-white/50 dark:bg-white/10 w-fit">
-            Step 2 of 3
-          </p>
-          <h2 className="text-lg font-semibold text-foreground">
-            Choose Transcription Model
-          </h2>
-          <p className="text-sm text-foreground/60">
-            Larger models are more accurate but need more storage
-          </p>
-        </div>
+          {/* MODEL CARDS */}
+          <section className="card-feature-cream">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="icon-plate-orange">
+                <Sparkles className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="eyebrow-uppercase text-ink-mid">Models</p>
+                <h3
+                  className="title-lg text-ink mt-1"
+                >
+                  {models.length} available
+                </h3>
+              </div>
+            </div>
 
-        <div className="flex-1 overflow-y-auto -mx-6 px-6">
-          <RadioGroup
-            value={selectedModel?.id || ""}
-            onValueChange={handleSelectModel}
-            className="space-y-2"
-          >
-            {models.map((model: WhisperModel) => {
-              const isSelected = selectedModel?.id === model.id;
-              const isThisDownloading = downloadingModelId === model.id;
+            <div className="space-y-3">
+              {models.map((model) => {
+                const isSelected = selectedModel?.id === model.id;
+                const isThisDownloading = downloadingModelId === model.id;
+                const isRecommended = model.id === ONBOARDING_RECOMMENDED_MODEL_ID;
 
-              return (
-                <div key={model.id}>
-                  <Label
-                    htmlFor={model.id}
+                return (
+                  <button
+                    key={model.id}
+                    type="button"
+                    onClick={() => handleSelectModel(model.id)}
+                    disabled={isDownloading && !isThisDownloading}
                     className={cn(
-                      "flex items-start gap-3 p-4 rounded-2xl cursor-pointer transition-all glass-card",
-                      isSelected &&
-                        "ring-2 ring-foreground/30 border-foreground/20 bg-foreground/5",
-                      isDownloading && !isThisDownloading && "opacity-50"
+                      "w-full text-left rounded-md border p-4 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
+                      isSelected
+                        ? "border-primary bg-canvas"
+                        : "border-hairline bg-canvas hover:border-ink",
                     )}
+                    style={isSelected ? { boxShadow: "0 0 0 1px #ff4f00" } : undefined}
                   >
-                    <RadioGroupItem
-                      value={model.id}
-                      id={model.id}
-                      disabled={isDownloading && !isThisDownloading}
-                      className="mt-0.5"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm text-foreground">
-                          {model.name}
-                        </span>
-                        {model.id === ONBOARDING_RECOMMENDED_MODEL_ID && (
-                          <span className="glass-badge flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-foreground/90 text-white bg-green font-medium">
-                            <Sparkles className="h-3 w-3" />
-                            Recommended
+                    <div className="flex items-start gap-3 sm:gap-4">
+                      <div
+                        className={cn(
+                          "flex h-10 w-10 items-center justify-center rounded-md shrink-0",
+                          isSelected
+                            ? "bg-primary text-on-dark"
+                            : "bg-canvas-soft text-ink",
+                        )}
+                      >
+                        <Cpu className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className="title-sm text-ink"
+                          >
+                            {model.name}
                           </span>
+                          {isSelected && (
+                            <span
+                              className="caption-strong px-2 py-0.5 rounded-full"
+                              style={{ background: "rgba(255,79,0,0.1)", color: "#ff4f00" }}
+                            >
+                              Selected
+                            </span>
+                          )}
+                          {isRecommended && !isSelected && (
+                            <span className="caption-strong text-ink bg-canvas-soft px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                              <Star className="h-3 w-3" />
+                              Recommended
+                            </span>
+                          )}
+                        </div>
+                        <p className="body-sm text-body-muted mt-1.5">
+                          {model.description}
+                        </p>
+                        <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+                          <span className="inline-flex items-center gap-1.5 caption px-2 py-1 rounded-md bg-canvas-soft text-body">
+                            <HardDrive className="h-3 w-3" />
+                            {model.size}
+                          </span>
+                          <span className="caption px-2 py-1 rounded-md bg-canvas-soft text-body">
+                            {getModelLanguageLabel(model)}
+                          </span>
+                        </div>
+
+                        {isThisDownloading && (
+                          <div className="mt-3 space-y-1.5">
+                            <div className="h-1.5 bg-canvas-soft rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-primary transition-all duration-300 rounded-full"
+                                style={{ width: `${downloadProgress}%` }}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <p className="caption text-body-muted">Downloading...</p>
+                              <p className="caption-strong text-primary tabular-nums">
+                                {Math.round(downloadProgress)}%
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {model.downloaded && !isThisDownloading && (
+                          <div className="mt-2.5 flex items-center gap-1.5 caption-strong" style={{ color: "#ff4f00" }}>
+                            <Check className="h-3 w-3" />
+                            Downloaded
+                          </div>
                         )}
                       </div>
-                      <p className="text-xs text-foreground/60 mt-0.5">
-                        {model.description}
-                      </p>
-                      <div className="flex items-center gap-3 mt-2 text-xs text-foreground/60">
-                        <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/30 dark:bg-white/10">
-                          <HardDrive className="h-3 w-3" />
-                          {model.size}
-                        </span>
-                        <span className="px-2 py-1 rounded-lg bg-white/30 dark:bg-white/10">
-                          {getModelLanguageLabel(model)}
-                        </span>
-                      </div>
-
-                      {isThisDownloading && (
-                        <div className="mt-3 space-y-1">
-                          <div className="h-2 bg-white/30 dark:bg-white/10 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-foreground/80 transition-all duration-300 rounded-full"
-                              style={{ width: `${downloadProgress}%` }}
-                            />
-                          </div>
-                          <p className="text-xs text-foreground/60">
-                            {Math.round(downloadProgress)}% downloaded
-                          </p>
-                        </div>
-                      )}
-
-                      {model.downloaded && !isThisDownloading && (
-                        <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
-                          <Check className="h-3 w-3" />
-                          Downloaded
-                        </div>
-                      )}
                     </div>
-                  </Label>
-                </div>
-              );
-            })}
-          </RadioGroup>
-
-          {downloadError && (
-            <div className="mt-4 p-3 glass-card border-red-500/30 bg-red-500/10 rounded-2xl">
-              <p className="text-sm text-red-500 font-medium">
-                Download failed
-              </p>
-              <p className="text-xs text-red-500/80 mt-1">{downloadError}</p>
+                  </button>
+                );
+              })}
             </div>
-          )}
-        </div>
 
-        <div className="flex gap-3 pt-4 border-t border-white/10 mt-4">
+            {downloadError && (
+              <div
+                className="mt-4 p-3.5 rounded-md border flex items-start gap-2.5"
+                style={{ borderColor: "rgba(207,32,47,0.3)", background: "rgba(207,32,47,0.05)", color: "#cf202f" }}
+              >
+                <p className="body-sm">{downloadError}</p>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+
+      {/* STICKY FOOTER */}
+      <div className="shrink-0 border-t border-hairline bg-canvas-soft">
+        <div className="max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-4 flex items-center justify-between gap-3 flex-wrap">
           <button
-            className="glass-button py-2.5 px-4 rounded-xl text-sm font-medium disabled:opacity-50"
             onClick={onBack}
             disabled={isDownloading}
+            className="paper-button-outline cursor-pointer disabled:opacity-50"
           >
             Back
           </button>
+
           {!isDownloaded ? (
             <button
               onClick={handleDownload}
               disabled={!selectedModel || isDownloading}
-              className="glass-button flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25 disabled:opacity-50"
+              className="paper-button-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isDownloading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Downloading...
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4" />
-                  Download ({selectedModel?.size || "Select model"})
-                </>
-              )}
+              {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {isDownloading
+                ? `Downloading ${Math.round(downloadProgress)}%`
+                : `Download ${selectedModel?.size ?? ""}`.trim()}
             </button>
           ) : (
             <button
               onClick={onNext}
               disabled={!canContinue}
-              className="glass-button flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25 disabled:opacity-50"
+              className="paper-button-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Check className="h-4 w-4" />
               Continue
             </button>
           )}

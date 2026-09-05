@@ -1,6 +1,6 @@
 [package]
 name = "wavee"
-version = "1.0.0"
+version = "2.0.0"
 description = "Open-source desktop voice-to-text app with local AI transcription"
 authors = ["Johuniq"]
 edition = "2021"

@@ -1,4 +1,5 @@
 import { useToast } from "@/hooks/use-toast";
+import { cn, openUrl } from "@/lib/utils";
 import { reportError } from "@/lib/voice-api";
 import {
   checkForUpdates,
@@ -11,11 +12,10 @@ import {
 } from "@/lib/updater-api";
 import {
   AlertCircle,
-  CheckCircle2,
-  Download,
+  Check,
+  Circle,
   Loader2,
   RefreshCw,
-  Rocket,
   Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -115,147 +115,218 @@ export function UpdaterView() {
     }
   }, [toastError]);
 
-  const getStatusIcon = () => {
-    switch (status.status) {
-      case "checking":
-        return <Loader2 className="h-5 w-5 animate-spin text-foreground/60" />;
-      case "available":
-        return <Sparkles className="h-5 w-5 text-yellow-500" />;
-      case "not-available":
-        return <CheckCircle2 className="h-5 w-5 text-green-500" />;
-      case "downloading":
-        return <Download className="h-5 w-5 text-blue-500 animate-bounce" />;
-      case "ready":
-        return <Rocket className="h-5 w-5 text-green-500" />;
-      case "error":
-        return <AlertCircle className="h-5 w-5 text-destructive" />;
-      default:
-        return <RefreshCw className="h-5 w-5 text-foreground/60" />;
-    }
-  };
-
-  const getStatusMessage = () => {
-    switch (status.status) {
-      case "idle":
-        return "Click to check for updates";
-      case "checking":
-        return "Checking for updates...";
-      case "available":
-        return `Version ${status.info.version} is available`;
-      case "not-available":
-        return "You're running the latest version";
-      case "downloading":
-        return progress ? formatProgress(progress) : "Downloading...";
-      case "ready":
-        return "Update ready! Restart to apply";
-      case "error":
-        return status.message;
-    }
-  };
+  const isUpdateAvailable = status.status === "available";
+  const isReady = status.status === "ready";
+  const isDownloading = status.status === "downloading";
+  const isError = status.status === "error";
 
   return (
-    <div className="glass-card p-4 rounded-2xl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
-            {getStatusIcon()}
-          </div>
-          <div>
-            <h2 className="font-semibold text-sm text-foreground">
-              Software Updates
-            </h2>
-            <p className="text-xs text-foreground/60">{getStatusMessage()}</p>
-          </div>
-        </div>
-        <span className="px-2 py-1 rounded-lg bg-white/50 dark:bg-white/10 border border-white/30 dark:border-white/10 font-mono text-xs text-foreground/60">
-          {currentVersion ? `v${currentVersion}` : versionError ? "v?" : "..."}
-        </span>
-      </div>
-
-      {/* Progress bar for downloading */}
-      {status.status === "downloading" && progress && (
-        <div className="mb-3">
-          <div className="h-2 bg-white/30 dark:bg-white/10 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-foreground/80 transition-all duration-300 rounded-full"
-              style={{
-                width: progress.total
-                  ? `${(progress.downloaded / progress.total) * 100}%`
-                  : "50%",
-              }}
-            />
-          </div>
-          <p className="text-xs text-foreground/60 mt-2">
-            Keep Wavee open while the update downloads.
-          </p>
-        </div>
+    <section className="card-feature-cream relative overflow-hidden">
+      {/* Decorative orange glow when update is available */}
+      {isUpdateAvailable && (
+        <div
+          aria-hidden
+          className="absolute -top-16 -right-16 h-56 w-56 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(255,79,0,0.18), transparent 70%)",
+          }}
+        />
       )}
 
-      {status.status === "error" && (
-        <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3 mb-3 flex items-start gap-2 text-red-600 dark:text-red-400">
-          <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-          <p className="text-xs">{status.message}</p>
-        </div>
-      )}
-
-      {/* Release notes */}
-      {(status.status === "available" || status.status === "ready") &&
-        status.info.body && (
-          <div className="rounded-xl bg-white/30 dark:bg-white/10 border border-white/30 dark:border-white/10 p-3 mb-3">
-            <p className="font-medium text-xs text-foreground mb-1">
-              What's new:
+      <div className="relative">
+        {/* Header */}
+        <div className="flex items-start gap-3 mb-5">
+          <div
+            className={cn(
+              "icon-plate shrink-0",
+              isUpdateAvailable && "!bg-primary/10 !text-primary",
+              isReady && "!bg-primary/10 !text-primary",
+            )}
+          >
+            {isUpdateAvailable || isReady ? (
+              <Sparkles className="h-4 w-4" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="eyebrow-uppercase text-ink-mid">Updates</p>
+              {isUpdateAvailable && (
+                <span
+                  className="inline-flex items-center gap-1.5 caption-strong px-2 py-0.5 rounded-full"
+                  style={{ background: "rgba(255,79,0,0.1)", color: "#ff4f00" }}
+                >
+                  <Circle className="h-1.5 w-1.5 fill-primary text-primary" />
+                  New version
+                </span>
+              )}
+              {isReady && (
+                <span
+                  className="inline-flex items-center gap-1.5 caption-strong px-2 py-0.5 rounded-full"
+                  style={{ background: "rgba(255,79,0,0.1)", color: "#ff4f00" }}
+                >
+                  <Check className="h-3 w-3" />
+                  Ready to install
+                </span>
+              )}
+              {status.status === "not-available" && (
+                <span className="inline-flex items-center gap-1.5 caption-strong px-2 py-0.5 rounded-full bg-canvas text-ink">
+                  <Check className="h-3 w-3" />
+                  Up to date
+                </span>
+              )}
+            </div>
+            <h3
+              className="title-lg text-ink mt-1"
+            >
+              Software updates
+            </h3>
+            <p className="body-sm text-body-muted mt-1.5">
+              {isUpdateAvailable
+                ? `Version ${status.info.version} is ready for you.`
+                : isReady
+                  ? "Update downloaded — restart Wavee to apply it."
+                  : "Keep Wavee current with the latest fixes and features."}
             </p>
-            <p className="text-xs text-foreground/70 whitespace-pre-wrap line-clamp-4">
+          </div>
+          <span
+            className="caption-strong px-2.5 py-1 rounded-md font-mono shrink-0 hidden sm:inline-block"
+            style={{
+              background: "#fffefb",
+              border: "1px solid #e8e2d6",
+              color: "#605d52",
+              letterSpacing: "0.01em",
+            }}
+            title={versionError ?? undefined}
+          >
+            {currentVersion ? `v${currentVersion}` : versionError ? "v?" : "..."}
+          </span>
+        </div>
+
+        {/* Version row (mobile fallback) */}
+        <div className="sm:hidden mb-4 flex items-center gap-2">
+          <span className="caption-strong text-ink-mid">Installed</span>
+          <span
+            className="caption-strong px-2 py-0.5 rounded-md font-mono"
+            style={{
+              background: "#fffefb",
+              border: "1px solid #e8e2d6",
+              color: "#605d52",
+            }}
+          >
+            {currentVersion ? `v${currentVersion}` : versionError ? "v?" : "..."}
+          </span>
+        </div>
+
+        {/* Error state */}
+        {isError && (
+          <div className="mb-5 p-3.5 rounded-md border border-destructive/30 bg-destructive/5 flex items-start gap-2.5 text-destructive">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            <span className="body-sm">{status.message}</span>
+          </div>
+        )}
+
+        {/* Download progress */}
+        {isDownloading && progress && (
+          <div className="mb-5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="caption-strong text-ink-mid">
+                {progress.total
+                  ? formatProgress(progress)
+                  : "Downloading..."}
+              </span>
+              <span
+                className="caption-strong text-primary tabular-nums"
+                style={{ fontVariantNumeric: "tabular-nums" }}
+              >
+                {progress.total
+                  ? `${Math.round((progress.downloaded / progress.total) * 100)}%`
+                  : "—"}
+              </span>
+            </div>
+            <div className="h-1.5 bg-canvas-soft rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-300 rounded-full"
+                style={{
+                  width: progress.total
+                    ? `${(progress.downloaded / progress.total) * 100}%`
+                    : "50%",
+                }}
+              />
+            </div>
+            <p className="caption text-body-muted mt-2">
+              Keep Wavee open while the update downloads.
+            </p>
+          </div>
+        )}
+
+        {/* Release notes */}
+        {(isUpdateAvailable || isReady) && status.info.body && (
+          <div
+            className="mb-5 p-4 rounded-md border border-hairline"
+            style={{ background: "#fffefb" }}
+          >
+            <p className="caption-strong text-ink-mid mb-2">What's new</p>
+            <p className="body-sm text-ink leading-relaxed whitespace-pre-wrap line-clamp-5">
               {status.info.body}
             </p>
           </div>
         )}
 
-      {/* Action buttons */}
-      <div className="flex gap-2">
-        {status.status === "idle" ||
-        status.status === "not-available" ||
-        status.status === "error" ? (
-          <button
-            onClick={handleCheckForUpdates}
-            className="glass-button flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Check for Updates
-          </button>
-        ) : null}
+        {/* Action row */}
+        <div className="flex flex-wrap items-center gap-3">
+          {status.status === "idle" ||
+          status.status === "not-available" ||
+          status.status === "error" ? (
+            <button
+              onClick={handleCheckForUpdates}
+              className="paper-button-primary size-md cursor-pointer"
+            >
+              {isError ? "Try again" : "Check for updates"}
+            </button>
+          ) : null}
 
-        {status.status === "checking" && (
-          <button
-            disabled
-            className="glass-button flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium opacity-70 cursor-not-allowed"
-          >
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Checking...
-          </button>
-        )}
+          {status.status === "checking" && (
+            <button
+              disabled
+              className="paper-button-secondary size-md cursor-not-allowed"
+            >
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Checking for updates...
+            </button>
+          )}
 
-        {status.status === "available" && (
-          <button
-            onClick={handleDownloadAndInstall}
-            className="flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
-          >
-            <Download className="h-4 w-4" />
-            Download & Install
-          </button>
-        )}
+          {isUpdateAvailable && (
+            <button
+              onClick={handleDownloadAndInstall}
+              className="paper-button-primary size-md cursor-pointer"
+            >
+              Download & install
+            </button>
+          )}
 
-        {status.status === "ready" && (
+          {isReady && (
+            <button
+              onClick={handleRelaunch}
+              className="paper-button-primary size-md cursor-pointer"
+            >
+              Restart now
+            </button>
+          )}
+
+          {/* Secondary action: open releases on GitHub */}
           <button
-            onClick={handleRelaunch}
-            className="flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
+            onClick={() =>
+              openUrl("https://github.com/johuniq/wavee/releases/latest")
+            }
+            className="paper-button-outline size-md cursor-pointer"
           >
-            <Rocket className="h-4 w-4" />
-            Restart Now
+            View release notes
           </button>
-        )}
+        </div>
       </div>
-    </div>
+    </section>
   );
 }

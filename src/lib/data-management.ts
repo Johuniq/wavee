@@ -23,7 +23,7 @@ export async function exportAppData(): Promise<string> {
   const history = await getTranscriptionHistory(10000); // Get all history
 
   const exportData: ExportData = {
-    version: "1.0.0",
+    version: "2.0.0",
     exportedAt: new Date().toISOString(),
     history,
   };

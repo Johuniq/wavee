@@ -1,16 +1,13 @@
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import { addTranscription, reportError, transcribeFile } from "@/lib/voice-api";
 import { useAppStore } from "@/store";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   AlertCircle,
-  ArrowLeft,
-  Check,
-  ClipboardCopy,
+  Circle,
   FileAudio,
+  Headphones,
   Loader2,
-  RefreshCcw,
   Upload,
   X,
 } from "lucide-react";
@@ -20,7 +17,7 @@ interface TranscribeViewProps {
   onClose: () => void;
 }
 
-export function TranscribeView({ onClose }: TranscribeViewProps) {
+export function TranscribeView(_props: TranscribeViewProps) {
   const { settings } = useAppStore();
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
@@ -50,11 +47,11 @@ export function TranscribeView({ onClose }: TranscribeViewProps) {
               "wav",
               "mp3",
               "m4a",
-              "flac",
               "ogg",
+              "flac",
               "webm",
-              "aac",
-              "mkv",
+              "mp4",
+              "mov",
             ],
           },
         ],
@@ -62,16 +59,12 @@ export function TranscribeView({ onClose }: TranscribeViewProps) {
 
       if (selected && typeof selected === "string") {
         setSelectedFile(selected);
-        // Extract filename from path
-        const name = selected.split(/[/\\]/).pop() || selected;
-        setFileName(name);
-        setError(null);
-        setTranscription("");
+        setFileName(selected.split(/[/\\]/).pop() || selected);
       }
     } catch (err) {
       const message = getErrorMessage(err);
-      console.error("Failed to select file:", err);
-      setError(message || "Failed to select file");
+      console.error("File selection failed:", err);
+      setError(message);
       await reportError("filesystem", message, "error", {
         userAction: "Select audio file",
       }).catch(console.error);
@@ -81,10 +74,7 @@ export function TranscribeView({ onClose }: TranscribeViewProps) {
   };
 
   const handleTranscribe = async () => {
-    if (!selectedFile) {
-      setError("Please select an audio file first");
-      return;
-    }
+    if (!selectedFile || isTranscribing) return;
 
     setIsTranscribing(true);
     setError(null);
@@ -99,7 +89,6 @@ export function TranscribeView({ onClose }: TranscribeViewProps) {
       );
       setTranscription(text);
 
-      // Save to history
       if (text) {
         const durationMs = Date.now() - startTime;
         try {
@@ -119,16 +108,12 @@ export function TranscribeView({ onClose }: TranscribeViewProps) {
         }
       }
     } catch (err) {
-      const message = getErrorMessage(err) || "Transcription failed";
+      const message = getErrorMessage(err);
       console.error("Transcription failed:", err);
       setError(message);
       await reportError("transcription", message, "error", {
-        userAction: "Transcribe audio file",
-        context: {
-          fileName,
-          language: settings.language,
-          modelId: settings.selectedModelId || "base",
-        },
+        userAction: "Transcribe file",
+        context: { file: selectedFile },
       }).catch(console.error);
     } finally {
       setIsTranscribing(false);
@@ -137,18 +122,14 @@ export function TranscribeView({ onClose }: TranscribeViewProps) {
 
   const handleCopy = async () => {
     if (!transcription) return;
-
     try {
       await navigator.clipboard.writeText(transcription);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       const message = getErrorMessage(err);
-      console.error("Failed to copy:", err);
-      setError("Could not copy transcription.");
-      await reportError("ui", message, "error", {
-        userAction: "Copy file transcription",
-      }).catch(console.error);
+      console.error("Copy failed:", err);
+      setError(message);
     }
   };
 
@@ -161,216 +142,217 @@ export function TranscribeView({ onClose }: TranscribeViewProps) {
   };
 
   return (
-    <div className="flex flex-col h-full relative overflow-hidden">
-      {/* Background mesh gradient */}
-      <div className="glass-mesh-bg" />
-
-      {/* Glass Header */}
-      <div className="border-b border-white/20 dark:border-white/10 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
-        <button
-          onClick={onClose}
-          disabled={isTranscribing}
-          className="glass-button px-1 py-1 rounded-xl text-xs font-medium text-red-500 hover:text-red-600 flex items-center gap-1"
-        >
-          <ArrowLeft className="h-4 w-4 text-foreground/70" />
-        </button>
-        <div className="flex items-center gap-2">
-          <h1 className="text-lg font-semibold">Transcribe Audio</h1>
+    <div className="flex h-full flex-col overflow-hidden bg-canvas">
+      {/* ─── HEADER ─── */}
+      <div className="shrink-0 border-b border-hairline">
+        <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-3 sm:py-4">
+          <p className="eyebrow-uppercase text-ink-mid">Transcribe</p>
+          <h1
+            className="display-sm text-ink mt-1"
+          >
+            From audio file to <span className="text-primary">text</span>.
+          </h1>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* File Selection */}
-        <div className="glass-card p-4 rounded-2xl">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
-              <Upload className="h-4 w-4 text-foreground/60" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-sm text-foreground">
-                Select Audio File
-              </h2>
-              <p className="text-xs text-foreground/60">
-                Choose a file to transcribe
-              </p>
-            </div>
-          </div>
+      <div className="flex-1 overflow-y-auto">
+        <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-4 xl:py-5 space-y-4 xl:space-y-5">
 
-          {/* Drop Zone / File Info */}
-          <div
-            onClick={handleSelectFile}
-            className={cn(
-              "border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all",
-              "bg-white/30 dark:bg-white/5 hover:bg-white/50 dark:hover:bg-white/10",
-              (isSelectingFile || isTranscribing) && "opacity-70 cursor-wait",
-              selectedFile
-                ? "border-foreground/30 bg-foreground/5"
-                : "border-white/30 dark:border-white/10 hover:border-foreground/30"
-            )}
-          >
-            {selectedFile ? (
-              <div className="flex items-center justify-center gap-3">
-                <div className="p-3 rounded-xl bg-white/30 dark:bg-white/10">
-                  {isSelectingFile ? (
-                    <Loader2 className="h-8 w-8 animate-spin text-foreground/60" />
-                  ) : (
-                    <FileAudio className="h-8 w-8 text-foreground/60" />
-                  )}
+          {error && (
+            <div className="p-3 rounded-md border border-destructive/30 bg-destructive/5 flex items-center gap-2.5 text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span className="body-sm">{error}</span>
+            </div>
+          )}
+
+          {warning && (
+            <div
+              className="p-3 rounded-md border flex items-center gap-2.5"
+              style={{
+                borderColor: 'rgba(255,79,0,0.3)',
+                background: 'rgba(255,79,0,0.06)',
+                color: '#ff4f00',
+              }}
+            >
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span className="body-sm">{warning}</span>
+            </div>
+          )}
+
+          {/* ─── HERO STATUS BAND — Dark coffee-ink ─── */}
+          <section className="hero-band-dark">
+            <div className="grid grid-cols-1 @xl:grid-cols-[1.4fr_1fr] gap-4 @xl:gap-6 p-4 sm:p-5 @xl:p-6 items-start @xl:items-center">
+              <div className="min-w-0">
+                <p className="eyebrow-uppercase text-primary mb-2">
+                  <span className="inline-flex items-center gap-2">
+                    <Circle className="h-1.5 w-1.5 fill-primary text-primary" />
+                    Local transcription
+                  </span>
+                </p>
+                <h2
+                  className="display-md text-on-dark"
+                >
+                  Drop in a file. Get <span className="text-primary">words</span>.
+                </h2>
+                <p className="body-sm text-on-dark-soft mt-2 max-w-xl">
+                  Wavee processes audio entirely on your machine. Pick a recording and we'll turn it into clean, copyable text.
+                </p>
+              </div>
+
+              <div className="product-ui-card-dark w-full">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="icon-plate-dark">
+                    <Headphones className="h-3.5 w-3.5 text-on-dark" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="caption-strong text-on-dark">Supported formats</p>
+                    <p className="caption text-on-dark-soft mt-0.5">8 common audio & video types</p>
+                  </div>
                 </div>
-                <div className="text-left">
-                  <p className="font-medium text-foreground truncate max-w-[200px]">
+                <div className="flex flex-wrap gap-1">
+                  {["WAV", "MP3", "M4A", "OGG", "FLAC", "WEBM", "MP4", "MOV"].map((format) => (
+                    <span
+                      key={format}
+                      className="caption-strong px-2 py-0.5 rounded-md"
+                      style={{ background: '#14100e', color: '#c5c0b1', border: '1px solid #36342e' }}
+                    >
+                      {format}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ─── FILE UPLOAD — Cream surface with large drop zone ─── */}
+          {!selectedFile ? (
+            <section
+              className="card-feature-cream cursor-pointer group transition-all hover:border-ink"
+              onClick={handleSelectFile}
+            >
+              <div className="flex flex-col items-center justify-center text-center py-7 sm:py-9 px-5">
+                <div className="icon-plate-orange mb-4 group-hover:scale-105 transition-transform">
+                  <Upload className="h-4 w-4" />
+                </div>
+                <p className="eyebrow-uppercase text-ink-mid mb-2">Step 1</p>
+                <h3
+                  className="display-md text-ink"
+                >
+                  Select an audio file
+                </h3>
+                <p className="body-sm text-body-muted mt-2 max-w-md">
+                  Recordings, voice notes, meeting clips, interviews — anything with audio.
+                </p>
+                <button
+                  className="paper-button-primary mt-4 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={isSelectingFile}
+                >
+                  {isSelectingFile ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  {isSelectingFile ? "Opening..." : "Browse files"}
+                </button>
+              </div>
+            </section>
+          ) : (
+            <section className="card-feature-cream">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="icon-plate">
+                  <FileAudio className="h-3.5 w-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="eyebrow-uppercase text-ink-mid">Step 2</p>
+                  <h3
+                    className="title-md text-ink mt-0.5"
+                  >
+                    Ready to transcribe
+                  </h3>
+                </div>
+              </div>
+
+              {/* File row */}
+              <div
+                className="flex items-center gap-2.5 sm:gap-3 p-3 rounded-md border border-hairline mb-3"
+                style={{ background: '#fffefb' }}
+              >
+                <div className="icon-plate shrink-0">
+                  <FileAudio className="h-3.5 w-3.5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p
+                    className="body-sm-strong text-ink truncate"
+                    title={fileName}
+                  >
                     {fileName}
                   </p>
-                  <p className="text-xs text-foreground/60">
-                    Click to change file
+                  <p className="caption text-body-muted mt-0.5">
+                    Loaded · awaiting transcription
                   </p>
                 </div>
                 <button
-                  className="glass-icon-button p-2 rounded-lg ml-2"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleClear();
                   }}
-                  disabled={isTranscribing}
+                  className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline text-body-muted hover:border-destructive hover:text-destructive transition-colors shrink-0"
+                  aria-label="Remove file"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5" />
                 </button>
               </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="p-4 rounded-2xl bg-white/30 dark:bg-white/10 w-fit mx-auto">
-                  {isSelectingFile ? (
-                    <Loader2 className="h-10 w-10 animate-spin text-foreground/60" />
-                  ) : (
-                    <Upload className="h-10 w-10 text-foreground/60" />
-                  )}
-                </div>
-                <p className="text-sm font-medium text-foreground">
-                  {isSelectingFile ? "Opening file picker..." : "Click to select an audio file"}
-                </p>
-                <p className="text-xs text-foreground/60">
-                  Supports WAV, MP3, M4A, FLAC, OGG, WebM
-                </p>
-              </div>
-            )}
-          </div>
 
-          {/* Transcribe Button */}
-          <button
-            onClick={handleTranscribe}
-            disabled={!selectedFile || isTranscribing}
-            className={cn(
-              "w-full mt-4 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition-all",
-              selectedFile && !isTranscribing
-                ? "text-white bg-foreground/90 hover:bg-foreground shadow-lg shadow-foreground/25"
-                : "glass-button opacity-50 cursor-not-allowed"
-            )}
-          >
-            {isTranscribing ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Transcribing...
-              </>
-            ) : (
-              <>
-                <FileAudio className="h-4 w-4" />
-                Transcribe
-              </>
-            )}
-          </button>
+              <button
+                onClick={handleTranscribe}
+                disabled={isTranscribing}
+                className="paper-button-primary w-full sm:w-auto"
+              >
+                {isTranscribing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {isTranscribing ? "Transcribing..." : "Transcribe file"}
+              </button>
+            </section>
+          )}
 
-          {/* Error Message */}
-          {error && (
-            <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          {/* ─── TRANSCRIPTION RESULT ─── */}
+          {transcription && (
+            <section className="paper-card">
+              <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
                 <div className="min-w-0 flex-1">
-                  <p>{error}</p>
-                  {selectedFile && !isTranscribing && (
-                    <button
-                      className="glass-button px-3 py-1.5 rounded-xl text-xs font-medium mt-3 flex items-center gap-1.5"
-                      onClick={handleTranscribe}
-                    >
-                      <RefreshCcw className="h-3.5 w-3.5" />
-                      Try Again
-                    </button>
-                  )}
+                  <p className="eyebrow-uppercase text-ink-mid mb-1">Result</p>
+                  <h3
+                    className="title-md text-ink"
+                  >
+                    Transcription
+                  </h3>
                 </div>
-              </div>
-            </div>
-          )}
-          {warning && (
-            <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-sm">
-              {warning}
-            </div>
-          )}
-        </div>
-
-        {/* Transcription Result */}
-        {(transcription || isTranscribing) && (
-          <div className="glass-card p-4 rounded-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
-                  <Check className="h-4 w-4 text-foreground/60" />
-                </div>
-                <h2 className="font-semibold text-sm text-foreground">
-                  Transcription
-                </h2>
-              </div>
-              {transcription && (
                 <button
-                  className="glass-button px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5"
                   onClick={handleCopy}
-                  disabled={copied}
+                  className="paper-button-outline size-md shrink-0 cursor-pointer"
+                  style={{ borderColor: copied ? '#ff4f00' : '#201515', color: copied ? '#ff4f00' : '#201515' }}
                 >
-                  <ClipboardCopy className="h-3.5 w-3.5" />
-                  {copied ? "Copied!" : "Copy"}
+                  {copied ? "Copied" : "Copy text"}
                 </button>
-              )}
-            </div>
+              </div>
 
-            {isTranscribing ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-foreground/60" />
-                <span className="ml-2 text-foreground/60">
-                  Processing audio...
+              <Textarea
+                readOnly
+                value={transcription}
+                className="paper-input min-h-[140px] sm:min-h-[180px] resize-none leading-relaxed"
+                style={{
+                  fontSize: 'var(--type-body-sm)',
+                  letterSpacing: '-0.005em',
+                  borderRadius: '8px',
+                }}
+              />
+
+              <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                <span className="inline-flex items-center gap-1 caption px-2 py-0.5 rounded-md bg-canvas-soft text-body">
+                  {transcription.trim().split(/\s+/).length} words
+                </span>
+                <span className="inline-flex items-center gap-1 caption px-2 py-0.5 rounded-md bg-canvas-soft text-body">
+                  {transcription.length} characters
                 </span>
               </div>
-            ) : (
-              <Textarea
-                value={transcription}
-                onChange={(e) => setTranscription(e.target.value)}
-                className="min-h-[200px] resize-none bg-white/30 dark:bg-white/5 border-white/30 dark:border-white/10 rounded-xl"
-                placeholder="Transcription will appear here..."
-              />
-            )}
-          </div>
-        )}
-
-        {/* Instructions */}
-        {!selectedFile && !transcription && (
-          <div className="glass-card p-4 rounded-2xl">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
-                <FileAudio className="h-4 w-4 text-foreground/60" />
-              </div>
-              <h3 className="font-semibold text-sm text-foreground">
-                How to use
-              </h3>
-            </div>
-            <ol className="text-sm text-foreground/70 space-y-2 list-decimal list-inside ml-1">
-              <li>Click the upload area to select an audio file</li>
-              <li>Click "Transcribe" to turn the audio into clean text</li>
-              <li>Copy the text or edit it as needed</li>
-            </ol>
-            <p className="text-xs text-foreground/60 mt-4 p-3 rounded-xl bg-white/30 dark:bg-white/10">
-              💡 For best results, use clear audio with minimal background
-              noise.
-            </p>
-          </div>
-        )}
+            </section>
+          )}
+        </div>
       </div>
     </div>
   );

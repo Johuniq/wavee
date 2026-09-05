@@ -9,6 +9,11 @@ import { invoke } from "@tauri-apps/api/core";
 // Types (matching Rust structs)
 // ============================================
 
+export interface DbVocabularyEntry {
+  spoken: string;
+  written: string;
+}
+
 export interface DbAppSettings {
   push_to_talk_key: string;
   toggle_key: string;
@@ -23,6 +28,9 @@ export interface DbAppSettings {
   post_processing_enabled: boolean;
   voice_commands_enabled: boolean;
   clipboard_mode: boolean;
+  auto_check_for_updates: boolean;
+  recording_overlay_position: string;
+  custom_vocabulary: DbVocabularyEntry[];
 }
 
 export interface DbAppState {
@@ -169,7 +177,8 @@ export async function dbGetAppDataDir(): Promise<string> {
 // Conversion Helpers (DB <-> Frontend types)
 // ============================================
 
-import type { AppSettings, WhisperModel } from "@/types";
+import type { AppSettings, ModelCapabilities, WhisperModel } from "@/types";
+import { MODEL_CAPABILITIES, WHISPER_MULTILINGUAL_LANGUAGES } from "@/types";
 
 export function dbSettingsToFrontend(db: DbAppSettings): AppSettings {
   return {
@@ -180,12 +189,17 @@ export function dbSettingsToFrontend(db: DbAppSettings): AppSettings {
     selectedModelId: db.selected_model_id,
     showRecordingIndicator: db.show_recording_indicator,
     showRecordingOverlay: db.show_recording_overlay ?? true,
+    recordingOverlayPosition: (db.recording_overlay_position as AppSettings["recordingOverlayPosition"]) ?? "top-center",
     playAudioFeedback: db.play_audio_feedback,
     postProcessingEnabled: db.post_processing_enabled,
     voiceCommandsEnabled: db.voice_commands_enabled ?? false,
     clipboardMode: db.clipboard_mode,
     autoStartOnBoot: db.auto_start_on_boot,
     minimizeToTray: db.minimize_to_tray,
+    autoCheckForUpdates: db.auto_check_for_updates ?? true,
+    customVocabulary: Array.isArray(db.custom_vocabulary)
+      ? db.custom_vocabulary
+      : [],
   };
 }
 
@@ -204,6 +218,12 @@ export function frontendSettingsToDb(settings: AppSettings): DbAppSettings {
     clipboard_mode: settings.clipboardMode,
     auto_start_on_boot: settings.autoStartOnBoot,
     minimize_to_tray: settings.minimizeToTray,
+    auto_check_for_updates: settings.autoCheckForUpdates,
+    recording_overlay_position: settings.recordingOverlayPosition,
+    custom_vocabulary: (settings.customVocabulary ?? []).map((entry) => ({
+      spoken: entry.spoken,
+      written: entry.written,
+    })),
   };
 }
 
@@ -215,7 +235,15 @@ export function dbModelToFrontend(db: DbWhisperModel): WhisperModel {
     languages = ["en"];
   }
 
-  return {
+  const capabilities: ModelCapabilities | undefined = MODEL_CAPABILITIES[db.id];
+
+  if (capabilities) {
+    languages = capabilities.supportedLanguages;
+  } else if (languages.includes("multilingual")) {
+    languages = WHISPER_MULTILINGUAL_LANGUAGES;
+  }
+
+  const model: WhisperModel = {
     id: db.id,
     name: db.name,
     size: db.size,
@@ -225,6 +253,12 @@ export function dbModelToFrontend(db: DbWhisperModel): WhisperModel {
     downloaded: db.downloaded,
     recommended: ["base", "parakeet-v3"].includes(db.id),
   };
+
+  if (capabilities) {
+    return { ...model, ...capabilities };
+  }
+
+  return model;
 }
 
 export function dbModelsToFrontend(dbModels: DbWhisperModel[]): WhisperModel[] {

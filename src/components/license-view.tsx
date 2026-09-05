@@ -10,33 +10,26 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/errors";
 import {
   activateLicense,
   deactivateLicense,
-  formatExpirationDate,
   getLicense,
   getLicenseStatusMessage,
   isLicenseActive,
   maskLicenseKey,
-  validateLicense,
   type LicenseData,
 } from "@/lib/license-api";
-import { openUrl } from "@/lib/utils";
+import { cn, openUrl } from "@/lib/utils";
 import { reportError } from "@/lib/voice-api";
 import {
   AlertCircle,
-  ArrowLeft,
   Check,
-  Clock,
-  ExternalLink,
+  Circle,
+  Copy,
   Key,
   Loader2,
-  RefreshCcw,
-  RefreshCw,
-  Shield,
   ShieldCheck,
   ShieldX,
   Sparkles,
@@ -49,53 +42,37 @@ interface LicenseViewProps {
   onLicenseChange?: (isValid: boolean) => void;
 }
 
-export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
+export function LicenseView({ onClose: _onClose, onLicenseChange }: LicenseViewProps) {
+  const { success: toastSuccess } = useToast();
   const [license, setLicense] = useState<LicenseData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isActivating, setIsActivating] = useState(false);
-  const [isValidating, setIsValidating] = useState(false);
-  const [isDeactivating, setIsDeactivating] = useState(false);
-  const [licenseKey, setLicenseKey] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const { success: toastSuccess, error: toastError } = useToast();
-
-  // Helper to keep production license errors user-friendly.
-  const extractErrorMessage = (err: any): string => {
-    try {
-      if (!err) return "Unknown error";
-      return getErrorMessage(err);
-    } catch (e) {
-      return "Unknown error";
-    }
-  };
-
-  // Load license on mount
-  useEffect(() => {
-    loadLicense();
-  }, []);
+  const [licenseKey, setLicenseKey] = useState("");
+  const [isActivating, setIsActivating] = useState(false);
+  const [isDeactivating, setIsDeactivating] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const loadLicense = async () => {
-    setIsLoading(true);
-    setError(null);
-    setLoadError(null);
     try {
+      setIsLoading(true);
+      setError(null);
       const data = await getLicense();
       setLicense(data);
-      onLicenseChange?.(data.is_activated && data.status === "active");
     } catch (err) {
-      const msg = extractErrorMessage(err) || "Failed to load license";
-      toastError("Failed to load license", msg);
-      setLoadError(msg);
-      await reportError("license", msg, "error", {
-        userAction: "Load license information",
+      const message = getErrorMessage(err);
+      console.error("Failed to load license:", err);
+      setError(message);
+      await reportError("license", message, "error", {
+        userAction: "Load license info",
       }).catch(console.error);
     } finally {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadLicense();
+  }, []);
 
   const handleActivate = async () => {
     if (!licenseKey.trim()) {
@@ -103,22 +80,19 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
       return;
     }
 
-    setIsActivating(true);
-    setError(null);
-    setSuccess(null);
-
     try {
+      setIsActivating(true);
+      setError(null);
       const data = await activateLicense(licenseKey.trim());
       setLicense(data);
       setLicenseKey("");
-      setSuccess("License activated successfully!");
-      toastSuccess("License activated", "License activated successfully");
+      toastSuccess("License activated", "Your license has been activated successfully");
       onLicenseChange?.(data.is_activated && data.status === "active");
     } catch (err) {
-      const msg = extractErrorMessage(err) || "Failed to activate license";
-      toastError("Activation failed", msg);
-      setError(msg);
-      await reportError("license", msg, "error", {
+      const message = getErrorMessage(err);
+      console.error("Activation failed:", err);
+      setError(message);
+      await reportError("license", message, "error", {
         userAction: "Activate license",
       }).catch(console.error);
     } finally {
@@ -126,57 +100,19 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
     }
   };
 
-  const handleValidate = async () => {
-    setIsValidating(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const data = await validateLicense();
-      setLicense(data);
-      if (data.is_activated && data.status === "active") {
-        toastSuccess("License validated", "License validated successfully");
-      } else {
-        setError(getLicenseStatusMessage(data.status));
-      }
-      onLicenseChange?.(data.is_activated && data.status === "active");
-    } catch (err) {
-      const msg = extractErrorMessage(err) || "Failed to validate license";
-      console.error("Failed to validate license:", err);
-      toastError("Validation failed", msg);
-      setError(msg);
-      await reportError("license", msg, "error", {
-        userAction: "Validate license",
-      }).catch(console.error);
-    } finally {
-      setIsValidating(false);
-    }
-  };
-
   const handleDeactivate = async () => {
-    setIsDeactivating(true);
-    setError(null);
-    setSuccess(null);
-
     try {
+      setIsDeactivating(true);
+      setError(null);
       await deactivateLicense();
-      // Reload license from database to get the correct status
-      // Status will be "trial_expired" if user had a trial, or "inactive" if not
-      const updatedLicense = await getLicense();
-      setLicense(updatedLicense);
-
-      const hadTrial = updatedLicense.trial_started_at !== null;
-      const message = hadTrial
-        ? "License deactivated. Your trial has already been used."
-        : "License deactivated. You can reactivate on this or another device.";
-      setSuccess(message);
+      toastSuccess("License deactivated", "Your license has been deactivated");
+      await loadLicense();
       onLicenseChange?.(false);
     } catch (err) {
-      const msg = extractErrorMessage(err) || "Failed to deactivate license";
-      console.error("Failed to deactivate license:", err);
-      toastError("Deactivate failed", msg);
-      setError(msg);
-      await reportError("license", msg, "error", {
+      const message = getErrorMessage(err);
+      console.error("Deactivation failed:", err);
+      setError(message);
+      await reportError("license", message, "error", {
         userAction: "Deactivate license",
       }).catch(console.error);
     } finally {
@@ -184,393 +120,279 @@ export function LicenseView({ onClose, onLicenseChange }: LicenseViewProps) {
     }
   };
 
-  const isActive = license ? isLicenseActive(license.status) : false;
-  const isTrial = license?.status === "trial";
-  const isTrialExpired = license?.status === "trial_expired";
-  const trialDaysRemaining = license?.trial_days_remaining;
+  const handleCopyLicense = async () => {
+    if (license?.license_key) {
+      try {
+        await navigator.clipboard.writeText(license.license_key);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        console.error("Copy failed:", err);
+      }
+    }
+  };
+
+  const active = license ? isLicenseActive(license.status) : false;
+  const statusMessage = license ? getLicenseStatusMessage(license.status) : null;
 
   return (
-    <div className="flex flex-col h-full relative overflow-hidden">
-      {/* Background mesh gradient */}
-      <div className="glass-mesh-bg" />
-
-      {/* Glass Header */}
-      <div className="border-b border-white/20 dark:border-white/10 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
-        <button
-          onClick={onClose}
-          className="glass-button px-1 py-1 rounded-xl text-xs font-medium text-red-500 hover:text-red-600 flex items-center gap-1"
-        >
-          <ArrowLeft className="h-4 w-4 text-foreground/70" />
-        </button>
-        <div className="flex items-center gap-2">
-          <h1 className="text-lg font-semibold">License</h1>
+    <div className="flex h-full flex-col overflow-hidden bg-canvas">
+      {/* ─── HEADER ─── */}
+      <div className="shrink-0 border-b border-hairline">
+        <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-3 sm:py-4">
+          <p className="eyebrow-uppercase text-ink-mid">License</p>
+          <h1
+            className="display-sm text-ink mt-1"
+          >
+            {active ? (
+              <>Your license is <span className="text-primary">active</span>.</>
+            ) : (
+              <>Unlock everything Wavee can do.</>
+            )}
+          </h1>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {isLoading ? (
-          <div className="flex-1 flex items-center justify-center py-12">
-            <div className="glass-card p-8 rounded-2xl flex flex-col items-center gap-3">
-              <Loader2 className="h-8 w-8 animate-spin text-foreground/60" />
-              <p className="text-sm text-foreground/60">
-                Loading license info...
-              </p>
+      <div className="flex-1 overflow-y-auto">
+        <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-4 xl:py-5 space-y-4 xl:space-y-5">
+          {error && (
+            <div className="p-3 rounded-md border border-destructive/30 bg-destructive/5 flex items-center gap-2.5 text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span className="body-sm">{error}</span>
             </div>
-          </div>
-        ) : loadError ? (
-          <div className="flex-1 flex items-center justify-center py-12">
-            <div className="glass-card p-8 rounded-2xl flex flex-col items-center text-center">
-              <div className="p-4 rounded-2xl bg-white/30 dark:bg-white/10 mb-4">
-                <AlertCircle className="h-10 w-10 text-red-500" />
-              </div>
-              <h3 className="font-semibold text-foreground mb-1">
-                License unavailable
-              </h3>
-              <p className="text-sm text-foreground/60">{loadError}</p>
-              <button
-                className="glass-button px-4 py-2 rounded-xl text-sm font-medium mt-4 flex items-center gap-2"
-                onClick={loadLicense}
-                disabled={isLoading}
-              >
-                <RefreshCcw className="h-4 w-4" />
-                Retry
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Status Card */}
-            <div className="glass-card p-4 rounded-2xl">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
-                    <Shield className="h-4 w-4 text-foreground/60" />
-                  </div>
-                  <h2 className="font-semibold text-sm text-foreground">
-                    License Status
-                  </h2>
-                </div>
-                {isTrial ? (
-                  <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-medium">
-                    <Clock className="h-3.5 w-3.5" />
-                    Trial
-                  </span>
-                ) : isTrialExpired ? (
-                  <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-medium">
-                    <Clock className="h-3.5 w-3.5" />
-                    Trial Expired
-                  </span>
-                ) : isActive ? (
-                  <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    Active
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/30 dark:bg-white/10 text-muted-foreground text-xs font-medium">
-                    <ShieldX className="h-3.5 w-3.5" />
-                    Inactive
-                  </span>
-                )}
-              </div>
+          )}
 
-              {/* Trial info */}
-              {isTrial &&
-                trialDaysRemaining !== null &&
-                trialDaysRemaining !== undefined && (
-                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 mb-4">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-amber-500" />
-                      <span className="text-sm text-amber-600 dark:text-amber-400 font-medium">
-                        {trialDaysRemaining} day
-                        {trialDaysRemaining !== 1 ? "s" : ""} remaining
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-body-muted" />
+                <p className="body-sm text-body-muted">Loading license info...</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* ─── HERO STATUS BAND — Dark coffee-ink ─── */}
+              <section className="hero-band-dark">
+                <div className="grid grid-cols-1 @xl:grid-cols-[1.4fr_1fr] gap-4 @xl:gap-6 p-4 sm:p-5 @xl:p-6 items-start @xl:items-center">
+                  <div className="min-w-0">
+                    <p className="eyebrow-uppercase text-primary mb-2">
+                      <span className="inline-flex items-center gap-2">
+                        <Circle className={cn(
+                          "h-1.5 w-1.5",
+                          active ? "fill-primary text-primary" : "fill-on-dark-muted text-on-dark-muted"
+                        )} />
+                        {active ? "Active" : "Not activated"}
                       </span>
-                    </div>
-                    <p className="text-xs text-foreground/60 mt-1">
-                      Purchase a license to unlock unlimited use
                     </p>
-                  </div>
-                )}
-
-              {/* Trial expired info */}
-              {isTrialExpired && (
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 mb-4">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-red-500" />
-                    <span className="text-sm text-red-600 dark:text-red-400 font-medium">
-                      Your trial has expired
-                    </span>
-                  </div>
-                  <p className="text-xs text-foreground/60 mt-1">
-                    Purchase a license to continue using Wavee
-                  </p>
-                </div>
-              )}
-
-              {license?.license_key && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-white/30 dark:bg-white/10">
-                    <span className="text-xs text-foreground/60">
-                      License Key
-                    </span>
-                    <code className="text-xs font-mono text-foreground/80">
-                      {maskLicenseKey(license.license_key)}
-                    </code>
-                  </div>
-                  {license.customer_email && (
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-white/30 dark:bg-white/10">
-                      <span className="text-xs text-foreground/60">Email</span>
-                      <span className="text-sm text-foreground/80">
-                        {license.customer_email}
-                      </span>
-                    </div>
-                  )}
-                  {license.customer_name && (
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-white/30 dark:bg-white/10">
-                      <span className="text-xs text-foreground/60">Name</span>
-                      <span className="text-sm text-foreground/80">
-                        {license.customer_name}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-white/30 dark:bg-white/10">
-                    <span className="text-xs text-foreground/60">
-                      Expiration
-                    </span>
-                    <span className="text-sm text-foreground/80">
-                      {formatExpirationDate(license.expires_at)}
-                    </span>
-                  </div>
-                  {license.last_validated_at && (
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-white/30 dark:bg-white/10">
-                      <span className="text-xs text-foreground/60">
-                        Last Validated
-                      </span>
-                      <span className="text-sm text-foreground/80">
-                        {new Date(
-                          license.last_validated_at,
-                        ).toLocaleDateString()}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-white/30 dark:bg-white/10">
-                    <span className="text-xs text-foreground/60">
-                      Activations
-                    </span>
-                    <span className="text-sm text-foreground/80">
-                      {license.usage}
-                      {license.limit_activations
-                        ? ` / ${license.limit_activations}`
-                        : ""}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {!license?.license_key && !isTrial && (
-                <p className="text-sm text-foreground/70 p-3 rounded-xl bg-white/30 dark:bg-white/10">
-                  No license activated. Enter your license key below to unlock
-                  all features.
-                </p>
-              )}
-            </div>
-
-            {/* Error/Success Messages */}
-            {error && (
-              <div className="glass-card p-3 rounded-2xl border-red-500/30 bg-red-500/10 flex items-center gap-2 text-red-600 dark:text-red-400">
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                <span className="text-sm">{error}</span>
-              </div>
-            )}
-            {success && (
-              <div className="glass-card p-3 rounded-2xl border-green-500/30 bg-green-500/10 flex items-center gap-2 text-green-600 dark:text-green-400">
-                <Check className="h-4 w-4 flex-shrink-0" />
-                <span className="text-sm">{success}</span>
-              </div>
-            )}
-
-            {/* Activate License */}
-            {(!isActive || isTrial) && !license?.license_key && (
-              <div className="glass-card p-4 rounded-2xl">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
-                    <Key className="h-4 w-4 text-foreground/60" />
-                  </div>
-                  <div>
-                    <h2 className="font-semibold text-sm text-foreground">
-                      {isTrial ? "Upgrade to Pro" : "Activate License"}
+                    <h2 className="display-md text-on-dark">
+                      {active ? (
+                        <>You're all set.</>
+                      ) : (
+                        <>
+                          Wavee is <span className="text-primary">unlocked</span> with a license.
+                        </>
+                      )}
                     </h2>
-                    <p className="text-xs text-foreground/60">
-                      {isTrial
-                        ? "Enter your license key to unlock unlimited access"
-                        : "Enter your license key to activate Wavee Pro"}
+                    <p className="body-sm text-on-dark-soft mt-2 max-w-xl">
+                      {active
+                        ? statusMessage || "Your license is valid and active on this device."
+                        : "Activate a license to unlock unlimited transcriptions, all models, and premium features."}
                     </p>
                   </div>
-                </div>
 
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="license-key"
-                      className="text-xs font-medium text-foreground/60 uppercase tracking-wider"
+                  <div className="product-ui-card-dark w-full">
+                    <div className="flex items-center gap-2.5 mb-3">
+                      <div className={cn(
+                        "shrink-0",
+                        active ? "icon-plate-dark border-primary" : "icon-plate-dark"
+                      )} style={active ? { background: 'rgba(255,79,0,0.15)', borderColor: 'rgba(255,79,0,0.4)' } : {}}>
+                        {active ? (
+                          <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                        ) : (
+                          <ShieldX className="h-3.5 w-3.5 text-on-dark-soft" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="caption-strong text-on-dark">Status</p>
+                        <p className="caption text-on-dark-soft mt-0.5">
+                          {active ? "License verified" : "No license on this device"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {license?.license_key && (
+                      <>
+                        <p className="caption-strong text-on-dark-muted mb-1.5">License key</p>
+                        <div className="flex items-center gap-2">
+                          <code
+                            className="flex-1 px-2.5 py-2 rounded-md text-xs font-mono text-on-dark truncate"
+                            style={{ background: '#14100e', border: '1px solid #36342e' }}
+                          >
+                            {maskLicenseKey(license.license_key)}
+                          </code>
+                          <button
+                            onClick={handleCopyLicense}
+                            className="shrink-0 flex h-8 w-8 items-center justify-center rounded-md border border-hairline-soft text-on-dark-soft hover:text-on-dark hover:border-on-dark-soft transition-colors"
+                            style={{ borderColor: '#36342e' }}
+                            aria-label="Copy license key"
+                          >
+                            {copied ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              {/* ─── ACTIVATION FORM — Cream surface ─── */}
+              {!active && (
+                <section className="card-feature-cream">
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <div className="icon-plate">
+                      <Key className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="eyebrow-uppercase text-ink-mid">Activate</p>
+                      <h3
+                        className="title-md text-ink mt-0.5"
+                      >
+                        Enter your license key
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="caption-strong text-ink-mid mb-1.5 block">License key</label>
+                      <Input
+                        value={licenseKey}
+                        onChange={(e) => setLicenseKey(e.target.value)}
+                        placeholder="XXXXX-XXXXX-XXXXX-XXXXX"
+                        className="paper-input h-9 text-sm font-m"
+                        style={{ borderRadius: '8px' }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleActivate();
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <button
+                        onClick={handleActivate}
+                        disabled={isActivating || !licenseKey.trim()}
+                        className="paper-button-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isActivating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                        {isActivating ? "Activating..." : "Activate license"}
+                      </button>
+                      <p className="caption text-body-muted">
+                        Press Enter to activate
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* ─── DEACTIVATION — Cream surface with destructive accent ─── */}
+              {active && (
+                <section className="paper-card" style={{ borderColor: 'rgba(207,32,47,0.25)' }}>
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div
+                      className="flex h-9 w-9 items-center justify-center rounded-full"
+                      style={{ background: 'rgba(207,32,47,0.1)', color: '#cf202f' }}
                     >
-                      License Key
-                    </Label>
-                    <Input
-                      id="license-key"
-                      placeholder="Paste your Wavee license key"
-                      value={licenseKey}
-                      onChange={(e) => setLicenseKey(e.target.value)}
-                      disabled={isActivating}
-                      className="bg-white/30 dark:bg-white/5 border-white/30 dark:border-white/10 rounded-xl"
-                    />
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="title-md text-ink">
+                        Deactivate on this device
+                      </h3>
+                      <p className="body-sm text-body-muted mt-1">
+                        Removes the license from this machine. You can reactivate anytime.
+                      </p>
+                    </div>
                   </div>
-                  <button
-                    className="w-full py-2.5 rounded-xl flex items-center glass-button justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25 disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={handleActivate}
-                    disabled={
-                      isActivating ||
-                      isValidating ||
-                      isDeactivating ||
-                      !licenseKey.trim()
-                    }
-                  >
-                    {isActivating ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Activating...
-                      </>
-                    ) : (
-                      <>
-                        <Shield className="h-4 w-4" />
-                        Activate License
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Manage License */}
-            {license?.license_key && (
-              <div className="glass-card p-4 rounded-2xl">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
-                    <RefreshCw className="h-4 w-4 text-foreground/60" />
-                  </div>
-                  <h2 className="font-semibold text-sm text-foreground">
-                    Manage License
-                  </h2>
-                </div>
-
-                <div className="space-y-2">
-                  <button
-                    className="glass-button w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium"
-                    onClick={handleValidate}
-                    disabled={isValidating}
-                    title={
-                      isDeactivating
-                        ? "Wait for deactivation to finish"
-                        : undefined
-                    }
-                  >
-                    {isValidating ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Validating...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="h-4 w-4" />
-                        Validate License
-                      </>
-                    )}
-                  </button>
-
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <button
-                        className="w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-red-500 hover:text-red-600 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition-all"
+                        className="paper-button-outline cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                        style={{ borderColor: '#cf202f', color: '#cf202f' }}
                         disabled={isDeactivating}
                       >
-                        {isDeactivating ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Deactivating...
-                          </>
-                        ) : (
-                          <>
-                            <Trash2 className="h-4 w-4" />
-                            Deactivate License
-                          </>
-                        )}
+                        {isDeactivating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                        {isDeactivating ? "Deactivating..." : "Deactivate license"}
                       </button>
                     </AlertDialogTrigger>
-                    <AlertDialogContent className="glass-card border-0">
+                    <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Deactivate License?</AlertDialogTitle>
+                        <AlertDialogTitle>Deactivate license?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This will deactivate your license on this device. You
-                          can reactivate it later or activate it on another
-                          device.
+                          This will remove the license from this device. You can reactivate it later.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel className="glass-button">
-                          Cancel
-                        </AlertDialogCancel>
+                        <AlertDialogCancel className="paper-button-secondary">Cancel</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={handleDeactivate}
-                          disabled={isDeactivating}
-                          className="bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600"
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
                           Deactivate
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
-                </div>
-              </div>
-            )}
+                </section>
+              )}
 
-            {/* Buy License - Only show when user doesn't have active license */}
-            {(!isActive || isTrial || isTrialExpired) && (
-              <div className="glass-card p-4 rounded-2xl overflow-hidden relative">
-                <div className="relative">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
-                      <Sparkles className="h-4 w-4 text-foreground/60" />
-                    </div>
-                    <div>
-                      <h2 className="font-semibold text-sm text-foreground">
-                        {isTrial || isTrialExpired
-                          ? "Upgrade to Pro"
-                          : "Get Wavee Pro"}
-                      </h2>
-                      <p className="text-xs text-foreground/60">
-                        {isTrial
-                          ? "Continue using Wavee after your trial ends"
-                          : isTrialExpired
-                            ? "Your trial has ended - purchase to continue"
-                            : "Unlock all features with a Pro license"}
+              {/* ─── PURCHASE CTA — Orange-accented cream band ─── */}
+              {!active && (
+                <section className="card-feature-cream relative overflow-hidden">
+                  {/* Decorative orange glow */}
+                  <div
+                    aria-hidden
+                    className="absolute -top-12 -right-12 h-48 w-48 pointer-events-none"
+                    style={{
+                      background: 'radial-gradient(circle, rgba(255,79,0,0.18), transparent 70%)',
+                    }}
+                  />
+                  <div className="relative grid grid-cols-1 @xl:grid-cols-[1.4fr_1fr] gap-4 @xl:gap-5 items-center">
+                    <div className="min-w-0">
+                      <p className="eyebrow-uppercase text-primary mb-2">
+                        <span className="inline-flex items-center gap-2">
+                          <Sparkles className="h-3 w-3" />
+                          Get a license
+                        </span>
+                      </p>
+                      <h3
+                        className="display-xs text-ink"
+                      >
+                        Unlock unlimited transcriptions and premium models.
+                      </h3>
+                      <p className="body-sm text-body-muted mt-2 max-w-md">
+                        Every license supports ongoing development and keeps your voice data local.
                       </p>
                     </div>
+                    <div className="flex flex-wrap gap-2 @xl:justify-end">
+                      <button
+                        onClick={() => openUrl("https://github.com/johuniq/wavee")}
+                        className="paper-button-primary cursor-pointer"
+                      >
+                        Learn more
+                      </button>
+                      <button
+                        onClick={() => openUrl("https://github.com/johuniq/wavee/releases/latest")}
+                        className="paper-button-outline cursor-pointer"
+                      >
+                        Releases
+                      </button>
+                    </div>
                   </div>
-
-                  <button
-                    className="glass-button w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
-                    onClick={() => openUrl("https://trywavee.johuniq.tech")}
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    {isTrial || isTrialExpired
-                      ? "Upgrade Now"
-                      : "Purchase License"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+                </section>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

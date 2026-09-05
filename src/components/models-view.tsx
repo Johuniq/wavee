@@ -9,7 +9,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -36,20 +35,21 @@ import {
   type ModelBadgeCategory,
   type WhisperModel,
 } from "@/types";
+import { LANGUAGE_NAMES } from "@/types";
 import {
-  ArrowLeft,
   AlertCircle,
+  ArrowRight,
   Check,
   Cpu,
-  Download,
   Gauge,
+  Globe,
   HardDrive,
   Loader2,
-  RefreshCcw,
   Star,
   Trash2,
   X,
   Zap,
+  Circle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -57,7 +57,7 @@ interface ModelsViewProps {
   onClose: () => void;
 }
 
-export function ModelsView({ onClose }: ModelsViewProps) {
+export function ModelsView(_props: ModelsViewProps) {
   const {
     initializeFromDb,
     selectedModel,
@@ -251,18 +251,15 @@ export function ModelsView({ onClose }: ModelsViewProps) {
 
   const categoryIcon = (category: ModelBadgeCategory) => {
     if (category === "recommended") {
-      return <Star className="h-3.5 w-3.5" />;
+      return <Star className="h-3 w-3" />;
     }
-
     if (category === "accurate") {
-      return <Gauge className="h-3.5 w-3.5" />;
+      return <Gauge className="h-3 w-3" />;
     }
-
     if (category === "fast") {
-      return <Zap className="h-3.5 w-3.5" />;
+      return <Zap className="h-3 w-3" />;
     }
-
-    return <HardDrive className="h-3.5 w-3.5" />;
+    return <HardDrive className="h-3 w-3" />;
   };
 
   const categoryLabel: Record<ModelBadgeCategory, string> = {
@@ -272,335 +269,433 @@ export function ModelsView({ onClose }: ModelsViewProps) {
     compact: "Small",
   };
 
+  const categoryAccent: Record<ModelBadgeCategory, string> = {
+    recommended: "bg-primary/10 text-primary",
+    accurate: "bg-canvas-soft text-ink",
+    fast: "bg-canvas-soft text-ink",
+    compact: "bg-canvas-soft text-ink",
+  };
+
   const isBusy = Boolean(downloadingModelId || deletingModelId);
   const hasModels = availableModels.length > 0;
+  const downloadedCount = availableModels.filter(m => m.downloaded).length;
+  const currentLanguageName =
+    languageOptions.find((l) => l.code === selectedLanguage)?.name ??
+    (selectedLanguage === "auto" ? "Auto detect" : selectedLanguage.toUpperCase());
 
   return (
-    <div className="flex flex-col h-full relative overflow-hidden">
-      <div className="glass-mesh-bg" />
-
-      <div className="border-b border-white/20 dark:border-white/10 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onClose}
-            className="glass-button px-1 py-1 rounded-xl text-xs font-medium text-red-500 hover:text-red-600 flex items-center gap-1"
+    <div className="flex h-full flex-col overflow-hidden bg-canvas">
+      {/* ─── HEADER ─── */}
+      <div className="shrink-0 border-b border-hairline">
+        <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-3 sm:py-4">
+          <p className="eyebrow-uppercase text-ink-mid">Models</p>
+          <h1
+            className="display-sm text-ink mt-1"
           >
-            <ArrowLeft className="h-4 w-4 text-foreground/70" />
-          </button>
-          <h1 className="text-lg font-semibold">Models</h1>
+            Choose your <span className="text-primary">engine</span>.
+          </h1>
         </div>
-        {selectedModel && (
-          <span className="glass-status max-w-[150px] truncate text-xs">
-            {selectedModel.name}
-          </span>
-        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto">
         {!isInitialized ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="glass-card p-8 rounded-2xl flex flex-col items-center gap-3">
-              <Loader2 className="h-8 w-8 animate-spin text-foreground/60" />
-              <p className="text-sm text-foreground/60">Loading models...</p>
+          <div className="flex items-center justify-center h-full p-6">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-body-muted" />
+              <p className="body-sm text-body-muted">Loading models...</p>
             </div>
           </div>
         ) : !hasModels || pageError ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="glass-card p-8 rounded-2xl flex flex-col items-center text-center">
-              <div className="p-4 rounded-2xl bg-white/30 dark:bg-white/10 mb-4">
-                <AlertCircle className="h-10 w-10 text-foreground/60" />
+          <div className="flex items-center justify-center h-full p-6">
+            <div className="paper-card p-6 flex flex-col items-center text-center max-w-sm">
+              <div className="icon-plate-orange mb-4">
+                <AlertCircle className="h-4 w-4" />
               </div>
-              <h3 className="font-semibold text-foreground mb-1">
+              <h3 className="title-md text-ink">
                 Models unavailable
               </h3>
-              <p className="text-sm text-foreground/60">
+              <p className="body-sm text-body-muted mt-1.5">
                 {pageError || "The model list could not be loaded."}
               </p>
               <button
-                className="glass-button px-4 py-2 rounded-xl text-sm font-medium mt-4 flex items-center gap-2"
+                className="paper-button-primary mt-4 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={handleRetryLoad}
                 disabled={isRetrying}
               >
-                {isRetrying ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCcw className="h-4 w-4" />
-                )}
-                Retry
+                {isRetrying ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {isRetrying ? "Retrying..." : "Retry"}
               </button>
             </div>
           </div>
         ) : (
-        <div className="glass-card p-4 rounded-2xl space-y-4">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
-              <Cpu className="h-4 w-4 text-foreground/60" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-sm text-foreground">
-                Transcription Model
-              </h2>
-              <p className="text-xs text-foreground/60">
-                Choose the model used for dictation
-              </p>
-            </div>
-          </div>
+          <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-4 xl:py-5 space-y-4 xl:space-y-5">
 
-          {selectedModel && (
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-foreground/60 uppercase tracking-wider">
-                Spoken Language
-              </Label>
-              <Select
-                value={selectedLanguage}
-                onValueChange={(language) => {
-                  try {
-                    updateSettings({ language });
-                  } catch (err) {
-                    const message = getErrorMessage(err);
-                    setPageError(message);
-                    reportError("configuration", message, "error", {
-                      userAction: "Change spoken language",
-                    }).catch(console.error);
-                  }
-                }}
-                disabled={isBusy || languageOptions.length === 0}
-              >
-                <SelectTrigger className="glass-button border-0 h-10">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="glass-card border-0 max-h-72">
-                  {languageOptions.map((language) => (
-                    <SelectItem key={language.code} value={language.code}>
-                      {language.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-foreground/60">
-                Only languages supported by {selectedModel.name} are shown.
-                Changing this reloads the model before the next recording.
-              </p>
-            </div>
-          )}
+            {/* ─── HERO STATUS BAND — Dark coffee ink ─── */}
+            <section className="hero-band-dark">
+              <div className="grid grid-cols-1 @xl:grid-cols-[1.4fr_1fr] gap-4 @xl:gap-5 p-4 sm:p-5 @xl:p-6 items-start @xl:items-center">
+                <div className="min-w-0">
+                  <p className="eyebrow-uppercase text-primary mb-2">
+                    <span className="inline-flex items-center gap-2">
+                      <Circle className="h-1.5 w-1.5 fill-primary text-primary" />
+                      Local transcription
+                    </span>
+                  </p>
+<h2
+                    className="display-md text-on-dark"
+                  >
+                    {downloadedCount > 0
+                      ? <>You have <span className="text-primary">{downloadedCount}</span> model{downloadedCount === 1 ? "" : "s"} ready.</>
+                      : <>Download your first model to start.</>}
+                  </h2>
+                  <p className="body-sm text-on-dark-soft mt-2 max-w-xl">
+                    {selectedModel
+                      ? `Currently using ${selectedModel.name}. Download more below to compare speed, accuracy, and size.`
+                      : "Pick a model that fits your machine. Smaller models load faster; larger ones transcribe more accurately."}
+                  </p>
+                </div>
 
-          {!selectedModel && (
-            <div className="p-3 rounded-xl bg-white/30 dark:bg-white/5 border border-white/30 dark:border-white/10">
-              <p className="text-sm font-medium text-foreground">
-                No active model
-              </p>
-              <p className="text-xs text-foreground/60 mt-1">
-                Download a model, then choose Use to start dictating.
-              </p>
-            </div>
-          )}
-
-          <div className="h-px bg-border/50" />
-
-          <div className="space-y-2">
-            {availableModels.map((model) => {
-              const isActive = selectedModel?.id === model.id;
-              const isDownloading = downloadingModelId === model.id;
-              const isCanceling = cancelingModelId === model.id;
-              const isDeleting = deletingModelId === model.id;
-              const categories = getModelCategories(model);
-
-              return (
-                <div
-                  key={model.id}
-                  className={cn(
-                    "p-3 rounded-xl border transition-all",
-                    "bg-white/30 dark:bg-white/5 border-white/30 dark:border-white/10",
-                    model.downloaded &&
-                      "cursor-pointer hover:bg-white/50 dark:hover:bg-white/10",
-                    isActive &&
-                      "ring-2 ring-foreground/30 border-foreground/20 bg-foreground/5"
-                  )}
-                  onClick={() => handleSelectModel(model)}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm text-foreground">
-                          {model.name}
-                        </span>
-                        {isActive && (
-                          <span className="glass-status text-xs bg-foreground/90 text-white px-2 py-0.5 rounded-full font-medium">
-                            Active
-                          </span>
-                        )}
-                        {model.downloaded && !isActive && (
-                          <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                            <Check className="h-3 w-3" />
-                            Ready
-                          </span>
-                        )}
+                {/* Right: language picker card */}
+                {selectedModel ? (
+                  <div className="product-ui-card-dark w-full">
+                    <div className="flex items-center gap-2.5 mb-3">
+                      <div className="icon-plate-dark">
+                        <Globe className="h-3.5 w-3.5 text-on-dark" />
                       </div>
-                      {categories.length > 0 && (
-                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                          {categories.map((category) => (
-                            <span
-                              key={category}
-                              className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-white/50 dark:bg-white/10 text-foreground/60"
-                            >
-                              {categoryIcon(category)}
-                              {categoryLabel[category]}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <p className="text-xs text-foreground/60 mt-1 leading-relaxed">
-                        {model.description}
-                      </p>
-                      <div className="flex items-center gap-3 mt-2 text-xs text-foreground/60">
-                        <span className="inline-flex items-center gap-1">
-                          <HardDrive className="h-3 w-3" />
-                          {model.size}
-                        </span>
-                        <span>{getModelLanguageLabel(model)}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="caption-strong text-on-dark">Spoken language</p>
+                        <p className="caption text-on-dark-soft mt-0.5 truncate">{currentLanguageName}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {model.downloaded ? (
-                        <>
-                          {!isActive && (
-                            <button
-                              className="glass-button px-2 py-1 text-xs font-medium rounded-lg"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleSelectModel(model);
-                              }}
-                              disabled={isBusy}
-                            >
-                              Use
-                            </button>
-                          )}
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <button
-                                className="glass-icon-button p-1.5 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                                onClick={(event) => event.stopPropagation()}
-                                disabled={isDeleting || isBusy}
-                              >
-                                {isDeleting ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                )}
-                              </button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent
-                              className="glass-card border-0"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete model?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This removes {model.name} from local storage.
-                                  You can download it again later.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel className="glass-button">
-                                  Cancel
-                                </AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeleteModel(model)}
-                                  disabled={isBusy}
-                                  className="bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600"
+                    {languageOptions.length > 0 ? (
+                      <Select
+                        value={selectedLanguage}
+                        onValueChange={(language) => {
+                          try {
+                            updateSettings({ language });
+                          } catch (err) {
+                            const message = getErrorMessage(err);
+                            setPageError(message);
+                            reportError("configuration", message, "error", {
+                              userAction: "Change spoken language",
+                            }).catch(console.error);
+                          }
+                        }}
+                        disabled={isBusy}
+                      >
+                        <SelectTrigger
+                          className="border-0 h-9 text-on-dark cursor-pointer"
+                          style={{ background: '#14100e', borderRadius: '8px' }}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {languageOptions.map((language) => (
+                            <SelectItem key={language.code} value={language.code}>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="caption-strong uppercase flex h-5 w-8 items-center justify-center rounded"
+                                  style={{ background: '#f8f4f0', color: '#605d52', letterSpacing: '0.05em' }}
                                 >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <button
-                            className="glass-button px-2 py-1 text-xs font-medium rounded-lg flex items-center gap-1"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleDownloadModel(model);
-                            }}
-                            disabled={downloadingModelId !== null}
-                            title={
-                              downloadingModelId && !isDownloading
-                                ? "Wait for the current download to finish"
-                                : undefined
-                            }
-                          >
-                            {isDownloading ? (
-                              <>
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                {Math.floor(downloadProgress)}%
-                              </>
-                            ) : (
-                              <>
-                                <Download className="h-3 w-3" />
-                                Download
-                              </>
-                            )}
-                          </button>
-                          {isDownloading && (
-                            <button
-                              className="glass-icon-button p-1.5 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleCancelDownload(model);
-                              }}
-                              disabled={isCanceling}
-                              title="Cancel download"
-                            >
-                              {isCanceling ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <X className="h-3.5 w-3.5" />
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      )}
+                                  {language.code === "auto" ? "AUTO" : language.code}
+                                </span>
+                                <span>{language.name}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p className="caption text-on-dark-soft">
+                        No languages configured for {selectedModel.name}.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="product-ui-card-dark w-full">
+                    <div className="flex items-center gap-2.5">
+                      <div className="icon-plate-dark">
+                        <Cpu className="h-3.5 w-3.5 text-on-dark" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="caption-strong text-on-dark">No active model</p>
+                        <p className="caption text-on-dark-soft mt-0.5">Download one below to begin.</p>
+                      </div>
                     </div>
                   </div>
+                )}
+              </div>
+            </section>
 
-                  {isDownloading && (
-                    <div className="mt-3">
-                      <div className="h-1.5 bg-white/30 dark:bg-white/10 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-foreground/80 transition-all duration-300 rounded-full"
-                          style={{ width: `${downloadProgress}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-foreground/60 mt-1">
-                        {isCanceling
-                          ? "Canceling download..."
-                          : "Keep Wavee open while this downloads."}
-                      </p>
-                    </div>
-                  )}
+            {/* ─── MODELS LIST ─── */}
+            <section className="flex flex-col gap-3 sm:gap-4">
+              <div className="flex items-end justify-between gap-2 flex-wrap">
+                <div className="min-w-0">
+                  <p className="eyebrow-uppercase text-ink-mid">Available</p>
+                  <h2
+                    className="display-xs text-ink mt-1"
+                  >
+                    All models
+                  </h2>
+                </div>
+                <p className="caption text-body-muted">
+                  {availableModels.length} total · {downloadedCount} downloaded
+                </p>
+              </div>
 
-                  {rowErrors[model.id] && (
-                    <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+              <div className="grid grid-cols-1 min-[640px]:grid-cols-2 @3xl:grid-cols-2 gap-3 sm:gap-4">
+                {availableModels.map((model) => {
+                  const isActive = selectedModel?.id === model.id;
+                  const isDownloading = downloadingModelId === model.id;
+                  const isCanceling = cancelingModelId === model.id;
+                  const isDeleting = deletingModelId === model.id;
+                  const categories = getModelCategories(model);
+
+                  return (
+                    <div
+                      key={model.id}
+                      className={cn(
+                        "paper-card relative transition-all",
+                        model.downloaded && "cursor-pointer",
+                        isActive && "border-ink shadow-[0_8px_24px_-16px_rgba(32,21,21,0.25)]"
+                      )}
+                      onClick={() => handleSelectModel(model)}
+                    >
+                      {/* Active indicator stripe */}
+                      {isActive && (
+                        <div className="absolute left-0 top-4 bottom-4 w-1 bg-primary rounded-r-full" />
+                      )}
+
+                      <div className="flex items-start justify-between gap-2.5 sm:gap-3">
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium text-red-500">
-                            Action failed
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3
+                              className="title-sm text-ink"
+                            >
+                              {model.name}
+                            </h3>
+                            {isActive && (
+                              <span className="caption-strong text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                                Active
+                              </span>
+                            )}
+                            {model.downloaded && !isActive && (
+                              <span className="caption-strong flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ color: '#05b169', background: 'rgba(5,177,105,0.1)' }}>
+                                <Check className="h-2.5 w-2.5" />
+                                Ready
+                              </span>
+                            )}
+                          </div>
+
+                          {categories.length > 0 && (
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                              {categories.map((category) => (
+                                <span
+                                  key={category}
+                                  className={cn(
+                                    "inline-flex items-center gap-1 caption px-1.5 py-0.5 rounded-full",
+                                    categoryAccent[category],
+                                  )}
+                                >
+                                  {categoryIcon(category)}
+                                  {categoryLabel[category]}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          <p className="body-sm text-body-muted mt-1.5 leading-relaxed">
+                            {model.description}
                           </p>
-                          <p className="text-xs text-red-500/80 mt-0.5 break-words">
-                            {rowErrors[model.id]}
-                          </p>
+
+                          <div className="flex items-center gap-2.5 mt-2 caption text-body-muted flex-wrap">
+                            <span className="inline-flex items-center gap-1">
+                              <HardDrive className="h-2.5 w-2.5" />
+                              {model.size}
+                            </span>
+                            <span className="h-1 w-1 rounded-full bg-body-mid shrink-0" />
+                            <span className="inline-flex items-center gap-1">
+                              {getModelLanguageLabel(model)}
+                              {isActive &&
+                                selectedLanguage &&
+                                languageOptions.some(
+                                  (l) => l.code === selectedLanguage,
+                                ) && (
+                                  <span className="body-sm-strong text-ink">
+                                    · {LANGUAGE_NAMES[selectedLanguage] ?? selectedLanguage}
+                                  </span>
+                                )}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {model.downloaded ? (
+                            <>
+                              {!isActive && (
+                                <button
+                                  className="paper-button-outline size-sm cursor-pointer"
+                                  style={{ borderColor: '#201515', color: '#201515' }}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleSelectModel(model);
+                                  }}
+                                  disabled={isBusy}
+                                >
+                                  Use
+                                </button>
+                              )}
+                              {isActive && (
+                                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-on-dark">
+                                  <Check className="h-3.5 w-3.5" />
+                                </div>
+                              )}
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <button
+                                    className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline text-body-muted hover:border-destructive hover:text-destructive transition-colors"
+                                    onClick={(event) => event.stopPropagation()}
+                                    disabled={isDeleting || isBusy}
+                                    aria-label={`Delete ${model.name}`}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete model?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This removes {model.name} from local storage.
+                                      You can download it again later.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel className="paper-button-secondary">Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeleteModel(model)}
+                                      disabled={isBusy}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                className="paper-button-primary size-sm cursor-pointer"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleDownloadModel(model);
+                                }}
+                                disabled={downloadingModelId !== null}
+                                title={
+                                  downloadingModelId && !isDownloading
+                                    ? "Wait for the current download to finish"
+                                    : undefined
+                                }
+                              >
+                                {isDownloading ? (
+                                  <>
+                                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                                    {Math.floor(downloadProgress)}%
+                                  </>
+                                ) : (
+                                  "Download"
+                                )}
+                              </button>
+                              {isDownloading && (
+                                <button
+                                  className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline text-body-muted hover:border-destructive hover:text-destructive transition-colors"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleCancelDownload(model);
+                                  }}
+                                  disabled={isCanceling}
+                                  title="Cancel download"
+                                  aria-label="Cancel download"
+                                >
+                                  {isCanceling ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <X className="h-3 w-3" />
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
+
+                      {/* Download progress */}
+                      {isDownloading && (
+                        <div className="mt-3">
+                          <div className="h-1 bg-canvas-soft rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-primary transition-all duration-300 rounded-full"
+                              style={{ width: `${downloadProgress}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between mt-1.5">
+                            <p className="caption text-body-muted">
+                              {isCanceling
+                                ? "Canceling download..."
+                                : "Keep Wavee open while this downloads."}
+                            </p>
+                            <p className="caption-strong text-primary">
+                              {Math.floor(downloadProgress)}%
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Row errors */}
+                      {rowErrors[model.id] && (
+                        <div className="mt-3 p-2.5 rounded-md border border-destructive/30 bg-destructive/5">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="h-3.5 w-3.5 text-destructive mt-0.5 flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="caption-strong text-destructive">
+                                Action failed
+                              </p>
+                              <p className="body-sm text-destructive/80 mt-1 break-words">
+                                {rowErrors[model.id]}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* ─── FOOTER NOTE — Local-only privacy ─── */}
+            <section className="card-feature-cream">
+              <div className="grid grid-cols-1 @xl:grid-cols-[auto_1fr_auto] gap-3 @xl:gap-5 items-start @xl:items-center">
+                <div className="icon-plate-orange shrink-0">
+                  <HardDrive className="h-4 w-4" />
                 </div>
-              );
-            })}
+                <div className="min-w-0">
+                  <p className="eyebrow-uppercase text-ink-mid mb-1">Local-only</p>
+                  <h3
+                    className="title-md text-ink"
+                  >
+                    Models live on your device.
+                  </h3>
+                  <p className="body-sm text-body-muted mt-1.5 max-w-xl">
+                    Downloaded models run entirely offline. Audio never leaves your machine while transcribing.
+                  </p>
+                </div>
+                <ArrowRight className="h-4 w-4 text-body-muted hidden @xl:block" />
+              </div>
+            </section>
           </div>
-        </div>
         )}
       </div>
     </div>

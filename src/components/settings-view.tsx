@@ -1,4 +1,3 @@
-import { Logo } from "@/components/logo";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -8,127 +7,66 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { UpdaterView } from "@/components/updater-view";
 import { useToast } from "@/hooks/use-toast";
-import {
-  downloadFile,
-  exportAppData,
-  getStorageStats,
-} from "@/lib/data-management";
 import { setAutoStart } from "@/lib/preferences-api";
 import { cn } from "@/lib/utils";
 import { reportError } from "@/lib/voice-api";
 import { useAppStore } from "@/store";
 import {
   AlertCircle,
-  ArrowLeft,
-  ChevronRight,
-  Database,
-  FileDown,
+  Circle,
+  Clipboard,
   Keyboard,
-  Loader2,
-  RefreshCcw,
-  RotateCcw,
+  Maximize2,
+  Monitor,
+  Power,
+  RefreshCw,
   Sparkles,
   Volume2,
   Waves,
+  Zap,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { Logo } from "@/components/logo";
 
 interface SettingsViewProps {
   onClose: () => void;
 }
 
-export function SettingsView({ onClose }: SettingsViewProps) {
-  const { settings, updateSettings, resetSettings } = useAppStore();
-  const { success: toastSuccess, error: toastError } = useToast();
+export function SettingsView(_props: SettingsViewProps) {
+  const { settings, updateSettings } = useAppStore();
+  const { error: toastError, success: toastSuccess } = useToast();
 
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
-  const [settingsError, setSettingsError] = useState<string | null>(null);
-  const [isLoadingStats, setIsLoadingStats] = useState(true);
-  const [statsError, setStatsError] = useState<string | null>(null);
-  const [storageStats, setStorageStats] = useState<{
-    historyCount: number;
-  } | null>(null);
   const [recordingPushToTalk, setRecordingPushToTalk] = useState(false);
   const [recordingToggle, setRecordingToggle] = useState(false);
+  const [recordingSecondsLeft, setRecordingSecondsLeft] = useState(0);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   const getErrorMessage = (error: unknown) =>
     error instanceof Error
       ? error.message
       : String(error || "Something went wrong");
 
-  // Load storage stats
-  const loadStorageStats = async () => {
-    try {
-      setIsLoadingStats(true);
-      setStatsError(null);
-      const stats = await getStorageStats();
-      setStorageStats(stats);
-    } catch (error) {
-      const message = getErrorMessage(error);
-      setStatsError(message);
-      await reportError("database", message, "warning", {
-        userAction: "Load storage stats",
-      }).catch(console.error);
-    } finally {
-      setIsLoadingStats(false);
-    }
-  };
-
+  // Ref so the keydown listener always knows which field to write to
+  // without being re-bound on every state change.
+  const recordingTypeRef = useRef<"pushToTalk" | "toggle" | null>(null);
   useEffect(() => {
-    loadStorageStats();
-  }, []);
+    recordingTypeRef.current = recordingPushToTalk
+      ? "pushToTalk"
+      : recordingToggle
+        ? "toggle"
+        : null;
+  }, [recordingPushToTalk, recordingToggle]);
 
-  const handleExport = async () => {
-    try {
-      setIsExporting(true);
-      setExportError(null);
-      const data = await exportAppData();
-      const filename = `Wavee-backup-${new Date()
-        .toISOString()
-        .slice(0, 10)}.json`;
-      const saved = await downloadFile(data, filename);
-      if (saved) {
-        toastSuccess("Export complete", "Data exported successfully");
-      }
-    } catch (err) {
-      const message = getErrorMessage(err);
-      console.error("Export failed:", err);
-      setExportError(message);
-      toastError("Export failed", "Failed to export data");
-      await reportError("filesystem", message, "error", {
-        userAction: "Export app data",
-      }).catch(console.error);
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  // Hotkey recording handlers
-  const handleRecordHotkey = (type: "pushToTalk" | "toggle") => {
-    if (type === "pushToTalk") {
-      setRecordingPushToTalk(true);
-      setRecordingToggle(false);
-    } else {
-      setRecordingToggle(true);
-      setRecordingPushToTalk(false);
-    }
-
+  // Single, effect-managed keydown listener for hotkey capture. Always
+  // removed on cleanup so a stale listener can never fire and overwrite
+  // the wrong field.
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const type = recordingTypeRef.current;
+      if (!type) return;
+
       e.preventDefault();
       e.stopPropagation();
 
@@ -138,7 +76,6 @@ export function SettingsView({ onClose }: SettingsViewProps) {
       if (e.altKey) parts.push("Alt");
       if (e.metaKey) parts.push("Meta");
 
-      // Get the key name
       let key = e.key;
       if (key === " ") key = "Space";
       else if (key.length === 1) key = key.toUpperCase();
@@ -149,7 +86,6 @@ export function SettingsView({ onClose }: SettingsViewProps) {
         key === "Alt" ||
         key === "Meta"
       ) {
-        // Don't record modifier-only keys
         return;
       }
 
@@ -165,246 +101,285 @@ export function SettingsView({ onClose }: SettingsViewProps) {
         setSettingsError(null);
         setRecordingToggle(false);
       }
-
-      document.removeEventListener("keydown", handleKeyDown);
     };
 
     document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [updateSettings]);
 
-    // Cancel after 5 seconds
-    setTimeout(() => {
+  // Tick the seconds-remaining counter while a capture is active
+  useEffect(() => {
+    if (!recordingPushToTalk && !recordingToggle) return;
+    setRecordingSecondsLeft(5);
+    const interval = window.setInterval(() => {
+      setRecordingSecondsLeft((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [recordingPushToTalk, recordingToggle]);
+
+  // 5s timeout to abort the capture if no key is pressed
+  useEffect(() => {
+    if (!recordingPushToTalk && !recordingToggle) return;
+    const timer = window.setTimeout(() => {
       setRecordingPushToTalk(false);
       setRecordingToggle(false);
-      document.removeEventListener("keydown", handleKeyDown);
+      setRecordingSecondsLeft(0);
     }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [recordingPushToTalk, recordingToggle]);
+
+  const handleRecordHotkey = (type: "pushToTalk" | "toggle") => {
+    if (type === "pushToTalk") {
+      setRecordingPushToTalk(true);
+      setRecordingToggle(false);
+    } else {
+      setRecordingToggle(true);
+      setRecordingPushToTalk(false);
+    }
+    setRecordingSecondsLeft(5);
   };
 
-  return (
-    <div className="flex flex-col h-full relative overflow-hidden">
-      {/* Background mesh gradient */}
-      <div className="glass-mesh-bg" />
+  const activeCount =
+    Number(settings.showRecordingIndicator) +
+    Number(settings.showRecordingOverlay) +
+    Number(settings.playAudioFeedback) +
+    Number(settings.postProcessingEnabled) +
+    Number(settings.voiceCommandsEnabled);
 
-      {/* Glass Header */}
-      <div className="border-b border-white/20 dark:border-white/10 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
-        <button
-          onClick={onClose}
-          className="glass-button px-1 py-1 rounded-xl text-xs font-medium text-red-500 hover:text-red-600 flex items-center gap-1"
-        >
-          <ArrowLeft className="h-4 w-4 text-foreground/70" />
-        </button>
-        <div className="flex items-center gap-2">
-          <h1 className="text-lg font-semibold">Settings</h1>
+  return (
+    <div className="flex h-full flex-col overflow-hidden bg-canvas">
+      {/* ─── HEADER ─── */}
+      <div className="shrink-0 border-b border-hairline">
+        <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-3 sm:py-4">
+          <p className="eyebrow-uppercase text-ink-mid">Settings</p>
+<h1
+              className="display-sm text-ink mt-1"
+            >
+              Tune Wavee to your <span className="text-primary">workflow</span>.
+            </h1>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {settingsError && (
-          <div className="glass-card p-3 rounded-2xl border-red-500/30 bg-red-500/10 flex items-center gap-2 text-red-600 dark:text-red-400">
-            <AlertCircle className="h-4 w-4 flex-shrink-0" />
-            <span className="text-sm">{settingsError}</span>
-          </div>
-        )}
-        {/* Hotkey Settings */}
-        <div className="glass-card p-4 rounded-2xl">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
-              <Keyboard className="h-4 w-4 text-foreground/60" />
+      <div className="flex-1 overflow-y-auto">
+        <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-4 xl:py-5 space-y-4 xl:space-y-5">
+          {settingsError && (
+            <div className="p-3 rounded-md border border-destructive/30 bg-destructive/5 flex items-center gap-2.5 text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span className="body-sm">{settingsError}</span>
             </div>
-            <div>
-              <h2 className="font-semibold text-sm text-foreground">
-                Hotkey Mode
-              </h2>
-              <p className="text-xs text-foreground/60">
-                Configure recording shortcuts
-              </p>
-            </div>
-          </div>
+          )}
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-foreground/60 uppercase tracking-wider">
-                Recording Mode
-              </Label>
-              <Select
-                value={settings.hotkeyMode}
-                onValueChange={(value: "push-to-talk" | "toggle") =>
-                  updateSettings({ hotkeyMode: value })
-                }
-              >
-                <SelectTrigger className="glass-button border-0 h-10">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="glass-card border-0">
-                  <SelectItem value="push-to-talk">Push to Talk</SelectItem>
-                  <SelectItem value="toggle">Toggle</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-foreground/60">
-                {settings.hotkeyMode === "push-to-talk"
-                  ? "Hold the key to record, release to stop"
-                  : "Press once to start, press again to stop"}
-              </p>
-            </div>
-
-            <div className="h-px bg-border/50" />
-
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-foreground/60 uppercase tracking-wider">
-                Push to Talk Key
-              </Label>
-              <div className="flex items-center gap-2">
-                <code
-                  className={cn(
-                    "flex-1 px-3 py-2 rounded-xl text-sm font-mono transition-all",
-                    "bg-white/50 dark:bg-white/5 border border-white/30 dark:border-white/10",
-                    recordingPushToTalk && "animate-pulse border-blue-500/50",
-                  )}
+          {/* ─── HERO STATUS BAND — Dark coffee-ink ─── */}
+          <section className="hero-band-dark">
+            <div className="grid grid-cols-1 @xl:grid-cols-[1.4fr_1fr] gap-4 @xl:gap-6 p-4 sm:p-5 @xl:p-6 items-start @xl:items-center">
+              <div className="min-w-0">
+                <p className="eyebrow-uppercase text-primary mb-2">
+                  <span className="inline-flex items-center gap-2">
+                    <Circle className="h-1.5 w-1.5 fill-primary text-primary" />
+                    Personalized
+                  </span>
+                </p>
+                <h2
+                  className="display-md text-on-dark"
                 >
-                  {recordingPushToTalk
-                    ? "Press any key..."
-                    : settings.pushToTalkKey}
-                </code>
-                <button
-                  className="glass-button px-3 py-2 text-xs font-medium rounded-xl"
-                  onClick={() => handleRecordHotkey("pushToTalk")}
-                  disabled={recordingPushToTalk}
-                >
-                  {recordingPushToTalk ? "Recording..." : "Change"}
-                </button>
+                  {activeCount} of 5 power-ups <span className="text-primary">active</span>.
+                </h2>
+                <p className="body-sm text-on-dark-soft mt-2 max-w-xl">
+                  Configure hotkeys, transcription behavior, and how Wavee shows up on your desktop.
+                </p>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-foreground/60 uppercase tracking-wider">
-                Toggle Key
-              </Label>
-              <div className="flex items-center gap-2">
-                <code
-                  className={cn(
-                    "flex-1 px-3 py-2 rounded-xl text-sm font-mono transition-all",
-                    "bg-white/50 dark:bg-white/5 border border-white/30 dark:border-white/10",
-                    recordingToggle && "animate-pulse border-blue-500/50",
-                  )}
-                >
-                  {recordingToggle ? "Press any key..." : settings.toggleKey}
-                </code>
-                <button
-                  className="glass-button px-3 py-2 text-xs font-medium rounded-xl"
-                  onClick={() => handleRecordHotkey("toggle")}
-                  disabled={recordingToggle}
-                >
-                  {recordingToggle ? "Recording..." : "Change"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* UI Preferences */}
-        <div className="glass-card p-4 rounded-2xl">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
-              <Sparkles className="h-4 w-4 text-foreground/60" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-sm text-foreground">
-                Preferences
-              </h2>
-              <p className="text-xs text-foreground/60">
-                Customize your experience
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            {/* Recording Indicator */}
-            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
-                  <div className="w-2.5 h-2.5 rounded-full bg-foreground/60" />
+              <div className="product-ui-card-dark w-full">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="icon-plate-dark">
+                    <Keyboard className="h-3.5 w-3.5 text-on-dark" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="caption-strong text-on-dark">Current hotkey</p>
+                    <p className="caption text-on-dark-soft mt-0.5 truncate">
+                      {settings.hotkeyMode === "push-to-talk" ? settings.pushToTalkKey : settings.toggleKey}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-sm font-medium cursor-pointer text-foreground">
-                    Recording Indicator
-                  </Label>
-                  <p className="text-xs text-foreground/60">
-                    Show visual feedback when recording
-                  </p>
+                <div className="flex items-center justify-between gap-2 pt-3 border-t" style={{ borderColor: '#36342e' }}>
+                  <span className="caption text-on-dark-muted">Mode</span>
+                  <span className="caption-strong text-on-dark">
+                    {settings.hotkeyMode === "push-to-talk" ? "Push to talk" : "Toggle"}
+                  </span>
                 </div>
               </div>
-              <Switch
+            </div>
+          </section>
+
+          {/* ─── HOTKEY SETTINGS — Cream surface ─── */}
+          <section className="card-feature-cream">
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="icon-plate">
+                <Keyboard className="h-3.5 w-3.5" />
+              </div>
+              <div className="min-w-0">
+                <p className="eyebrow-uppercase text-ink-mid">Hotkey</p>
+                <h3
+                  className="title-md text-ink mt-0.5"
+                >
+                  Recording shortcuts
+                </h3>
+              </div>
+            </div>
+
+            <div className="space-y-3.5">
+              <div className="space-y-1.5">
+                <Label className="eyebrow-uppercase text-ink-mid">Recording mode</Label>
+                <Select
+                  value={settings.hotkeyMode}
+                  onValueChange={(value: "push-to-talk" | "toggle") =>
+                    updateSettings({ hotkeyMode: value })
+                  }
+                >
+                  <SelectTrigger
+                    className="paper-input border border-hairline h-9 cursor-pointer"
+                    style={{ background: '#ffffff', borderRadius: '8px' }}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="push-to-talk">Push to talk</SelectItem>
+                    <SelectItem value="toggle">Toggle</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="caption text-body-muted">
+                  {settings.hotkeyMode === "push-to-talk"
+                    ? "Hold the key to record, release to stop."
+                    : "Press once to start, press again to stop."}
+                </p>
+              </div>
+
+              <div className="h-px bg-hairline-soft" />
+
+              <div className="grid grid-cols-1 min-[520px]:grid-cols-2 gap-3">
+                <HotkeyCaptureField
+                  label="Push to talk key"
+                  value={settings.pushToTalkKey}
+                  isRecording={recordingPushToTalk}
+                  secondsLeft={recordingSecondsLeft}
+                  onRecord={() => handleRecordHotkey("pushToTalk")}
+                />
+                <HotkeyCaptureField
+                  label="Toggle key"
+                  value={settings.toggleKey}
+                  isRecording={recordingToggle}
+                  secondsLeft={recordingSecondsLeft}
+                  onRecord={() => handleRecordHotkey("toggle")}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* ─── RECORDING — White surface ─── */}
+          <section className="paper-card">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="icon-plate">
+                <Volume2 className="h-3.5 w-3.5" />
+              </div>
+              <div className="min-w-0">
+                <p className="eyebrow-uppercase text-ink-mid">Recording</p>
+                <h3
+                  className="title-md text-ink mt-0.5"
+                >
+                  Recording behavior
+                </h3>
+              </div>
+            </div>
+
+            <div className="divide-y divide-hairline-soft">
+              <SettingRow
+                icon={<Circle className="h-3 w-3 fill-current" />}
+                iconClass={settings.showRecordingIndicator ? "bg-primary/10 text-primary" : ""}
+                title="Recording indicator"
+                description="Show visual feedback when recording"
                 checked={settings.showRecordingIndicator}
-                onCheckedChange={(checked) =>
-                  updateSettings({ showRecordingIndicator: checked })
-                }
+                onChange={(checked) => updateSettings({ showRecordingIndicator: checked })}
               />
-            </div>
-
-            {/* Fullscreen Recording Overlay */}
-            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
-                  <Waves className="h-4 w-4 text-foreground/60" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium cursor-pointer text-foreground">
-                    Recording Overlay
-                  </Label>
-                  <p className="text-xs text-foreground/60">
-                    Show fullscreen wave animation when recording
-                  </p>
-                </div>
-              </div>
-              <Switch
+              <SettingRow
+                icon={<Waves className="h-3.5 w-3.5" />}
+                iconClass={settings.showRecordingOverlay ? "bg-primary/10 text-primary" : ""}
+                title="Recording overlay"
+                description="Show animated pill while recording"
                 checked={settings.showRecordingOverlay}
-                onCheckedChange={(checked) =>
-                  updateSettings({ showRecordingOverlay: checked })
-                }
+                onChange={(checked) => updateSettings({ showRecordingOverlay: checked })}
               />
-            </div>
-
-            {/* Audio Feedback */}
-            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
-                  <Volume2 className="h-4 w-4 text-foreground/60" />
+              {settings.showRecordingOverlay && (
+                <div className="grid grid-cols-[auto_1fr_auto] gap-2.5 sm:gap-3 items-center py-2.5">
+                  <div className="icon-plate">
+                    <Maximize2 className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <Label className="body-sm-strong text-ink cursor-pointer">Overlay position</Label>
+                    <p className="caption text-body-muted mt-0.5">Where the recording pill appears on screen</p>
+                  </div>
+                  <Select
+                    value={settings.recordingOverlayPosition}
+                    onValueChange={(value: "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-center" | "bottom-right") =>
+                      updateSettings({ recordingOverlayPosition: value })
+                    }
+                  >
+                    <SelectTrigger className="paper-input border border-hairline h-9 w-[140px] cursor-pointer" style={{ background: '#ffffff', borderRadius: '8px' }}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="top-left">Top left</SelectItem>
+                      <SelectItem value="top-center">Top center</SelectItem>
+                      <SelectItem value="top-right">Top right</SelectItem>
+                      <SelectItem value="bottom-left">Bottom left</SelectItem>
+                      <SelectItem value="bottom-center">Bottom center</SelectItem>
+                      <SelectItem value="bottom-right">Bottom right</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div>
-                  <Label className="text-sm font-medium cursor-pointer text-foreground">
-                    Audio Feedback
-                  </Label>
-                  <p className="text-xs text-foreground/60">
-                    Play sound when recording starts/stops
-                  </p>
-                </div>
-              </div>
-              <Switch
+              )}
+              <SettingRow
+                icon={<Volume2 className="h-3.5 w-3.5" />}
+                iconClass={settings.playAudioFeedback ? "bg-primary/10 text-primary" : ""}
+                title="Audio feedback"
+                description="Play sound when recording starts/stops"
                 checked={settings.playAudioFeedback}
-                onCheckedChange={(checked) =>
-                  updateSettings({ playAudioFeedback: checked })
-                }
+                onChange={(checked) => updateSettings({ playAudioFeedback: checked })}
               />
             </div>
+          </section>
 
-            {/* Start on Boot */}
-            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
-                  <ChevronRight className="h-4 w-4 text-foreground/60" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium cursor-pointer text-foreground">
-                    Start on Boot
-                  </Label>
-                  <p className="text-xs text-foreground/60">
-                    Launch Wavee when system starts
-                  </p>
-                </div>
+          {/* ─── SYSTEM — White surface ─── */}
+          <section className="paper-card">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="icon-plate">
+                <Monitor className="h-3.5 w-3.5" />
               </div>
-              <Switch
+              <div className="min-w-0">
+                <p className="eyebrow-uppercase text-ink-mid">System</p>
+                <h3
+                  className="title-md text-ink mt-0.5"
+                >
+                  System behavior
+                </h3>
+              </div>
+            </div>
+
+            <div className="divide-y divide-hairline-soft">
+              <SettingRow
+                icon={<Power className="h-3.5 w-3.5" />}
+                iconClass={settings.autoStartOnBoot ? "bg-primary/10 text-primary" : ""}
+                title="Start on boot"
+                description="Launch Wavee when system starts"
                 checked={settings.autoStartOnBoot}
-                onCheckedChange={async (checked) => {
+                onChange={async (checked) => {
                   try {
                     setSettingsError(null);
                     await setAutoStart(checked);
@@ -423,268 +398,232 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                   }
                 }}
               />
-            </div>
-
-            {/* Minimize to Tray */}
-            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
-                  <div className="w-3 h-2 border-2 border-foreground/60 rounded-sm" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium cursor-pointer text-foreground">
-                    Minimize to Tray
-                  </Label>
-                  <p className="text-xs text-foreground/60">
-                    Keep running in system tray when closed
-                  </p>
-                </div>
-              </div>
-              <Switch
+              <SettingRow
+                icon={<Monitor className="h-3.5 w-3.5" />}
+                iconClass={settings.minimizeToTray ? "bg-primary/10 text-primary" : ""}
+                title="Minimize to tray"
+                description="Keep running in system tray when closed"
                 checked={settings.minimizeToTray}
-                onCheckedChange={(checked) =>
-                  updateSettings({ minimizeToTray: checked })
-                }
+                onChange={(checked) => updateSettings({ minimizeToTray: checked })}
               />
             </div>
+          </section>
 
-            {/* Smart Text Processing */}
-            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
-                  <Sparkles className="h-4 w-4 text-foreground/60" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium cursor-pointer text-foreground">
-                    Smart Text Processing
-                  </Label>
-                  <p className="text-xs text-foreground/60">
-                    Auto-format: "camel case" → camelCase
-                  </p>
-                </div>
+          {/* ─── UPDATES — White surface ─── */}
+          <section className="paper-card">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="icon-plate">
+                <RefreshCw className="h-3.5 w-3.5" />
               </div>
-              <Switch
-                checked={settings.postProcessingEnabled}
-                onCheckedChange={(checked) =>
-                  updateSettings({ postProcessingEnabled: checked })
-                }
-              />
-            </div>
-
-            {/* Voice Commands */}
-            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
-                  <Keyboard className="h-4 w-4 text-foreground/60" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium cursor-pointer text-foreground">
-                    Voice Commands
-                  </Label>
-                  <p className="text-xs text-foreground/60">
-                    Allow spoken editing commands like undo, paste, and delete
-                    line
-                  </p>
-                </div>
-              </div>
-              <Switch
-                checked={settings.voiceCommandsEnabled}
-                onCheckedChange={(checked) =>
-                  updateSettings({ voiceCommandsEnabled: checked })
-                }
-              />
-            </div>
-
-            {/* Clipboard Mode */}
-            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-white/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-white/30 dark:bg-white/10 flex items-center justify-center">
-                  <svg
-                    className="h-4 w-4 text-foreground/60"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium cursor-pointer text-foreground">
-                    Clipboard Mode
-                  </Label>
-                  <p className="text-xs text-foreground/60">
-                    Copy text to clipboard instead of typing
-                  </p>
-                </div>
-              </div>
-              <Switch
-                checked={settings.clipboardMode}
-                onCheckedChange={(checked) =>
-                  updateSettings({ clipboardMode: checked })
-                }
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Data Management */}
-        <div className="glass-card p-4 rounded-2xl">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-xl bg-white/30 dark:bg-white/10">
-              <Database className="h-4 w-4 text-foreground/60" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-sm text-foreground">
-                Data Management
-              </h2>
-              <p className="text-xs text-foreground/60">
-                Export and manage your data
-              </p>
-            </div>
-          </div>
-
-          {isLoadingStats ? (
-            <div className="p-3 rounded-xl bg-white/30 dark:bg-white/10 border border-white/30 dark:border-white/10 mb-3 flex items-center gap-2 text-foreground/60">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Loading storage stats...</span>
-            </div>
-          ) : statsError ? (
-            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 mb-3">
-              <div className="flex items-start gap-2 text-red-600 dark:text-red-400">
-                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm">Could not load storage stats.</p>
-                  <button
-                    className="glass-button px-3 py-1.5 rounded-xl text-xs font-medium mt-2 flex items-center gap-1.5"
-                    onClick={loadStorageStats}
-                  >
-                    <RefreshCcw className="h-3.5 w-3.5" />
-                    Retry
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            storageStats && (
-              <div className="p-3 rounded-xl bg-white/30 dark:bg-white/10 border border-white/30 dark:border-white/10 mb-3">
-                <p className="text-sm">
-                  <span className="font-semibold text-foreground">
-                    {storageStats.historyCount}
-                  </span>
-                  <span className="text-foreground/60">
-                    {" "}
-                    transcriptions in history
-                  </span>
-                </p>
-              </div>
-            )
-          )}
-
-          <button
-            className="glass-button w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium"
-            onClick={handleExport}
-            disabled={isExporting}
-          >
-            {isExporting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <FileDown className="h-4 w-4" />
-            )}
-            Export Data
-          </button>
-
-          <p className="text-xs text-foreground/60 mt-2 text-center">
-            Export your settings and history to a JSON file
-          </p>
-          {exportError && (
-            <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-              <span>{exportError}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Software Updates */}
-        <UpdaterView />
-
-        {/* Reset Settings */}
-        <div className="glass-card p-4 rounded-2xl">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 rounded-xl bg-red-500/10">
-              <RotateCcw className="h-4 w-4 text-red-500" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-sm text-foreground">
-                Reset Settings
-              </h2>
-              <p className="text-xs text-foreground/60">
-                Restore all options to defaults
-              </p>
-            </div>
-          </div>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <button className="glass-button w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-red-500 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition-all">
-                <RotateCcw className="h-4 w-4" />
-                Reset to Defaults
-              </button>
-            </AlertDialogTrigger>
-            <AlertDialogContent className="glass-card border-0">
-              <AlertDialogHeader>
-                <AlertDialogTitle>Reset Settings?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will restore all settings to their default values. This
-                  action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel className="glass-button">
-                  Cancel
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => {
-                    try {
-                      resetSettings();
-                      setSettingsError(null);
-                      toastSuccess?.("Settings reset to defaults");
-                    } catch (e) {
-                      const message = getErrorMessage(e);
-                      setSettingsError("Could not reset settings.");
-                      toastError?.("Failed to reset settings");
-                      reportError("configuration", message, "error", {
-                        userAction: "Reset settings",
-                      }).catch(console.error);
-                    }
-                  }}
-                  className="bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600"
+              <div className="min-w-0">
+                <p className="eyebrow-uppercase text-ink-mid">Updates</p>
+                <h3
+                  className="title-md text-ink mt-0.5"
                 >
-                  Reset
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                  Software updates
+                </h3>
+              </div>
+            </div>
+
+            <div className="divide-y divide-hairline-soft">
+              <SettingRow
+                icon={<RefreshCw className="h-3.5 w-3.5" />}
+                iconClass={settings.autoCheckForUpdates ? "bg-primary/10 text-primary" : ""}
+                title="Check for updates automatically"
+                description="Check daily and notify you before downloading or installing anything."
+                checked={settings.autoCheckForUpdates}
+                onChange={(checked) => updateSettings({ autoCheckForUpdates: checked })}
+              />
+            </div>
+          </section>
+
+          {/* ─── PROCESSING — White surface ─── */}
+          <section className="paper-card">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="icon-plate">
+                <Sparkles className="h-3.5 w-3.5" />
+              </div>
+              <div className="min-w-0">
+                <p className="eyebrow-uppercase text-ink-mid">Processing</p>
+                <h3
+                  className="title-md text-ink mt-0.5"
+                >
+                  Text processing
+                </h3>
+              </div>
+            </div>
+
+            <div className="divide-y divide-hairline-soft">
+              <SettingRow
+                icon={<Sparkles className="h-3.5 w-3.5" />}
+                iconClass={settings.postProcessingEnabled ? "bg-primary/10 text-primary" : ""}
+                title="Smart text processing"
+                description='Auto-format: "camel case" → camelCase'
+                checked={settings.postProcessingEnabled}
+                onChange={(checked) => updateSettings({ postProcessingEnabled: checked })}
+              />
+              <SettingRow
+                icon={<Zap className="h-3.5 w-3.5" />}
+                iconClass={settings.voiceCommandsEnabled ? "bg-primary/10 text-primary" : ""}
+                title="Voice commands"
+                description="Allow spoken editing commands like undo, paste, delete line"
+                checked={settings.voiceCommandsEnabled}
+                onChange={(checked) => updateSettings({ voiceCommandsEnabled: checked })}
+              />
+            </div>
+          </section>
+
+          {/* ─── OUTPUT — White surface ─── */}
+          <section className="paper-card">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="icon-plate">
+                <Clipboard className="h-3.5 w-3.5" />
+              </div>
+              <div className="min-w-0">
+                <p className="eyebrow-uppercase text-ink-mid">Output</p>
+                <h3
+                  className="title-md text-ink mt-0.5"
+                >
+                  Output behavior
+                </h3>
+              </div>
+            </div>
+
+            <div className="divide-y divide-hairline-soft">
+              <SettingRow
+                icon={<Clipboard className="h-3.5 w-3.5" />}
+                iconClass={settings.clipboardMode ? "bg-primary/10 text-primary" : ""}
+                title="Clipboard mode"
+                description="Copy text to clipboard instead of typing at cursor"
+                checked={settings.clipboardMode}
+                onChange={(checked) => updateSettings({ clipboardMode: checked })}
+              />
+            </div>
+          </section>
+
+          {/* ─── APP INFO FOOTER — Dark coffee-ink band ─── */}
+          <section className="hero-band-dark">
+            <div className="flex flex-col items-center text-center p-5 sm:p-6 gap-2">
+              <Logo size="sm" />
+              <p className="caption text-on-dark-soft">
+                Wave your voice into text at your cursor.
+              </p>
+              <div className="h-px w-10 my-0.5" style={{ background: "#36342e" }} />
+              <p className="caption text-on-dark-muted">
+                © {new Date().getFullYear()} Johuniq · All rights reserved
+              </p>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface SettingRowProps {
+  icon: React.ReactNode;
+  iconClass?: string;
+  title: string;
+  description: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  isLast?: boolean;
+}
+
+function SettingRow({
+  icon,
+  iconClass = "",
+  title,
+  description,
+  checked,
+  onChange,
+}: SettingRowProps) {
+  return (
+    <div className="grid grid-cols-[auto_1fr_auto] gap-2.5 sm:gap-3 items-center py-2.5 first:pt-0 last:pb-0">
+      <div className={cn("icon-plate", iconClass)}>{icon}</div>
+      <div className="min-w-0">
+        <Label className="body-sm-strong text-ink cursor-pointer">{title}</Label>
+        <p className="caption text-body-muted mt-0.5">{description}</p>
+      </div>
+      <Switch checked={checked} onCheckedChange={onChange} className="shrink-0" />
+    </div>
+  );
+}
+
+interface HotkeyCaptureFieldProps {
+  label: string;
+  value: string;
+  isRecording: boolean;
+  secondsLeft: number;
+  onRecord: () => void;
+}
+
+function HotkeyCaptureField({
+  label,
+  value,
+  isRecording,
+  secondsLeft,
+  onRecord,
+}: HotkeyCaptureFieldProps) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="eyebrow-uppercase text-ink-mid">{label}</Label>
+      <div className="flex items-stretch gap-2">
+        <div
+          className={cn(
+            "relative flex-1 min-w-0 rounded-md transition-all flex items-center justify-between gap-2 px-3 py-2 overflow-hidden",
+            isRecording ? "border-2 border-primary" : "border border-hairline"
+          )}
+          style={{ background: '#ffffff' }}
+        >
+          {/* Pulsing recording background */}
+          {isRecording && (
+            <div
+              aria-hidden
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "linear-gradient(90deg, rgba(255,79,0,0.06), rgba(255,79,0,0.12), rgba(255,79,0,0.06))",
+                animation: "shimmer 1.6s linear infinite",
+                backgroundSize: "200% 100%",
+              }}
+            />
+          )}
+
+          {isRecording ? (
+            <span className="relative z-10 flex items-center gap-2 min-w-0">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="absolute inset-0 rounded-full bg-primary opacity-60 animate-ping" />
+                <span className="relative h-2 w-2 rounded-full bg-primary" />
+              </span>
+              <span className="body-sm-strong text-primary truncate">
+                Press any key...
+              </span>
+              <span className="caption text-body-muted shrink-0 ml-auto tabular-nums">
+                {secondsLeft}s
+              </span>
+            </span>
+          ) : (
+            <code
+              className="relative z-10 font-mono text-ink truncate body-sm-strong"
+            >
+              {value}
+            </code>
+          )}
         </div>
 
-        {/* App Info Footer */}
-        <div className="glass-card p-6 rounded-2xl overflow-hidden relative">
-          <div className="relative flex flex-col items-center text-center">
-            <div className="mb-3">
-              <Logo size="sm" />
-            </div>
-            <p className="text-xs text-foreground/60">
-              Wave your voice into text at your cursor
-            </p>
-            <div className="h-px w-16 bg-border/50 my-3" />
-            <p className="text-xs text-foreground/60">
-              © {new Date().getFullYear()} Johuniq. All rights reserved.
-            </p>
-          </div>
-        </div>
+        <button
+          className={cn(
+            "shrink-0 px-3.5 py-2 text-sm rounded-md transition-colors cursor-pointer disabled:cursor-not-allowed",
+            isRecording
+              ? "border border-hairline bg-canvas-soft text-body-muted"
+              : "border border-ink bg-canvas text-ink hover:bg-canvas-soft"
+          )}
+          onClick={onRecord}
+          disabled={isRecording}
+        >
+          {isRecording ? "Listening" : "Change"}
+        </button>
       </div>
     </div>
   );

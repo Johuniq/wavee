@@ -3,6 +3,19 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+/// A single user-defined custom vocabulary entry.
+///
+/// `spoken` is the phrase the user expects to say (and what Whisper is most
+/// likely to mishear) and `written` is the canonical text that should appear
+/// in the final output. Matching is case-insensitive and word-boundary
+/// aware, so longer words that happen to contain a `spoken` substring are
+/// not affected.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct VocabularyEntry {
+    pub spoken: String,
+    pub written: String,
+}
+
 // Types for database operations
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppSettings {
@@ -19,6 +32,11 @@ pub struct AppSettings {
     pub post_processing_enabled: bool,
     pub voice_commands_enabled: bool,
     pub clipboard_mode: bool,
+    pub auto_check_for_updates: bool,
+    pub recording_overlay_position: String,
+    /// User-defined domain vocabulary. Stored as a JSON array so we can
+    /// support an arbitrary number of entries without a schema change.
+    pub custom_vocabulary: Vec<VocabularyEntry>,
 }
 
 impl Default for AppSettings {
@@ -37,6 +55,9 @@ impl Default for AppSettings {
             post_processing_enabled: true,
             voice_commands_enabled: false,
             clipboard_mode: false,
+            auto_check_for_updates: true,
+            recording_overlay_position: "top-center".to_string(),
+            custom_vocabulary: Vec::new(),
         }
     }
 }
@@ -146,6 +167,7 @@ impl Database {
                 post_processing_enabled INTEGER NOT NULL DEFAULT 1,
                 voice_commands_enabled INTEGER NOT NULL DEFAULT 0,
                 clipboard_mode INTEGER NOT NULL DEFAULT 0,
+                custom_vocabulary TEXT NOT NULL DEFAULT '[]',
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )",
             [],
@@ -174,6 +196,18 @@ impl Database {
         // Add show_recording_overlay column if it doesn't exist (migration for existing DBs)
         let _ = conn.execute(
             "ALTER TABLE settings ADD COLUMN show_recording_overlay INTEGER NOT NULL DEFAULT 1",
+            [],
+        );
+
+        // Add recording_overlay_position column if it doesn't exist (migration for existing DBs)
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN recording_overlay_position TEXT NOT NULL DEFAULT 'top-center'",
+            [],
+        );
+
+        // Add custom_vocabulary column if it doesn't exist (migration for existing DBs)
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN custom_vocabulary TEXT NOT NULL DEFAULT '[]'",
             [],
         );
 
@@ -439,10 +473,13 @@ impl Database {
         conn.query_row(
             "SELECT push_to_talk_key, toggle_key, hotkey_mode, language, selected_model_id,
                     show_recording_indicator, show_recording_overlay, play_audio_feedback, auto_start_on_boot, minimize_to_tray,
-                    post_processing_enabled, voice_commands_enabled, clipboard_mode
+                    post_processing_enabled, voice_commands_enabled, clipboard_mode, auto_check_for_updates, recording_overlay_position, custom_vocabulary
              FROM settings WHERE id = 1",
             [],
             |row| {
+                let vocab_json: String = row.get(15).unwrap_or_else(|_| "[]".to_string());
+                let custom_vocabulary = serde_json::from_str(&vocab_json)
+                    .unwrap_or_else(|_| Vec::new());
                 Ok(AppSettings {
                     push_to_talk_key: row.get(0)?,
                     toggle_key: row.get(1)?,
@@ -457,6 +494,9 @@ impl Database {
                     post_processing_enabled: row.get::<_, i32>(10)? == 1,
                     voice_commands_enabled: row.get::<_, i32>(11)? == 1,
                     clipboard_mode: row.get::<_, i32>(12)? == 1,
+                    auto_check_for_updates: row.get::<_, i32>(13).unwrap_or(1) == 1,
+                    recording_overlay_position: row.get(14).unwrap_or_else(|_| "top-center".to_string()),
+                    custom_vocabulary,
                 })
             },
         )
@@ -464,6 +504,8 @@ impl Database {
 
     pub fn update_settings(&self, settings: &AppSettings) -> Result<()> {
         let conn = self.conn.lock().unwrap();
+        let vocab_json = serde_json::to_string(&settings.custom_vocabulary)
+            .unwrap_or_else(|_| "[]".to_string());
         conn.execute(
             "UPDATE settings SET
                 push_to_talk_key = ?1,
@@ -479,6 +521,9 @@ impl Database {
                 post_processing_enabled = ?11,
                 voice_commands_enabled = ?12,
                 clipboard_mode = ?13,
+                auto_check_for_updates = ?14,
+                recording_overlay_position = ?15,
+                custom_vocabulary = ?16,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = 1",
             params![
@@ -495,6 +540,9 @@ impl Database {
                 settings.post_processing_enabled as i32,
                 settings.voice_commands_enabled as i32,
                 settings.clipboard_mode as i32,
+                settings.auto_check_for_updates as i32,
+                settings.recording_overlay_position,
+                vocab_json,
             ],
         )?;
         Ok(())
@@ -516,6 +564,8 @@ impl Database {
             "post_processing_enabled",
             "voice_commands_enabled",
             "clipboard_mode",
+            "auto_check_for_updates",
+            "recording_overlay_position",
         ];
 
         if !ALLOWED_KEYS.contains(&key) {

@@ -13,7 +13,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 #[cfg(target_os = "windows")]
@@ -33,6 +33,15 @@ const POLAR_ORG_ID: &str = "d076d42a-b873-40f7-9486-a731bfbb8eb7";
 
 /// Offline grace period in hours - license works offline for this duration
 const OFFLINE_GRACE_HOURS: i64 = 168; // 7 days
+
+/// Minimum interval between online license re-validations.
+///
+/// Hotkey presses trigger `start_recording` → `ensure_app_access_verified`,
+/// so a naive implementation would call Polar on every push-to-talk. We
+/// trust a fresh-enough local cache for up to this many hours between
+/// online checks, which keeps the dictation flow responsive and offline-
+/// friendly while still catching revocations within a day.
+const ONLINE_VALIDATION_MIN_INTERVAL_HOURS: i64 = 24;
 
 /// HTTP request timeout
 const REQUEST_TIMEOUT_SECS: u64 = 30;
@@ -535,6 +544,12 @@ pub struct LicenseManager {
     client: Client,
     pub org_id: String,
     pub api_base: String,
+    /// Timestamp of the most recent online validation attempt (success or
+    /// failure). Used to throttle online calls; hotkey-driven paths must
+    /// not hit Polar on every press. Wrapped in a Mutex because the
+    /// manager is shared across Tauri command handlers running on the
+    /// async runtime.
+    last_online_attempt: Mutex<Option<chrono::DateTime<chrono::Utc>>>,
 }
 
 impl LicenseManager {
@@ -554,7 +569,97 @@ impl LicenseManager {
             client,
             org_id: org_id.to_string(),
             api_base: api_base.to_string(),
+            last_online_attempt: Mutex::new(None),
         }
+    }
+
+    /// Returns true when there is a cached license that still satisfies
+    /// the offline grace period and is not past its server-side expiry.
+    /// This intentionally never touches the network and is cheap enough
+    /// to call on every hotkey press.
+    pub fn is_cached_license_valid(&self) -> bool {
+        let Some(cache) = load_cache() else {
+            return false;
+        };
+        cached_license_allows_offline(&cache)
+    }
+
+    /// Records that we just attempted an online validation. Failures to
+    /// acquire the lock are ignored: throttling is best-effort and a
+    /// missed timestamp only means one extra request, never a denied
+    /// user.
+    fn mark_online_attempt(&self) {
+        if let Ok(mut guard) = self.last_online_attempt.lock() {
+            *guard = Some(chrono::Utc::now());
+        }
+    }
+
+    /// Returns true when the last online validation was recent enough
+    /// that we should skip another network call. Always returns false
+    /// when no previous attempt has been recorded.
+    fn should_throttle_online_validation(&self) -> bool {
+        let Ok(guard) = self.last_online_attempt.lock() else {
+            return false;
+        };
+        let Some(last) = *guard else {
+            return false;
+        };
+        let elapsed = (chrono::Utc::now() - last).num_hours();
+        elapsed >= 0 && elapsed < ONLINE_VALIDATION_MIN_INTERVAL_HOURS
+    }
+
+    /// Validate without touching the network when the local cache is
+    /// fresh. On success returns the cached `LicenseInfo` (status
+    /// `Granted`). On failure falls through to a throttled online
+    /// validation, then to the offline grace period as a last resort.
+    pub async fn validate_smart(&self) -> Result<LicenseInfo, String> {
+        if self.is_cached_license_valid() {
+            if let Some(cache) = load_cache() {
+                let info = self.license_info_from_cache(&cache);
+                if info.status.allows_usage() {
+                    debug!("Using cached license (skipping online validation)");
+                    return Ok(info);
+                }
+            }
+        }
+        self.validate_throttled().await
+    }
+
+    /// Build a `LicenseInfo` snapshot from a cached license record.
+    fn license_info_from_cache(&self, cache: &CachedLicense) -> LicenseInfo {
+        LicenseInfo {
+            license_key: cache.license_key.clone(),
+            display_key: mask_key(&cache.license_key),
+            status: LicenseStatus::Granted,
+            activation_id: Some(cache.activation_id.clone()),
+            customer_email: cache.customer_email.clone(),
+            customer_name: cache.customer_name.clone(),
+            benefit_id: Some(cache.benefit_id.clone()),
+            expires_at: cache.expires_at.clone(),
+            limit_activations: None,
+            usage: cache.usage,
+            limit_usage: None,
+            validations: cache.validations,
+            last_validated_at: Some(cache.last_validated_at.clone()),
+            device_id: get_device_id(),
+            device_label: get_device_label(),
+        }
+    }
+
+    /// Online validation, but only when the throttle window has elapsed
+    /// or the cache is missing/expired. Network failures still fall
+    /// through to the offline grace period so dictation keeps working
+    /// when the user's internet is down.
+    pub async fn validate_throttled(&self) -> Result<LicenseInfo, String> {
+        if self.should_throttle_online_validation() && self.is_cached_license_valid() {
+            if let Some(cache) = load_cache() {
+                debug!("Online validation throttled; serving cached license");
+                return Ok(self.license_info_from_cache(&cache));
+            }
+        }
+
+self.mark_online_attempt();
+        self.validate().await
     }
 
     /// Activate a license key on this device
@@ -1182,5 +1287,54 @@ mod tests {
         };
 
         assert!(!cached_license_allows_offline(&cache));
+    }
+
+    fn fresh_granted_cache() -> CachedLicense {
+        CachedLicense {
+            license_key: "TEST-KEY-1234-ABCD".to_string(),
+            activation_id: "act_123".to_string(),
+            device_id: get_device_id(),
+            device_label: get_device_label(),
+            customer_email: None,
+            customer_name: None,
+            benefit_id: "benefit_xyz".to_string(),
+            expires_at: None,
+            last_validated_at: chrono::Utc::now().to_rfc3339(),
+            status: "granted".to_string(),
+            usage: 0,
+            validations: 1,
+            integrity_hash: String::new(),
+            cache_version: CACHE_VERSION,
+        }
+    }
+
+    #[test]
+    fn throttle_is_inert_without_prior_attempt() {
+        let manager = LicenseManager::with_org_id("test", "https://invalid.test");
+        // No prior attempt recorded -> always proceed (i.e. don't throttle).
+        assert!(!manager.should_throttle_online_validation());
+    }
+
+    #[test]
+    fn throttle_window_blocks_subsequent_attempts() {
+        let manager = LicenseManager::with_org_id("test", "https://invalid.test");
+        manager.mark_online_attempt();
+        assert!(
+            manager.should_throttle_online_validation(),
+            "should throttle within the window after a fresh attempt"
+        );
+    }
+
+    #[test]
+    fn license_info_from_cache_reports_granted() {
+        let manager = LicenseManager::with_org_id("test", "https://invalid.test");
+        let cache = fresh_granted_cache();
+
+        let info = manager.license_info_from_cache(&cache);
+
+        assert_eq!(info.license_key, cache.license_key);
+        assert_eq!(info.activation_id.as_deref(), Some(cache.activation_id.as_str()));
+        assert!(info.status.allows_usage());
+        assert!(matches!(info.status, LicenseStatus::Granted));
     }
 }

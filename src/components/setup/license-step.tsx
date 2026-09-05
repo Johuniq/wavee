@@ -9,11 +9,8 @@ import {
 import { cn, openUrl } from "@/lib/utils";
 import {
   AlertCircle,
-  ArrowLeft,
-  ArrowRight,
   Check,
   Clock,
-  ExternalLink,
   Key,
   Loader2,
   ShieldCheck,
@@ -26,6 +23,9 @@ interface LicenseStepProps {
   onBack: () => void;
 }
 
+const STEPS_TOTAL = 4;
+const STEP_INDEX = 1;
+
 export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
   const [license, setLicense] = useState<LicenseData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -36,7 +36,6 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
   const [success, setSuccess] = useState<string | null>(null);
   const [showActivationForm, setShowActivationForm] = useState(false);
 
-  // Load license on mount
   useEffect(() => {
     loadLicense();
   }, []);
@@ -73,10 +72,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
       setLicenseKey("");
       setSuccess("License activated successfully!");
       toastSuccess("License activated", "License activated successfully");
-      // Auto proceed after successful activation
-      setTimeout(() => {
-        onNext();
-      }, 1500);
+      setTimeout(() => onNext(), 1500);
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Failed to activate license";
@@ -98,10 +94,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
       setLicense(data);
       setSuccess("7-day trial started!");
       toastSuccess("Trial started", "Your 7-day trial has started");
-      // Auto proceed after starting trial
-      setTimeout(() => {
-        onNext();
-      }, 1500);
+      setTimeout(() => onNext(), 1500);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to start trial";
       toastError("Trial failed", msg);
@@ -113,286 +106,242 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
 
   const isActive = license ? isLicenseActive(license.status) : false;
   const isTrial = license?.status === "trial";
-
-  // If already activated or in trial, allow to continue
   const canProceed = isActive || isTrial;
 
   if (isLoading) {
     return (
-      <div className="relative flex flex-col items-center justify-center h-full overflow-hidden">
-        {/* Background mesh gradient */}
-        <div className="glass-mesh-bg" />
-
-        <div className="relative z-10 flex flex-col items-center">
-          <div className="w-16 h-16 rounded-2xl bg-white/30 dark:bg-white/10 backdrop-blur-xl border border-white/30 flex items-center justify-center mb-4">
-            <Loader2 className="h-8 w-8 animate-spin text-foreground/60" />
-          </div>
-          <p className="text-sm text-foreground/60 font-medium">
-            Checking license...
-          </p>
-        </div>
+      <div className="flex h-full flex-col items-center justify-center bg-canvas">
+        <Loader2 className="h-7 w-7 animate-spin text-body-muted" />
+        <p className="body-sm text-body-muted mt-3">Checking license...</p>
       </div>
     );
   }
 
   return (
-    <div className="relative flex flex-col h-full overflow-hidden">
-      {/* Background mesh gradient */}
-      <div className="glass-mesh-bg" />
-
-      <div className="relative z-10 flex-1 flex flex-col px-6 py-8">
-        <div className="flex-1 flex flex-col max-w-sm w-full mx-auto">
-          {/* Header */}
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/30 dark:bg-white/10 backdrop-blur-xl border border-white/30 flex items-center justify-center shadow-lg">
-              <Key className="h-8 w-8 text-foreground/60" />
-            </div>
-            <h2 className="text-2xl font-bold text-foreground">
-              Activate Wavee
-            </h2>
-            <p className="text-sm text-foreground/60 mt-2">
-              {showActivationForm
-                ? "Enter your license key to activate"
-                : "Choose how you'd like to get started"}
-            </p>
-          </div>
-
-          {/* Messages */}
-          {error && (
-            <div className="mb-4 p-4 rounded-2xl bg-red-500/10 backdrop-blur-xl border border-red-500/30 flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center shrink-0">
-                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+    <div className="flex h-full flex-col overflow-hidden bg-canvas">
+      <div className="flex-1 overflow-y-auto">
+        <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-6 xl:py-10 space-y-6">
+          {/* HERO — Dark band */}
+          <section className="hero-band-dark">
+            <div className="flex flex-col items-center text-center gap-4 p-8 sm:p-10">
+              <div className="icon-plate-dark">
+                <Key className="h-4 w-4 text-primary" />
               </div>
-              <p className="text-sm text-red-600 dark:text-red-400 pt-1">
-                {error}
+              <p className="eyebrow-uppercase text-primary">
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-1 w-1 rounded-full bg-primary" />
+                  Step {STEP_INDEX} of {STEPS_TOTAL}
+                </span>
               </p>
+              <h2
+                className="display-lg text-on-dark"
+              >
+                {showActivationForm ? "Activate " : "Choose how to "}
+                <span className="text-primary">get started</span>.
+              </h2>
+              <p className="body-md text-on-dark-soft max-w-md">
+                {showActivationForm
+                  ? "Enter your license key to activate."
+                  : "Try free for 7 days or activate an existing license."}
+              </p>
+            </div>
+          </section>
+
+          {/* MESSAGES */}
+          {error && (
+            <div className="p-3.5 rounded-md border border-destructive/30 bg-destructive/5 flex items-start gap-2.5 text-destructive">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span className="body-sm">{error}</span>
             </div>
           )}
 
           {success && (
-            <div className="mb-4 p-4 rounded-2xl bg-emerald-500/10 backdrop-blur-xl border border-emerald-500/30 flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
-                <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <p className="text-sm text-emerald-600 dark:text-emerald-400 pt-1">
-                {success}
-              </p>
+            <div className="p-3.5 rounded-md border flex items-start gap-2.5" style={{ borderColor: "rgba(255,79,0,0.3)", background: "rgba(255,79,0,0.06)", color: "#ff4f00" }}>
+              <Check className="h-4 w-4 mt-0.5 shrink-0" />
+              <span className="body-sm">{success}</span>
             </div>
           )}
 
-          {/* Already active/trial status */}
           {canProceed && !success && (
-            <div className="mb-4 p-4 rounded-2xl bg-green-500/10 backdrop-blur-xl border border-green-500/30">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
-                  <ShieldCheck className="h-6 w-6 text-green-600 dark:text-green-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-emerald-600 dark:text-emerald-400">
-                    {isTrial ? "Trial Active" : "License Active"}
-                  </p>
-                  <p className="text-xs text-foreground/60">
-                    {isTrial
-                      ? `${license?.trial_days_remaining ?? 7} days remaining`
-                      : "Your license is activated"}
-                  </p>
-                </div>
+            <div
+              className="p-5 rounded-md border flex items-center gap-4"
+              style={{ borderColor: "rgba(255,79,0,0.3)", background: "rgba(255,79,0,0.06)" }}
+            >
+              <div
+                className="flex h-10 w-10 items-center justify-center rounded-full shrink-0"
+                style={{ background: "rgba(255,79,0,0.15)" }}
+              >
+                <ShieldCheck className="h-5 w-5 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <p className="title-md text-primary">
+                  {isTrial ? "Trial active" : "License active"}
+                </p>
+                <p className="caption text-body mt-0.5">
+                  {isTrial
+                    ? `${license?.trial_days_remaining ?? 7} days remaining`
+                    : "Your license is activated"}
+                </p>
               </div>
             </div>
           )}
 
-          {/* Main content - options or activation form */}
-          {isActive ? (
-            <div className="flex-1 flex items-center justify-center">
-              {/* License already active - options hidden */}
-            </div>
-          ) : !showActivationForm ? (
-            <div className="space-y-3 flex-1">
-              {/* Trial Option */}
-              <button
-                onClick={handleStartTrial}
-                disabled={isStartingTrial}
-                className={cn(
-                  "w-full p-4 rounded-2xl text-left transition-all duration-200",
-                  "bg-white/40 dark:bg-white/5 backdrop-blur-xl",
-                  "border border-white/50 dark:border-white/10",
-                  "hover:bg-white/60 dark:hover:bg-white/10 hover:border-foreground/30",
-                  "hover:shadow-lg",
-                  "group",
-                )}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-white/50 dark:bg-white/10 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                    {isStartingTrial ? (
-                      <Loader2 className="h-6 w-6 animate-spin text-foreground/60" />
-                    ) : (
-                      <Clock className="h-6 w-6 text-foreground/60" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-foreground">
-                      Start 7-Day Free Trial
-                    </h3>
-                    <p className="text-xs text-foreground/60 mt-1">
-                      Try all features free for 7 days. No credit card required.
-                    </p>
-                  </div>
-                </div>
-              </button>
-
-              {/* License Activation Option */}
-              <button
-                onClick={() => setShowActivationForm(true)}
-                className={cn(
-                  "w-full p-4 rounded-2xl text-left transition-all duration-200",
-                  "bg-white/40 dark:bg-white/5 backdrop-blur-xl",
-                  "border border-white/50 dark:border-white/10",
-                  "hover:bg-white/60 dark:hover:bg-white/10 hover:border-foreground/30",
-                  "hover:shadow-lg",
-                  "group",
-                )}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-white/50 dark:bg-white/10 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                    <Key className="h-6 w-6 text-foreground/60" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-foreground">
-                      I Have a License Key
-                    </h3>
-                    <p className="text-xs text-foreground/60 mt-1">
-                      Already purchased? Enter your license key to activate.
-                    </p>
-                  </div>
-                </div>
-              </button>
-
-              {/* Purchase link */}
-              <div className="pt-4 text-center">
-                <button
-                  onClick={() => openUrl("https://  trywavee.johuniq.tech")}
-                  className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground transition-colors"
-                >
+          {/* OPTIONS */}
+          {isActive ? null : !showActivationForm ? (
+            <section className="card-feature-cream">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="icon-plate">
                   <Sparkles className="h-4 w-4" />
-                  Purchase a license
-                  <ExternalLink className="h-3 w-3" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="eyebrow-uppercase text-ink-mid">Options</p>
+                  <h3
+                    className="title-lg text-ink mt-1"
+                  >
+                    Pick a starting point
+                  </h3>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  onClick={handleStartTrial}
+                  disabled={isStartingTrial}
+                  className={cn(
+                    "w-full text-left rounded-md border p-4 transition-colors cursor-pointer disabled:opacity-50",
+                    "bg-canvas border-hairline hover:border-ink",
+                  )}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="icon-plate shrink-0">
+                      {isStartingTrial ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Clock className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h4
+                        className="title-md text-ink"
+                      >
+                        Start 7-day free trial
+                      </h4>
+                      <p className="body-sm text-body-muted mt-1.5">
+                        Try all features free for 7 days. No credit card required.
+                      </p>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setShowActivationForm(true)}
+                  className="w-full text-left rounded-md border border-hairline bg-canvas p-4 transition-colors hover:border-ink cursor-pointer"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="icon-plate shrink-0">
+                      <Key className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4
+                        className="title-md text-ink"
+                      >
+                        I have a license key
+                      </h4>
+                      <p className="body-sm text-body-muted mt-1.5">
+                        Already purchased? Enter your key to activate.
+                      </p>
+                    </div>
+                  </div>
                 </button>
               </div>
-            </div>
+
+              <div className="pt-4 mt-4 border-t border-hairline-soft text-center">
+                <button
+                  onClick={() => openUrl("https://trywavee.johuniq.tech")}
+                  className="paper-button cursor-pointer"
+                >
+                  Purchase a license
+                </button>
+              </div>
+            </section>
           ) : (
-            /* License activation form */
-            <div className="space-y-4 flex-1">
-              <div className="p-5 rounded-2xl bg-white/40 dark:bg-white/5 backdrop-blur-xl border border-white/50 dark:border-white/10">
-                <div className="mb-4">
-                  <h3 className="font-semibold text-foreground">
-                    Enter License Key
+            <section className="card-feature-cream">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="icon-plate">
+                  <Key className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="eyebrow-uppercase text-ink-mid">Activate</p>
+                  <h3
+                    className="title-lg text-ink mt-1"
+                  >
+                    Enter your license key
                   </h3>
-                  <p className="text-xs text-foreground/60 mt-1">
-                    Your license key was sent to your email after purchase
-                  </p>
+                </div>
+              </div>
+
+              <p className="body-sm text-body-muted mb-4">
+                Your license key was sent to your email after purchase.
+              </p>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="eyebrow-uppercase text-ink-mid block">
+                    License key
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Paste your Wavee license key"
+                    value={licenseKey}
+                    onChange={(e) => setLicenseKey(e.target.value)}
+                    disabled={isActivating}
+                    className="paper-input w-full h-11 px-4 font-mono text-sm disabled:opacity-50"
+                    style={{ borderRadius: "8px" }}
+                  />
                 </div>
 
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label
-                      htmlFor="license-key"
-                      className="text-sm font-medium text-foreground/80"
-                    >
-                      License Key
-                    </label>
-                    <input
-                      id="license-key"
-                      type="text"
-                      placeholder="Paste your Wavee license key"
-                      value={licenseKey}
-                      onChange={(e) => setLicenseKey(e.target.value)}
-                      disabled={isActivating}
-                      className={cn(
-                        "w-full px-4 py-3 rounded-xl font-mono text-sm",
-                        "bg-white/50 dark:bg-white/5",
-                        "border border-white/50 dark:border-white/20",
-                        "focus:outline-none focus:ring-2 focus:ring-foreground/30 focus:border-foreground/30",
-                        "placeholder:text-gray-400 dark:placeholder:text-gray-600",
-                        "disabled:opacity-50",
-                      )}
-                    />
-                  </div>
-
+                <div className="flex flex-wrap items-center gap-3">
                   <button
                     onClick={handleActivate}
                     disabled={isActivating || !licenseKey.trim()}
-                    className={cn(
-                      "w-full py-3 px-6 rounded-xl font-semibold",
-                      "bg-foreground/90 hover:bg-foreground",
-                      "text-white shadow-lg shadow-foreground/25",
-                      "disabled:opacity-50 disabled:cursor-not-allowed",
-                      "transition-all duration-200",
-                      "flex items-center justify-center gap-2",
-                    )}
+                    className="paper-button-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isActivating ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Activating...
-                      </>
-                    ) : (
-                      <>
-                        <ShieldCheck className="h-4 w-4" />
-                        Activate License
-                      </>
-                    )}
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : null}
+                    {isActivating ? "Activating..." : "Activate license"}
+                  </button>
+                  <button
+                    onClick={() => setShowActivationForm(false)}
+                    className="paper-button cursor-pointer"
+                  >
+                    Back to options
                   </button>
                 </div>
               </div>
-
-              <button
-                onClick={() => setShowActivationForm(false)}
-                className={cn(
-                  "w-full py-3 px-6 rounded-xl font-medium",
-                  "bg-white/30 dark:bg-white/10 backdrop-blur-xl",
-                  "border border-white/50 dark:border-white/10",
-                  "text-foreground/80",
-                  "hover:bg-white/50 dark:hover:bg-white/15",
-                  "transition-all duration-200",
-                )}
-              >
-                Back to options
-              </button>
-            </div>
+            </section>
           )}
         </div>
+      </div>
 
-        {/* Navigation buttons */}
-        <div className="flex gap-3 max-w-sm w-full mx-auto pt-4">
+      {/* STICKY FOOTER */}
+      <div className="shrink-0 border-t border-hairline bg-canvas-soft">
+        <div className="max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-4 flex items-center justify-between gap-3 flex-wrap">
           <button
             onClick={onBack}
-            className={cn(
-              "glass-button flex-1 py-3 px-6 rounded-xl font-medium",
-              "bg-white/30 dark:bg-white/10 backdrop-blur-xl",
-              "border border-white/50 dark:border-white/10",
-              "text-foreground/80",
-              "hover:bg-white/50 dark:hover:bg-white/15",
-              "transition-all duration-200",
-              "flex items-center justify-center gap-2",
-            )}
+            className="paper-button-outline cursor-pointer"
           >
-            <ArrowLeft className="h-4 w-4" />
             Back
           </button>
-          {canProceed && (
+          {canProceed ? (
             <button
               onClick={onNext}
-              className={cn(
-                "glass-button flex-1 py-3 px-6 rounded-xl font-semibold",
-                "bg-foreground/90 hover:bg-foreground",
-                "text-white shadow-lg shadow-foreground/25",
-                "transition-all duration-200",
-                "flex items-center justify-center gap-2",
-              )}
+              className="paper-button-primary cursor-pointer"
             >
               Continue
-              <ArrowRight className="h-4 w-4" />
             </button>
+          ) : (
+            <p className="caption text-body-muted">Start a trial or enter a key to continue.</p>
           )}
         </div>
       </div>

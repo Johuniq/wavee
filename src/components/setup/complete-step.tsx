@@ -1,6 +1,6 @@
 import { Logo } from "@/components/logo";
 import { useAppStore } from "@/store";
-import { CheckCircle2, Cpu, Keyboard, Mic, Sparkles } from "lucide-react";
+import { Check, Cpu, Keyboard, Mic, Sparkles } from "lucide-react";
 
 interface CompleteStepProps {
   onFinish: () => void;
@@ -15,103 +15,186 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
       : settings.toggleKey;
 
   return (
-    <div className="flex flex-col h-full relative overflow-hidden">
-      {/* Background mesh gradient */}
-      <div className="glass-mesh-bg" />
-
-      <div className="flex flex-col h-full min-h-0 px-6 py-8">
-        <div className="flex-1 min-h-0 flex flex-col items-center justify-center overflow-auto">
-          <div className="h-14 w-14 rounded-full p-2 bg-green-500/10 flex items-center justify-center mb-4 glass-card">
-            <CheckCircle2 className="h-8 w-8 text-green-500" />
-          </div>
-
-          <Logo size="md" />
-
-          <h2 className="text-lg font-semibold text-foreground mt-4">
-            Setup Complete
-          </h2>
-          <p className="text-sm text-foreground/60 text-center mt-1">
-            Wavee is ready to use
-          </p>
-
-          <div className="glass-card w-full mt-6 p-4 rounded-2xl space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-white/30 dark:bg-white/10">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-white/50 dark:bg-white/10">
-                  <Mic className="h-4 w-4 text-foreground/60" />
-                </div>
-                <span className="text-sm text-foreground">Microphone</span>
+    <div className="flex h-full flex-col overflow-hidden bg-canvas">
+      <div className="flex-1 overflow-y-auto">
+        <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-6 xl:py-10 space-y-6">
+          {/* HERO — Dark band with success accent */}
+          <section
+            className="hero-band-dark relative"
+            style={{
+              background:
+                "radial-gradient(circle at 50% 0%, rgba(255,79,0,0.18) 0%, transparent 60%), linear-gradient(180deg, #22171a 0%, #1a1212 100%)",
+            }}
+          >
+            <div className="flex flex-col items-center text-center gap-4 p-8 sm:p-12">
+              <div
+                className="h-14 w-14 rounded-full flex items-center justify-center"
+                style={{ background: "rgba(255,79,0,0.15)", color: "#ff4f00" }}
+              >
+                <Check className="h-7 w-7" strokeWidth={2.5} />
               </div>
-              <span className="text-sm text-green-500 font-medium flex items-center gap-1">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Connected
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between p-3 rounded-xl bg-white/30 dark:bg-white/10">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-white/50 dark:bg-white/10">
-                  <Cpu className="h-4 w-4 text-foreground/60" />
-                </div>
-                <span className="text-sm text-foreground">Model</span>
-              </div>
-              <span className="text-sm font-medium text-foreground">
-                {selectedModel?.name || "Base"}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between p-3 rounded-xl bg-white/30 dark:bg-white/10">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-white/50 dark:bg-white/10">
-                  <Keyboard className="h-4 w-4 text-foreground/60" />
-                </div>
-                <span className="text-sm text-foreground">Hotkey</span>
-              </div>
-              <code className="text-sm font-mono text-foreground px-2 py-1 rounded-lg bg-white/50 dark:bg-white/10">
-                {currentHotkey}
-              </code>
-            </div>
-          </div>
-
-          <div className="glass-card w-full my-3 p-4 rounded-2xl">
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="h-4 w-4 text-foreground/60" />
-              <p className="text-sm font-medium text-foreground">How to use</p>
-            </div>
-            <ol className="text-xs text-foreground/70 space-y-2">
-              <li className="flex items-start gap-2">
-                <span className="w-5 h-5 rounded-full bg-white/50 dark:bg-white/10 flex items-center justify-center text-xs font-medium text-foreground shrink-0">
-                  1
+              <p className="eyebrow-uppercase text-primary">
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-1 w-1 rounded-full bg-primary" />
+                  All set
                 </span>
-                Click where you want to type
+              </p>
+              <h2
+                className="display-lg text-on-dark"
+              >
+                You're <span className="text-primary">ready</span> to dictate.
+              </h2>
+              <p className="body-md text-on-dark-soft max-w-md">
+                Wavee is installed, configured, and waiting for your voice.
+              </p>
+            </div>
+          </section>
+
+          {/* CONFIGURATION SUMMARY */}
+          <section className="card-feature-cream">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="icon-plate">
+                <Sparkles className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="eyebrow-uppercase text-ink-mid">Setup</p>
+                <h3
+                  className="title-lg text-ink mt-1"
+                >
+                  Your configuration
+                </h3>
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between p-3.5 rounded-md border border-hairline bg-canvas">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="icon-plate">
+                    <Mic className="h-4 w-4" />
+                  </div>
+                  <span
+                    className="title-sm text-ink"
+                  >
+                    Microphone
+                  </span>
+                </div>
+                <span className="caption-strong inline-flex items-center gap-1.5" style={{ color: "#ff4f00" }}>
+                  <Check className="h-3.5 w-3.5" />
+                  Ready
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-3.5 rounded-md border border-hairline bg-canvas">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="icon-plate">
+                    <Cpu className="h-4 w-4" />
+                  </div>
+                  <span
+                    className="title-sm text-ink"
+                  >
+                    Model
+                  </span>
+                </div>
+                <span className="body-sm-strong text-ink truncate ml-3">
+                  {selectedModel?.name || "Base"}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-3.5 rounded-md border border-hairline bg-canvas">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="icon-plate">
+                    <Keyboard className="h-4 w-4" />
+                  </div>
+                  <span
+                    className="title-sm text-ink"
+                  >
+                    Hotkey
+                  </span>
+                </div>
+                <code className="caption-strong text-ink font-mono px-2.5 py-1 rounded-md bg-canvas-soft">
+                  {currentHotkey}
+                </code>
+              </div>
+            </div>
+          </section>
+
+          {/* HOW TO USE */}
+          <section className="card-feature-cream">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="icon-plate-orange">
+                <Sparkles className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="eyebrow-uppercase text-ink-mid">Get started</p>
+                <h3
+                  className="title-lg text-ink mt-1"
+                >
+                  How to use
+                </h3>
+              </div>
+            </div>
+
+            <ol className="space-y-3">
+              <li className="flex items-start gap-3">
+                <span
+                  className="flex h-6 w-6 items-center justify-center rounded-full shrink-0"
+                  style={{ background: "rgba(255,79,0,0.1)", color: "#ff4f00" }}
+                >
+                  <span className="caption-strong tabular-nums">1</span>
+                </span>
+                <span className="body-md text-ink pt-0.5">Click where you want to type.</span>
               </li>
-              <li className="flex items-start gap-2">
-                <span className="w-5 h-5 rounded-full bg-white/50 dark:bg-white/10 flex items-center justify-center text-xs font-medium text-foreground shrink-0">
-                  2
+              <li className="flex items-start gap-3">
+                <span
+                  className="flex h-6 w-6 items-center justify-center rounded-full shrink-0"
+                  style={{ background: "rgba(255,79,0,0.1)", color: "#ff4f00" }}
+                >
+                  <span className="caption-strong tabular-nums">2</span>
                 </span>
-                {settings.hotkeyMode === "push-to-talk"
-                  ? `Hold ${currentHotkey} and speak`
-                  : `Press ${currentHotkey} to start`}
+                <span className="body-md text-ink pt-0.5">
+                  {settings.hotkeyMode === "push-to-talk"
+                    ? `Hold ${currentHotkey} and speak.`
+                    : `Press ${currentHotkey} to start.`}
+                </span>
               </li>
-              <li className="flex items-start gap-2">
-                <span className="w-5 h-5 rounded-full bg-white/50 dark:bg-white/10 flex items-center justify-center text-xs font-medium text-foreground shrink-0">
-                  3
+              <li className="flex items-start gap-3">
+                <span
+                  className="flex h-6 w-6 items-center justify-center rounded-full shrink-0"
+                  style={{ background: "rgba(255,79,0,0.1)", color: "#ff4f00" }}
+                >
+                  <span className="caption-strong tabular-nums">3</span>
                 </span>
-                {settings.hotkeyMode === "push-to-talk"
-                  ? "Release to insert text"
-                  : `Press ${currentHotkey} again to stop`}
+                <span className="body-md text-ink pt-0.5">
+                  {settings.hotkeyMode === "push-to-talk"
+                    ? "Release to insert the text."
+                    : `Press ${currentHotkey} again to stop.`}
+                </span>
               </li>
             </ol>
+          </section>
+
+          {/* FOOTER LOGO CARD */}
+          <div className="flex items-center justify-center gap-2.5 pt-2 pb-1">
+            <Logo size="sm" />
+            <span
+              className="title-sm text-ink"
+            >
+              Wavee
+            </span>
           </div>
         </div>
+      </div>
 
-        <button
-          onClick={onFinish}
-          className="glass-button w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-white bg-foreground/90 hover:bg-foreground transition-all shadow-lg shadow-foreground/25"
-        >
-          <Sparkles className="h-4 w-4" />
-          Start Using Wavee
-        </button>
+      {/* STICKY FOOTER */}
+      <div className="shrink-0 border-t border-hairline bg-canvas-soft">
+        <div className="max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-4 flex items-center justify-center">
+          <button
+            onClick={onFinish}
+            className="paper-button-primary cursor-pointer w-full sm:w-auto sm:min-w-[240px]"
+          >
+            Start using Wavee
+          </button>
+        </div>
       </div>
     </div>
   );

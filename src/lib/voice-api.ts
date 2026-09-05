@@ -79,12 +79,23 @@ export async function isRecording(): Promise<boolean> {
   return await invoke<boolean>("is_recording");
 }
 
+export interface LoadedModelInfo {
+  model_id: string;
+  language: string;
+}
+
+export async function getLoadedModel(): Promise<LoadedModelInfo | null> {
+  return await invoke<LoadedModelInfo | null>("get_loaded_model");
+}
+
 // ============================================
 // Recording Overlay API
 // ============================================
 
-export async function showRecordingOverlay(): Promise<void> {
-  await invoke("show_recording_overlay");
+export async function showRecordingOverlay(
+  position?: string
+): Promise<void> {
+  await invoke("show_recording_overlay", { position });
 }
 
 export async function hideRecordingOverlay(): Promise<void> {

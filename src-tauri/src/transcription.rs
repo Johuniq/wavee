@@ -16,15 +16,15 @@ impl Transcriber {
     pub fn new(model_id: &str, model_path: &str, language: &str) -> Result<Self, String> {
         if model_id.starts_with("qwen3-asr-") {
             Ok(Self::Qwen3Asr(Box::new(Qwen3AsrTranscriber::new(
-                model_path, language,
+                model_id, model_path, language,
             )?)))
         } else if model_id.starts_with("parakeet-") {
             Ok(Self::Parakeet(ParakeetTranscriber::new(
-                model_path, language,
+                model_id, model_path, language,
             )?))
         } else {
             Ok(Self::Whisper(WhisperTranscriber::new(
-                model_path, language,
+                model_id, model_path, language,
             )?))
         }
     }
@@ -44,15 +44,32 @@ impl Transcriber {
             Self::Qwen3Asr(transcriber) => transcriber.set_language(language),
         }
     }
+
+    pub fn language(&self) -> &str {
+        match self {
+            Self::Whisper(t) => &t.language,
+            Self::Parakeet(t) => &t.language,
+            Self::Qwen3Asr(t) => &t.language,
+        }
+    }
+
+    pub fn model_id(&self) -> &str {
+        match self {
+            Self::Whisper(t) => &t.model_id,
+            Self::Parakeet(t) => &t.model_id,
+            Self::Qwen3Asr(t) => &t.model_id,
+        }
+    }
 }
 
 pub struct Qwen3AsrTranscriber {
     engine: AsrInference,
     language: String,
+    model_id: String,
 }
 
 impl Qwen3AsrTranscriber {
-    pub fn new(model_path: &str, language: &str) -> Result<Self, String> {
+    pub fn new(model_id: &str, model_path: &str, language: &str) -> Result<Self, String> {
         let model_dir = Path::new(model_path);
         if !model_dir.is_dir() {
             return Err(format!(
@@ -68,6 +85,7 @@ impl Qwen3AsrTranscriber {
         Ok(Self {
             engine,
             language: language.to_string(),
+            model_id: model_id.to_string(),
         })
     }
 
@@ -97,10 +115,11 @@ impl Qwen3AsrTranscriber {
 pub struct WhisperTranscriber {
     ctx: WhisperContext,
     language: String,
+    model_id: String,
 }
 
 impl WhisperTranscriber {
-    pub fn new(model_path: &str, language: &str) -> Result<Self, String> {
+    pub fn new(model_id: &str, model_path: &str, language: &str) -> Result<Self, String> {
         if !Path::new(model_path).exists() {
             return Err(format!("Model file not found: {}", model_path));
         }
@@ -121,6 +140,7 @@ impl WhisperTranscriber {
         Ok(Self {
             ctx,
             language: language.to_string(),
+            model_id: model_id.to_string(),
         })
     }
 
@@ -229,10 +249,11 @@ impl WhisperTranscriber {
 pub struct ParakeetTranscriber {
     model: ParakeetModel,
     language: String,
+    model_id: String,
 }
 
 impl ParakeetTranscriber {
-    pub fn new(model_path: &str, language: &str) -> Result<Self, String> {
+    pub fn new(model_id: &str, model_path: &str, language: &str) -> Result<Self, String> {
         configure_ort_acceleration();
 
         let model_dir = Path::new(model_path);
@@ -249,6 +270,7 @@ impl ParakeetTranscriber {
         Ok(Self {
             model,
             language: language.to_string(),
+            model_id: model_id.to_string(),
         })
     }
 

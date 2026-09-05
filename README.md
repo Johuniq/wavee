@@ -137,6 +137,19 @@ Wavee can recognize spoken editing and navigation actions as part of your dictat
 Example:
 Saying `undo`, `paste`, `select all`, or `backspace word` can trigger editing behavior without reaching for the keyboard as often.
 
+### 6. Custom Vocabulary
+
+Wavee lets you define domain-specific terms that local transcription models consistently mangle — product names, internal codenames, library names, acronyms, niche jargon — and have them replaced automatically in the final output.
+
+Open **Settings → Custom Vocabulary** to add pairs:
+
+- **You say**: the phrase Whisper tends to mishear (e.g. `next js`, `k eight s`, `wave e`)
+- **Wavee writes**: the canonical text that should appear in your output (e.g. `Next.js`, `k8s`, `Wavee`)
+
+Matching is case-insensitive and whole-word aware, so longer phrases always win over shorter substrings and replacements never fire inside unrelated words. The written form is preserved verbatim, so include the casing, punctuation, and symbols you want.
+
+This pairs naturally with Wavee's code-aware post-processing: dictating `next js slash app slash layout dot tsx` becomes `Next.js/app/@layout.tsx`, without Whisper deciding it's "next j s" along the way.
+
 ## Voice Commands
 
 Wavee supports voice-driven editing and navigation commands so dictation can do more than just insert text.
