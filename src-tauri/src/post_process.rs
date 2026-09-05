@@ -394,15 +394,18 @@ impl PostProcessor {
     /// term with its canonical written form using case-insensitive
     /// word-boundary matching. Applied first so that all downstream
     /// transformations operate on the user's canonical text.
-    fn apply_vocabulary(&self, text: &str) -> String {
+    fn apply_vocabulary(&self, text: &str) -> (String, Vec<(String, String)>) {
         if self.vocabulary.is_empty() {
-            return text.to_string();
+            return (text.to_string(), Vec::new());
         }
         let mut result = text.to_string();
-        for (pattern, replacement) in &self.vocabulary {
-            result = pattern.replace_all(&result, replacement.as_str()).to_string();
+        let mut restore_map: Vec<(String, String)> = Vec::new();
+        for (i, (pattern, replacement)) in self.vocabulary.iter().enumerate() {
+            let placeholder = format!("\u{E000}VOCAB{}\u{E000}", i);
+            restore_map.push((placeholder.clone(), replacement.clone()));
+            result = pattern.replace_all(&result, placeholder.as_str()).to_string();
         }
-        result
+        (result, restore_map)
     }
 
 /// Main post-processing function
@@ -418,7 +421,12 @@ impl PostProcessor {
 
         // Apply user-defined custom vocabulary next so the rest of the
         // pipeline operates on the user's canonical domain terms.
-        result = self.apply_vocabulary(&result);
+        // Replacements are stored as unique placeholders and restored at
+        // the end to protect them from downstream transformations (e.g.
+        // abbreviation uppercasing "OAuth" -> "OAUTH" or file-path
+        // detection adding @ before "Next.js").
+        let (vocab_result, restore_map) = self.apply_vocabulary(&result);
+        result = vocab_result;
 
         // Then apply code-specific transformations that involve "dot"
         result = self.process_explicit_casing(&result);
@@ -438,6 +446,11 @@ impl PostProcessor {
         result = self.process_keywords(&result); // Apply keyword casing
         result = self.cleanup_whitespace(&result);
 
+        // Restore custom vocabulary replacements (protected as placeholders)
+        for (placeholder, replacement) in &restore_map {
+            result = result.replace(placeholder, replacement);
+        }
+
         result
     }
 
@@ -447,7 +460,13 @@ impl PostProcessor {
         let mut result = self.process_voice_commands(text);
         // Still honour the user's custom vocabulary so they get consistent
         // domain terms even when voice-command-only mode is active.
-        result = self.apply_vocabulary(&result);
+        // Replacements are protected as placeholders and restored at the
+        // end to prevent downstream mangling.
+        let (vocab_result, restore_map) = self.apply_vocabulary(&result);
+        result = vocab_result;
+        for (placeholder, replacement) in &restore_map {
+            result = result.replace(placeholder, replacement);
+        }
         result
     }
 
