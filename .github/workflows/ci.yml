@@ -51,6 +51,8 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
 
       - name: Setup libclang for bindgen
         run: |
@@ -70,11 +72,11 @@ jobs:
         run: rustc -vV
 
       - name: Build macOS app bundle
-        run: pnpm tauri build --bundles app
+        run: pnpm tauri build --bundles app --target aarch64-apple-darwin
 
       - name: Validate macOS app bundle
         run: |
-          APP_PATH="$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' -type d -print -quit)"
+          APP_PATH="$(find src-tauri/target/aarch64-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app' -type d -print -quit)"
           test -n "$APP_PATH"
           plutil -lint "$APP_PATH/Contents/Info.plist"
           # Re-sign ad hoc in CI so verification checks the bundle contents

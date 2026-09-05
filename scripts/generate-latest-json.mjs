@@ -152,11 +152,14 @@ const windowsMsi = findAsset([/\.msi$/i]);
 const darwinAarch64 = findAsset([/aarch64.*\.app\.tar\.gz$/i]) || findAsset([/aarch64.*\.tar\.gz$/i]);
 const darwinX64 = findAsset([/(x64|x86_64).*\.app\.tar\.gz$/i]) || findAsset([/(x64|x86_64).*\.tar\.gz$/i]);
 
+const linuxX64AppImage = findAsset([/.*\.AppImage$/i]);
+
 if (requireAllPlatforms) {
   const missing = [
     ["Windows installer (.exe)", windowsExe],
     ["macOS Apple Silicon (.app.tar.gz)", darwinAarch64],
     ["macOS Intel (.app.tar.gz)", darwinX64],
+    ["Linux AppImage (.AppImage)", linuxX64AppImage],
   ]
     .filter(([, fileName]) => !fileName)
     .map(([label]) => label);
@@ -181,6 +184,9 @@ if (darwinAarch64Entry) platforms["darwin-aarch64"] = darwinAarch64Entry;
 
 const darwinX64Entry = signAsset(darwinX64, "darwin-x86_64");
 if (darwinX64Entry) platforms["darwin-x86_64"] = darwinX64Entry;
+
+const linuxX64Entry = signAsset(linuxX64AppImage, "linux-x86_64");
+if (linuxX64Entry) platforms["linux-x86_64"] = linuxX64Entry;
 
 const manifest = {
   version,

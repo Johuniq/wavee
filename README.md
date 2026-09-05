@@ -8,7 +8,7 @@
 
 **Wave your voice. Get text at your cursor.**
 
-Wavee is a local-first desktop dictation app for Windows and macOS. Hold a hotkey, speak naturally, and Wavee turns your voice into polished text that can be inserted right where you are working.
+Wavee is a local-first desktop dictation app for Windows, macOS, and Linux. Hold a hotkey, speak naturally, and Wavee turns your voice into polished text that can be inserted right where you are working.
 
 [Download Latest Release](https://github.com/johuniq/wavee/releases/latest) · [Report A Bug](https://github.com/johuniq/wavee/issues/new?template=bug_report.yml) · [Contribute](CONTRIBUTING.md)
 
@@ -36,7 +36,7 @@ Wavee is built to cover the full desktop dictation workflow from start to finish
 - Downloadable transcription models
 - Recording indicators and desktop integration
 - Local-first data handling
-- Windows and macOS desktop support
+- Windows, macOS, and Linux desktop support
 
 ## How It Works
 
@@ -187,10 +187,11 @@ Wavee currently supports:
 
 - Windows 10 (version 1803 or later) and Windows 11
 - macOS 13 Ventura or later
-
-Linux desktop builds are not currently supported.
+- Linux distributions with glibc 2.34+ and GTK 3 (Ubuntu 22.04+, Fedora 36+, etc.)
 
 macOS builds are produced for both Apple Silicon and Intel Macs.
+
+Linux builds are produced as AppImage, DEB, and RPM packages for x86_64.
 
 Windows installers use WebView2. On Windows 10 version 1803+ and Windows 11, this is typically already available or installed automatically by the installer.
 
@@ -247,6 +248,29 @@ To open Wavee:
 5. Confirm the prompt.
 
 You only need to do this once for the downloaded app.
+
+### Linux
+
+**Install via AppImage (Recommended):**
+1. Download the latest `Wavee_*.AppImage` from [Releases](https://github.com/johuniq/wavee/releases/latest).
+2. Make it executable: `chmod +x Wavee_*.AppImage`
+3. Run it: `./Wavee_*.AppImage`
+4. Choose a transcription model during setup.
+5. Grant microphone permission if your desktop environment prompts for it.
+6. Press the configured recording hotkey and speak.
+
+**Or install via DEB (Ubuntu/Debian):**
+1. Download the latest `.deb` package from [Releases](https://github.com/johuniq/wavee/releases/latest).
+2. `sudo apt install ./wavee_*.deb`
+3. Open Wavee from the Applications menu.
+4. Choose a transcription model during setup.
+
+**Or install via RPM (Fedora/RHEL):**
+1. Download the latest `.rpm` package from [Releases](https://github.com/johuniq/wavee/releases/latest).
+2. `sudo dnf install ./wavee-*.rpm`
+3. Open Wavee from the Applications menu.
+
+Note: Wavee requires PulseAudio or ALSA for microphone access on Linux. Install `pulseaudio` or `alsa-utils` if audio is not detected.
 
 ## Privacy
 
