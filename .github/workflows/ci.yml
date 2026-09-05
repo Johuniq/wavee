@@ -57,7 +57,6 @@ jobs:
           brew install llvm
           LLVM_PREFIX="$(brew --prefix llvm)"
           echo "LIBCLANG_PATH=${LLVM_PREFIX}/lib" >> "$GITHUB_ENV"
-          echo "DYLD_LIBRARY_PATH=${LLVM_PREFIX}/lib:${DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
       - name: Setup CMake
         run: |
@@ -66,6 +65,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Verify Rust toolchain
+        run: rustc -vV
 
       - name: Build macOS app bundle
         run: pnpm tauri build --bundles app
