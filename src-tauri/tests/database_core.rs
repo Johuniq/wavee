@@ -25,6 +25,10 @@ fn default_settings_are_created() {
     assert!(settings.post_processing_enabled);
     assert!(!settings.voice_commands_enabled);
     assert!(!settings.clipboard_mode);
+    assert!(!settings.auto_check_for_updates);
+    assert_eq!(settings.recording_overlay_position, "top-center");
+    assert!(settings.diagnostics_enabled);
+    assert!(settings.custom_vocabulary.is_empty());
 }
 
 #[test]
@@ -44,6 +48,7 @@ fn update_settings_persists_every_field() {
         post_processing_enabled: false,
         voice_commands_enabled: true,
         clipboard_mode: true,
+        ..Default::default()
     };
 
     db.update_settings(&settings).unwrap();
@@ -62,6 +67,10 @@ fn update_settings_persists_every_field() {
     assert!(!stored.post_processing_enabled);
     assert!(stored.voice_commands_enabled);
     assert!(stored.clipboard_mode);
+    assert!(!stored.auto_check_for_updates);
+    assert_eq!(stored.recording_overlay_position, "top-center");
+    assert!(stored.diagnostics_enabled);
+    assert!(stored.custom_vocabulary.is_empty());
 }
 
 #[test]

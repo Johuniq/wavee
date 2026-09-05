@@ -21,8 +21,9 @@ fn database_state_survives_reopen() {
             minimize_to_tray: false,
             post_processing_enabled: false,
             voice_commands_enabled: true,
-            clipboard_mode: true,
-        })
+        clipboard_mode: true,
+        ..Default::default()
+    })
         .unwrap();
         db.update_app_state(&AppState {
             is_first_launch: false,

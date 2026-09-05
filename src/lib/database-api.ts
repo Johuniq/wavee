@@ -197,7 +197,7 @@ export function dbSettingsToFrontend(db: DbAppSettings): AppSettings {
     clipboardMode: db.clipboard_mode,
     autoStartOnBoot: db.auto_start_on_boot,
     minimizeToTray: db.minimize_to_tray,
-    autoCheckForUpdates: db.auto_check_for_updates ?? true,
+    autoCheckForUpdates: db.auto_check_for_updates ?? false,
     customVocabulary: Array.isArray(db.custom_vocabulary)
       ? db.custom_vocabulary
       : [],

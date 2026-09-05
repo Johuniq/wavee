@@ -15,7 +15,7 @@ use database::{AppSettings, AppState, Database, LicenseData, TranscriptionHistor
 use downloader::{DownloadProgress, ModelDownloader};
 use error_reporting::{ErrorCategory, ErrorReport, ErrorReporter, ErrorSeverity, ErrorStats};
 use license::{
-    clear_cache, get_device_id, get_device_label, load_cache, LicenseInfo, LicenseManager,
+    clear_cache, get_device_id, get_device_label, LicenseInfo, LicenseManager,
     LicenseStatus,
 };
 use log::{debug, error, info, warn};

@@ -33,6 +33,7 @@ pub struct AppSettings {
     pub voice_commands_enabled: bool,
     pub clipboard_mode: bool,
     pub auto_check_for_updates: bool,
+    pub diagnostics_enabled: bool,
     pub recording_overlay_position: String,
     /// User-defined domain vocabulary. Stored as a JSON array so we can
     /// support an arbitrary number of entries without a schema change.
@@ -55,7 +56,8 @@ impl Default for AppSettings {
             post_processing_enabled: true,
             voice_commands_enabled: false,
             clipboard_mode: false,
-            auto_check_for_updates: true,
+            auto_check_for_updates: false,
+            diagnostics_enabled: true,
             recording_overlay_position: "top-center".to_string(),
             custom_vocabulary: Vec::new(),
         }
@@ -167,6 +169,8 @@ impl Database {
                 post_processing_enabled INTEGER NOT NULL DEFAULT 1,
                 voice_commands_enabled INTEGER NOT NULL DEFAULT 0,
                 clipboard_mode INTEGER NOT NULL DEFAULT 0,
+                auto_check_for_updates INTEGER NOT NULL DEFAULT 0,
+                diagnostics_enabled INTEGER NOT NULL DEFAULT 1,
                 custom_vocabulary TEXT NOT NULL DEFAULT '[]',
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )",
@@ -208,6 +212,18 @@ impl Database {
         // Add custom_vocabulary column if it doesn't exist (migration for existing DBs)
         let _ = conn.execute(
             "ALTER TABLE settings ADD COLUMN custom_vocabulary TEXT NOT NULL DEFAULT '[]'",
+            [],
+        );
+
+        // Add auto_check_for_updates column if it doesn't exist (migration for existing DBs)
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN auto_check_for_updates INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+
+        // Add diagnostics_enabled column if it doesn't exist (migration for existing DBs)
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN diagnostics_enabled INTEGER NOT NULL DEFAULT 1",
             [],
         );
 
@@ -473,7 +489,7 @@ impl Database {
         conn.query_row(
             "SELECT push_to_talk_key, toggle_key, hotkey_mode, language, selected_model_id,
                     show_recording_indicator, show_recording_overlay, play_audio_feedback, auto_start_on_boot, minimize_to_tray,
-                    post_processing_enabled, voice_commands_enabled, clipboard_mode, auto_check_for_updates, recording_overlay_position, custom_vocabulary
+                    post_processing_enabled, voice_commands_enabled, clipboard_mode, auto_check_for_updates, recording_overlay_position, custom_vocabulary, diagnostics_enabled
              FROM settings WHERE id = 1",
             [],
             |row| {
@@ -497,6 +513,7 @@ impl Database {
                     auto_check_for_updates: row.get::<_, i32>(13).unwrap_or(1) == 1,
                     recording_overlay_position: row.get(14).unwrap_or_else(|_| "top-center".to_string()),
                     custom_vocabulary,
+                    diagnostics_enabled: row.get::<_, i32>(16).unwrap_or(1) == 1,
                 })
             },
         )
@@ -524,6 +541,7 @@ impl Database {
                 auto_check_for_updates = ?14,
                 recording_overlay_position = ?15,
                 custom_vocabulary = ?16,
+                diagnostics_enabled = ?17,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = 1",
             params![
@@ -543,6 +561,7 @@ impl Database {
                 settings.auto_check_for_updates as i32,
                 settings.recording_overlay_position,
                 vocab_json,
+                settings.diagnostics_enabled as i32,
             ],
         )?;
         Ok(())
@@ -566,6 +585,7 @@ impl Database {
             "clipboard_mode",
             "auto_check_for_updates",
             "recording_overlay_position",
+            "diagnostics_enabled",
         ];
 
         if !ALLOWED_KEYS.contains(&key) {

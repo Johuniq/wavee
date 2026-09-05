@@ -135,7 +135,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoStartOnBoot: false,
   minimizeToTray: true,
   diagnosticsEnabled: true,
-  autoCheckForUpdates: true,
+   autoCheckForUpdates: false,
   customVocabulary: [
     { spoken: "wave e", written: "Wavee" },
     { spoken: "t a u r i", written: "Tauri" },
