@@ -10,7 +10,7 @@ import {
   RefreshCw,
   RotateCcw,
   Trash2,
-} from "lucide-react";
+} from "@/components/icons";
 import { useState } from "react";
 
 import {

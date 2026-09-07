@@ -142,6 +142,19 @@ export async function transcribeFile(
   return text;
 }
 
+export async function transcribeUrl(
+  url: string,
+  enableSpeakerDetection: boolean = false
+): Promise<string> {
+  return await invoke<string>("transcribe_url", { url, enableSpeakerDetection });
+}
+
+export async function transcribeFilesBatch(
+  filePaths: string[]
+): Promise<string[]> {
+  return await invoke<string[]>("transcribe_files_batch", { filePaths });
+}
+
 // ============================================
 // Model Download API
 // ============================================
@@ -476,30 +489,77 @@ export async function stopTranscribeAndInject(
 }
 
 // ============================================
+// Translation API
+// ============================================
+
+export async function translateText(
+  text: string,
+  sourceLanguage: string,
+  targetLanguage: string
+): Promise<string> {
+  return await invoke<string>("translate_text", {
+    text,
+    sourceLanguage,
+    targetLanguage,
+  });
+}
+
+export async function recordAndTranslate(
+  sourceLanguage: string,
+  targetLanguage: string,
+  enablePostProcessing: boolean = true
+): Promise<string | null> {
+  try {
+    const text = await invoke<string>("record_and_translate", {
+      sourceLanguage,
+      targetLanguage,
+    });
+
+    if (text && enablePostProcessing) {
+      return await postProcessText(text);
+    }
+
+    return text || null;
+  } catch (error) {
+    console.error("Failed to record and translate:", error);
+    return null;
+  }
+}
+
+// ============================================
 // Hotkey API
 // ============================================
 
-export async function registerHotkey(hotkey: string): Promise<void> {
-  await invoke("register_hotkey", { hotkey });
+export interface HotkeyRegistration {
+  hotkey: string;
+  label: string;
+}
+
+export async function registerHotkey(registrations: HotkeyRegistration[]): Promise<void> {
+  await invoke("register_hotkey", { registrations });
 }
 
 export async function unregisterHotkeys(): Promise<void> {
   await invoke("unregister_hotkeys");
 }
 
+export interface HotkeyEventPayload {
+  label: string;
+}
+
 export async function onHotkeyPressed(
-  callback: () => void
+  callback: (payload: HotkeyEventPayload) => void
 ): Promise<UnlistenFn> {
-  return await listen("hotkey-pressed", () => {
-    callback();
+  return await listen<HotkeyEventPayload>("hotkey-pressed", (event) => {
+    callback(event.payload);
   });
 }
 
 export async function onHotkeyReleased(
-  callback: () => void
+  callback: (payload: HotkeyEventPayload) => void
 ): Promise<UnlistenFn> {
-  return await listen("hotkey-released", () => {
-    callback();
+  return await listen<HotkeyEventPayload>("hotkey-released", (event) => {
+    callback(event.payload);
   });
 }
 

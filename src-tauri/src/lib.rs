@@ -1,6 +1,7 @@
 #![recursion_limit = "512"]
 
 mod audio;
+pub mod cloud_transcription;
 pub mod database;
 pub mod downloader;
 mod error_reporting;
@@ -11,6 +12,7 @@ mod text_inject;
 pub mod transcription;
 
 use audio::{AudioCaptureSource, AudioInputDevice, AudioOutputDevice, AudioRecorder};
+use cloud_transcription::build_http_client;
 use database::{AppSettings, AppState, Database, LicenseData, TranscriptionHistory, VocabularyEntry, WhisperModel};
 use downloader::{DownloadProgress, ModelDownloader};
 use error_reporting::{ErrorCategory, ErrorReport, ErrorReporter, ErrorSeverity, ErrorStats};
@@ -20,6 +22,7 @@ use license::{
 };
 use log::{debug, error, info, warn};
 use post_process::PostProcessor;
+use reqwest::Client;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -204,6 +207,7 @@ pub struct TextInjectorState(pub Arc<Mutex<text_inject::TextInjector>>);
 // Rate limiter: 100 requests per minute per action
 pub struct RecordingRateLimiter(pub Arc<RateLimiter>);
 pub struct TranscriptionRateLimiter(pub Arc<RateLimiter>);
+pub struct TranslationClientState(pub Arc<Client>);
 
 // Error type for commands
 #[derive(Debug, thiserror::Error)]
@@ -748,6 +752,14 @@ async fn load_model(
 
     ensure_app_access_verified(&db, &license_manager).await?;
 
+    // Cloud models do not require downloading local weights
+    if model_id.starts_with("cloud:") {
+        let mut transcriber_guard = transcriber.lock().unwrap();
+        *transcriber_guard = None;
+        info!("Cloud model selected: {} (language: {})", model_id, language);
+        return Ok(());
+    }
+
     if !is_valid_language_code(&language) {
         return Err(CommandError::Transcription(format!(
             "Invalid language code: {}",
@@ -844,6 +856,18 @@ async fn transcribe_audio(
 
     ensure_app_access_verified(&db, &license_manager).await?;
 
+    let settings = db.get_settings().map_err(CommandError::Database)?;
+    if settings.selected_model_id.starts_with("cloud:") {
+        if let Some((provider, model)) = cloud_transcription::parse_cloud_model_id(&settings.selected_model_id) {
+            let wav_bytes = cloud_transcription::encode_samples_to_wav(&audio_samples)
+                .map_err(CommandError::Recording)?;
+            let text = cloud_transcription::transcribe_with_cloud(&db, provider, model, wav_bytes, &settings.language, false)
+                .await
+                .map_err(CommandError::Transcription)?;
+            return Ok(text);
+        }
+    }
+
     let mut transcriber_guard = transcriber.lock().unwrap();
 
     if let Some(ref mut t) = *transcriber_guard {
@@ -863,12 +887,12 @@ async fn record_and_transcribe(
     recorder: State<'_, RecorderState>,
     transcriber: State<'_, TranscriberState>,
 ) -> CommandResult<String> {
-    let db = db.0.clone();
+    let _db = db.0.clone();
     let license_manager = license_manager.0.clone();
     let recorder = recorder.0.clone();
     let transcriber = transcriber.0.clone();
 
-    ensure_app_access_verified(&db, &license_manager).await?;
+    ensure_app_access_verified(&_db, &license_manager).await?;
 
     // Stop recording first
     let samples = {
@@ -883,6 +907,18 @@ async fn record_and_transcribe(
     };
 
     // Transcribe
+    let settings = _db.get_settings().map_err(CommandError::Database)?;
+    if settings.selected_model_id.starts_with("cloud:") {
+        if let Some((provider, model)) = cloud_transcription::parse_cloud_model_id(&settings.selected_model_id) {
+            let wav_bytes = cloud_transcription::encode_samples_to_wav(&samples)
+                .map_err(CommandError::Recording)?;
+            let text = cloud_transcription::transcribe_with_cloud(&_db, provider, model, wav_bytes, &settings.language, false)
+                .await
+                .map_err(CommandError::Transcription)?;
+            return Ok(text);
+        }
+    }
+
     let mut transcriber_guard = transcriber.lock().unwrap();
     if let Some(ref mut t) = *transcriber_guard {
         let text = t
@@ -892,6 +928,177 @@ async fn record_and_transcribe(
     } else {
         Err(CommandError::Transcription("No model loaded".to_string()))
     }
+}
+
+// ==================== Translation Commands ====================
+
+#[tauri::command]
+async fn translate_text(
+    _db: State<'_, DbState>,
+    client: State<'_, TranslationClientState>,
+    text: String,
+    source_language: String,
+    target_language: String,
+) -> CommandResult<String> {
+    let client = client.0.clone();
+
+    if text.trim().is_empty() {
+        return Ok(String::new());
+    }
+
+    if source_language == target_language {
+        return Ok(text);
+    }
+
+    let sanitized = sanitize_text(&text, 100_000).map_err(CommandError::PostProcessing)?;
+    if sanitized.is_empty() {
+        return Ok(String::new());
+    }
+
+    let langpair = format!("{}|{}", source_language, target_language);
+    let encoded = urlencoding::encode(&sanitized);
+
+    let url = format!(
+        "https://api.mymemory.translated.net/get?q={}&langpair={}",
+        encoded, langpair
+    );
+
+    debug!("Translating text via MyMemory: {} -> {}", source_language, target_language);
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| CommandError::Transcription(format!("Translation request failed: {}", e)))?;
+
+    if !response.status().is_success() {
+        return Err(CommandError::Transcription(format!(
+            "Translation service returned error: {}",
+            response.status()
+        )));
+    }
+
+    let json: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| CommandError::Transcription(format!("Failed to parse translation response: {}", e)))?;
+
+    let translated = json
+        .get("responseData")
+        .and_then(|d| d.get("translatedText"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("");
+
+    if translated.is_empty() {
+        return Err(CommandError::Transcription(
+            "Translation returned empty result".to_string(),
+        ));
+    }
+
+    info!("Translation completed: {} chars -> {} chars", sanitized.len(), translated.len());
+    Ok(translated.to_string())
+}
+
+#[tauri::command]
+async fn record_and_translate(
+    db: State<'_, DbState>,
+    license_manager: State<'_, LicenseManagerState>,
+    recorder: State<'_, RecorderState>,
+    transcriber: State<'_, TranscriberState>,
+    client: State<'_, TranslationClientState>,
+    source_language: String,
+    target_language: String,
+) -> CommandResult<String> {
+    let db = db.0.clone();
+    let license_manager = license_manager.0.clone();
+    let recorder = recorder.0.clone();
+    let transcriber = transcriber.0.clone();
+    let client = client.0.clone();
+
+    ensure_app_access_verified(&db, &license_manager).await?;
+
+    // Stop recording first
+    let samples = {
+        let mut recorder_guard = recorder.lock().unwrap();
+        if let Some(ref mut rec) = *recorder_guard {
+            rec.stop_recording().map_err(|e| {
+                error!("Failed to stop recording: {}", e);
+                CommandError::Recording(e)
+            })?
+        } else {
+            return Err(CommandError::Recording(
+                "No recorder initialized".to_string(),
+            ));
+        }
+    };
+
+    // Transcribe in source language
+    let settings = db.get_settings().map_err(CommandError::Database)?;
+    let mut text = if settings.selected_model_id.starts_with("cloud:") {
+        if let Some((provider, model)) = cloud_transcription::parse_cloud_model_id(&settings.selected_model_id) {
+            let wav_bytes = cloud_transcription::encode_samples_to_wav(&samples)
+                .map_err(CommandError::Recording)?;
+            cloud_transcription::transcribe_with_cloud(&db, provider, model, wav_bytes, &source_language, false)
+                .await
+                .map_err(CommandError::Transcription)?
+        } else {
+            return Err(CommandError::Transcription("No model loaded".to_string()));
+        }
+    } else {
+        let mut transcriber_guard = transcriber.lock().unwrap();
+        if let Some(ref mut t) = *transcriber_guard {
+            t.transcribe(&samples).map_err(CommandError::Transcription)?
+        } else {
+            return Err(CommandError::Transcription("No model loaded".to_string()));
+        }
+    };
+
+    if text.trim().is_empty() {
+        return Ok(String::new());
+    }
+
+    // Translate if source != target
+    if source_language != target_language {
+        let sanitized = sanitize_text(&text, 100_000).map_err(CommandError::PostProcessing)?;
+        if !sanitized.is_empty() {
+            let langpair = format!("{}|{}", source_language, target_language);
+            let encoded = urlencoding::encode(&sanitized);
+            let url = format!(
+                "https://api.mymemory.translated.net/get?q={}&langpair={}",
+                encoded, langpair
+            );
+
+            debug!("Translating text via MyMemory: {} -> {}", source_language, target_language);
+
+            let response = client
+                .get(&url)
+                .send()
+                .await
+                .map_err(|e| CommandError::Transcription(format!("Translation request failed: {}", e)))?;
+
+            if response.status().is_success() {
+                let json: serde_json::Value = response
+                    .json()
+                    .await
+                    .map_err(|e| CommandError::Transcription(format!("Failed to parse translation response: {}", e)))?;
+
+                let translated = json
+                    .get("responseData")
+                    .and_then(|d| d.get("translatedText"))
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("");
+
+                if !translated.is_empty() {
+                    text = translated.to_string();
+                    info!("Translation completed");
+                }
+            } else {
+                warn!("Translation service returned error: {}", response.status());
+            }
+        }
+    }
+
+    Ok(text)
 }
 
 #[tauri::command]
@@ -940,6 +1147,18 @@ async fn transcribe_file(
         .map_err(|e| CommandError::Transcription(format!("Failed to read audio file: {}", e)))?;
 
     // Transcribe
+    let settings = db.get_settings().map_err(CommandError::Database)?;
+    if settings.selected_model_id.starts_with("cloud:") {
+        if let Some((provider, model)) = cloud_transcription::parse_cloud_model_id(&settings.selected_model_id) {
+            let wav_bytes = cloud_transcription::encode_samples_to_wav(&samples)
+                .map_err(CommandError::Recording)?;
+            let text = cloud_transcription::transcribe_with_cloud(&db, provider, model, wav_bytes, &settings.language, false)
+                .await
+                .map_err(CommandError::Transcription)?;
+            return Ok(text);
+        }
+    }
+
     let mut transcriber_guard = transcriber.lock().unwrap();
     if let Some(ref mut t) = *transcriber_guard {
         let text = t
@@ -949,6 +1168,449 @@ async fn transcribe_file(
     } else {
         Err(CommandError::Transcription("No model loaded".to_string()))
     }
+}
+
+// ==================== URL Transcription Commands ====================
+
+fn is_youtube_url(url: &str) -> bool {
+    let lower = url.to_lowercase();
+    lower.contains("youtube.com")
+        || lower.contains("youtu.be")
+        || lower.contains("youtube.co")
+        || lower.contains("yt.be")
+}
+
+fn sanitize_url(url: &str) -> Result<String, String> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return Err("URL is empty".to_string());
+    }
+
+    let parsed = url::Url::parse(trimmed).map_err(|e| format!("Invalid URL: {}", e))?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err("URL must start with http:// or https://".to_string());
+    }
+
+    Ok(trimmed.to_string())
+}
+
+async fn download_url_to_temp(
+    app: &tauri::AppHandle,
+    url: &str,
+) -> Result<std::path::PathBuf, String> {
+    let client = build_http_client(120)?;
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to download URL: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "Download failed with status {}",
+            response.status()
+        ));
+    }
+
+    let temp_dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
+
+    let ext = std::path::Path::new(url)
+        .extension()
+        .and_then(|e| e.to_str())
+        .filter(|e| !e.is_empty())
+        .unwrap_or("audio");
+
+    let file_path = temp_dir.join(format!("url_audio_{}.{}", uuid::Uuid::new_v4(), ext));
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read download bytes: {}", e))?
+        .to_vec();
+
+    std::fs::write(&file_path, bytes).map_err(|e| e.to_string())?;
+
+    Ok(file_path)
+}
+
+fn yt_dlp_binary_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "yt-dlp.exe"
+    } else {
+        "yt-dlp"
+    }
+}
+
+async fn ensure_yt_dlp(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?;
+    let bin_dir = app_data_dir.join("bin");
+    std::fs::create_dir_all(&bin_dir).map_err(|e| e.to_string())?;
+
+    let binary_path = bin_dir.join(yt_dlp_binary_name());
+
+    if binary_path.exists() {
+        return Ok(binary_path);
+    }
+
+    let urls = if cfg!(target_os = "windows") {
+        vec![
+            "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe",
+        ]
+    } else if cfg!(target_os = "macos") {
+        vec![
+            "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos",
+        ]
+    } else {
+        vec![
+            "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp",
+        ]
+    };
+
+    let client = build_http_client(120)?;
+
+    for url in &urls {
+        let response = client
+            .get(*url)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to download yt-dlp: {}", e))?;
+
+        if response.status().is_success() {
+            let bytes = response
+                .bytes()
+                .await
+                .map_err(|e| format!("Failed to read yt-dlp download: {}", e))?
+                .to_vec();
+
+            std::fs::write(&binary_path, bytes)
+                .map_err(|e| format!("Failed to save yt-dlp: {}", e))?;
+
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = std::fs::metadata(&binary_path)
+                    .map_err(|e| e.to_string())?
+                    .permissions();
+                perms.set_mode(0o755);
+                std::fs::set_permissions(&binary_path, perms)
+                    .map_err(|e| e.to_string())?;
+            }
+
+            return Ok(binary_path);
+        }
+    }
+
+    Err("Failed to download yt-dlp. Make sure your network allows access to GitHub releases.".to_string())
+}
+
+fn find_system_ffmpeg() -> Result<Option<std::path::PathBuf>, String> {
+    let candidates = if cfg!(target_os = "windows") {
+        vec![
+            std::path::PathBuf::from("ffmpeg.exe"),
+            std::path::PathBuf::from(r"C:\ffmpeg\bin\ffmpeg.exe"),
+            std::path::PathBuf::from(r"C:\Program Files\ffmpeg\bin\ffmpeg.exe"),
+            std::path::PathBuf::from(r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe"),
+        ]
+    } else {
+        vec![
+            std::path::PathBuf::from("ffmpeg"),
+            std::path::PathBuf::from("/usr/local/bin/ffmpeg"),
+            std::path::PathBuf::from("/usr/bin/ffmpeg"),
+        ]
+    };
+
+    for candidate in candidates {
+        if candidate.exists() {
+            return Ok(Some(candidate));
+        }
+    }
+
+    Ok(None)
+}
+
+async fn extract_youtube_audio(
+    app: &tauri::AppHandle,
+    url: &str,
+) -> Result<std::path::PathBuf, String> {
+    let temp_dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
+
+    let uuid_str = uuid::Uuid::new_v4().to_string();
+    let output_template = temp_dir.join(format!("yt_audio_{}.%(ext)s", uuid_str));
+    let output_path_str = output_template
+        .to_str()
+        .ok_or_else(|| "Invalid output path".to_string())?;
+
+    let yt_dlp = ensure_yt_dlp(app).await.map_err(|e| {
+        format!("{} Make sure your network allows access to GitHub releases.", e)
+    })?;
+
+    let status = std::process::Command::new(yt_dlp)
+        .args([
+            "-f",
+            "bestaudio[ext=m4a][format_id!=140][format_id!=139]/bestaudio[ext=mp3]/bestaudio[format_id!=140][format_id!=139]",
+            "--audio-quality",
+            "0",
+            "-o",
+            output_path_str,
+            url,
+        ])
+        .status()
+        .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
+
+    if !status.success() {
+        return Err("yt-dlp failed to extract audio from the YouTube video.".to_string());
+    }
+
+    let prefix = format!("yt_audio_{}", uuid_str);
+    let mut found: Option<std::path::PathBuf> = None;
+
+    for entry in std::fs::read_dir(&temp_dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if name.starts_with(&prefix) {
+                found = Some(path);
+                break;
+            }
+        }
+    }
+
+    let path = found.ok_or_else(|| "yt-dlp did not produce an output file.".to_string())?;
+
+    if let Some(ext) = path.extension().and_then(|e| e.to_str().map(|s| s.to_lowercase())) {
+        if ext == "webm" || ext == "opus" || ext == "ogg" {
+            return Err(format!(
+                "YouTube delivered an unsupported audio format for this video: {}. \
+                 Try another video, or use a cloud transcription provider that supports this format.",
+                ext
+            ));
+        }
+
+        if ext == "m4a" || ext == "mp4" {
+            if let Ok(Some(ffmpeg)) = find_system_ffmpeg() {
+                let wav_path = temp_dir.join(format!("yt_audio_{}.wav", uuid_str));
+                let status = std::process::Command::new(ffmpeg)
+                    .args([
+                        "-y",
+                        "-i",
+                        path.to_str().unwrap(),
+                        "-ac",
+                        "1",
+                        "-ar",
+                        "16000",
+                        "-c:a",
+                        "pcm_s16le",
+                        wav_path.to_str().unwrap(),
+                    ])
+                    .status()
+                    .map_err(|e| format!("Failed to convert audio with ffmpeg: {}", e))?;
+
+                if status.success() && wav_path.exists() {
+                    let _ = std::fs::remove_file(&path);
+                    return Ok(wav_path);
+                }
+
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+    }
+
+    Ok(path)
+}
+
+#[tauri::command]
+async fn transcribe_url(
+    app: tauri::AppHandle,
+    db: State<'_, DbState>,
+    license_manager: State<'_, LicenseManagerState>,
+    transcriber: State<'_, TranscriberState>,
+    rate_limiter: State<'_, TranscriptionRateLimiter>,
+    url: String,
+    enable_speaker_detection: bool,
+) -> CommandResult<String> {
+    let db = db.0.clone();
+    let license_manager = license_manager.0.clone();
+    let transcriber = transcriber.0.clone();
+    let rate_limiter = rate_limiter.0.clone();
+
+    ensure_app_access_verified(&db, &license_manager).await?;
+
+    if !rate_limiter.check("transcribe_url") {
+        return Err(CommandError::Transcription(
+            "Rate limit exceeded. Please wait before transcribing another URL.".to_string(),
+        ));
+    }
+
+    let safe_url = sanitize_url(&url).map_err(CommandError::Transcription)?;
+    let settings = db.get_settings().map_err(CommandError::Database)?;
+
+    if let Some((provider, model)) = cloud_transcription::parse_cloud_model_id(&settings.selected_model_id) {
+        if provider.eq_ignore_ascii_case("deepgram") {
+            let text = cloud_transcription::transcribe_with_cloud_url(
+                &db,
+                cloud_transcription::CloudTranscriptionUrlOptions {
+                    provider: provider.to_string(),
+                    model: model.to_string(),
+                    url: safe_url.clone(),
+                    language: settings.language.clone(),
+                    enable_speaker_detection,
+                },
+            )
+            .await
+            .map_err(CommandError::Transcription)?;
+
+            return Ok(text);
+        }
+    }
+
+    let temp_path = if is_youtube_url(&safe_url) {
+        extract_youtube_audio(&app, &safe_url).await.map_err(CommandError::Transcription)?
+    } else {
+        download_url_to_temp(&app, &safe_url).await.map_err(CommandError::Transcription)?
+    };
+
+    let samples = read_audio_file(&temp_path).map_err(|e| {
+        let _ = std::fs::remove_file(&temp_path);
+        CommandError::Transcription(format!(
+            "Failed to read audio: {}. This format may require audio conversion. \
+             Try switching to Deepgram in Models settings, which supports URL-based transcription.",
+            e
+        ))
+    })?;
+
+    let _ = std::fs::remove_file(&temp_path);
+
+    if settings.selected_model_id.starts_with("cloud:") {
+        if let Some((provider, model)) = cloud_transcription::parse_cloud_model_id(&settings.selected_model_id) {
+            let wav_bytes = cloud_transcription::encode_samples_to_wav(&samples)
+                .map_err(CommandError::Recording)?;
+            let text = cloud_transcription::transcribe_with_cloud(&db, provider, model, wav_bytes, &settings.language, enable_speaker_detection)
+                .await
+                .map_err(CommandError::Transcription)?;
+            return Ok(text);
+        }
+    }
+
+    let mut transcriber_guard = transcriber.lock().unwrap();
+    if let Some(ref mut t) = *transcriber_guard {
+        let text = t
+            .transcribe(&samples)
+            .map_err(CommandError::Transcription)?;
+        Ok(text)
+    } else {
+        Err(CommandError::Transcription("No model loaded".to_string()))
+    }
+}
+
+#[tauri::command]
+async fn transcribe_files_batch(
+    db: State<'_, DbState>,
+    license_manager: State<'_, LicenseManagerState>,
+    transcriber: State<'_, TranscriberState>,
+    rate_limiter: State<'_, TranscriptionRateLimiter>,
+    file_paths: Vec<String>,
+) -> CommandResult<Vec<String>> {
+    let db = db.0.clone();
+    let license_manager = license_manager.0.clone();
+    let transcriber = transcriber.0.clone();
+    let rate_limiter = rate_limiter.0.clone();
+
+    ensure_app_access_verified(&db, &license_manager).await?;
+
+    if file_paths.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    if !rate_limiter.check("transcribe_files_batch") {
+        return Err(CommandError::Transcription(
+            "Rate limit exceeded. Please wait before transcribing again.".to_string(),
+        ));
+    }
+
+    let settings = db.get_settings().map_err(CommandError::Database)?;
+    let mut results = Vec::with_capacity(file_paths.len());
+
+    for file_path in file_paths {
+        let safe_path =
+            canonicalize_existing_file_path(&file_path).map_err(CommandError::Transcription)?;
+
+        if !path_has_extension(&safe_path, AUDIO_FILE_EXTENSIONS) {
+            results.push(format!(
+                "Skipped {}: unsupported format",
+                safe_path.display()
+            ));
+            continue;
+        }
+
+        let metadata = std::fs::metadata(&safe_path)
+            .map_err(|e| CommandError::Transcription(format!("Cannot read file {}: {}", safe_path.display(), e)))?;
+        if metadata.len() > 500 * 1024 * 1024 {
+            results.push(format!(
+                "Skipped {}: file exceeds 500MB limit",
+                safe_path.display()
+            ));
+            continue;
+        }
+
+        let samples = match read_audio_file(&safe_path) {
+            Ok(s) => s,
+            Err(e) => {
+                results.push(format!("Failed to read {}: {}", safe_path.display(), e));
+                continue;
+            }
+        };
+
+        let text = if settings.selected_model_id.starts_with("cloud:") {
+            if let Some((provider, model)) = cloud_transcription::parse_cloud_model_id(&settings.selected_model_id) {
+                let wav_bytes = match cloud_transcription::encode_samples_to_wav(&samples) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        results.push(format!("Failed to encode {}: {}", safe_path.display(), e));
+                        continue;
+                    }
+                };
+                match cloud_transcription::transcribe_with_cloud(&db, provider, model, wav_bytes, &settings.language, false).await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        results.push(format!("Transcription failed for {}: {}", safe_path.display(), e));
+                        continue;
+                    }
+                }
+            } else {
+                results.push(format!("Invalid cloud model for {}", safe_path.display()));
+                continue;
+            }
+        } else {
+            let mut transcriber_guard = transcriber.lock().unwrap();
+            match transcriber_guard.as_mut() {
+                Some(t) => match t.transcribe(&samples) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        results.push(format!("Transcription failed for {}: {}", safe_path.display(), e));
+                        continue;
+                    }
+                },
+                None => {
+                    results.push(format!("No model loaded for {}", safe_path.display()));
+                    continue;
+                }
+            }
+        };
+
+        results.push(text);
+    }
+
+    Ok(results)
 }
 
 fn read_audio_file(file_path: &std::path::Path) -> Result<Vec<f32>, String> {
@@ -1967,52 +2629,59 @@ fn get_models_dir(app: tauri::AppHandle) -> CommandResult<String> {
 
 // ==================== Hotkey Commands ====================
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+struct HotkeyRegistration {
+    hotkey: String,
+    label: String,
+}
+
+#[derive(Debug, serde::Serialize, Clone)]
+struct HotkeyEventPayload {
+    label: String,
+}
+
 #[tauri::command]
-fn register_hotkey(app: tauri::AppHandle, hotkey: String) -> CommandResult<()> {
-    let shortcut = parse_hotkey(&hotkey)
-        .map_err(|e| CommandError::Recording(format!("Invalid hotkey: {}", e)))?;
+fn register_hotkey(app: tauri::AppHandle, registrations: Vec<HotkeyRegistration>) -> CommandResult<()> {
+    if registrations.is_empty() {
+        return Ok(());
+    }
 
-    println!("Registering hotkey: {} -> {:?}", hotkey, shortcut);
+    println!("Registering {} hotkeys", registrations.len());
 
-    // Unregister all existing shortcuts first
     if let Err(e) = app.global_shortcut().unregister_all() {
         println!("Warning: Failed to unregister existing shortcuts: {}", e);
     }
 
-    // Register the new shortcut with handler
-    let result = app
-        .global_shortcut()
-        .on_shortcut(shortcut, move |app, _shortcut, event| {
-            println!("Shortcut event: {:?}", event.state());
+    for reg in registrations {
+        let shortcut = parse_hotkey(&reg.hotkey)
+            .map_err(|e| CommandError::Recording(format!("Invalid hotkey: {}", e)))?;
+        let label = reg.label.clone();
+
+        println!("Registering hotkey: {} -> {:?} (label: {})", reg.hotkey, shortcut, label);
+
+        let result = app.global_shortcut().on_shortcut(shortcut, move |app, _shortcut, event| {
+            println!("Shortcut event: {:?} for label: {}", event.state(), label);
             match event.state() {
                 ShortcutState::Pressed => {
-                    println!("Emitting hotkey-pressed");
-                    if let Err(e) = app.emit("hotkey-pressed", ()) {
-                        println!("Failed to emit hotkey-pressed: {}", e);
-                    }
+                    let _ = app.emit("hotkey-pressed", HotkeyEventPayload { label: label.clone() });
                 }
                 ShortcutState::Released => {
-                    println!("Emitting hotkey-released");
-                    if let Err(e) = app.emit("hotkey-released", ()) {
-                        println!("Failed to emit hotkey-released: {}", e);
-                    }
+                    let _ = app.emit("hotkey-released", HotkeyEventPayload { label: label.clone() });
                 }
             }
         });
 
-    match result {
-        Ok(_) => {
-            println!("Hotkey registered successfully");
-            Ok(())
-        }
-        Err(e) => {
-            println!("Failed to register hotkey: {}", e);
-            Err(CommandError::Recording(format!(
-                "Failed to register hotkey: {}",
-                e
-            )))
+        if let Err(e) = result {
+            println!("Failed to register hotkey {}: {}", reg.hotkey, e);
+            return Err(CommandError::Recording(format!(
+                "Failed to register hotkey {}: {}",
+                reg.hotkey, e
+            )));
         }
     }
+
+    println!("All hotkeys registered successfully");
+    Ok(())
 }
 
 #[tauri::command]
@@ -2283,6 +2952,111 @@ async fn load_error_reports(app: tauri::AppHandle) -> Result<usize, CommandError
     Ok(0)
 }
 
+// ==================== Cloud Provider Commands (BYOK) ====================
+
+#[tauri::command]
+async fn get_cloud_providers(
+    db: State<'_, DbState>,
+) -> CommandResult<Vec<cloud_transcription::CloudProviderInfo>> {
+    let records = db.0.get_cloud_providers().map_err(CommandError::Database)?;
+    let mut map: HashMap<String, database::CloudProviderRecord> = records
+        .into_iter()
+        .map(|r| (r.id.clone(), r))
+        .collect();
+
+    let standard_providers = vec![
+        ("groq", "Groq"),
+        ("openai", "OpenAI"),
+        ("deepgram", "Deepgram"),
+        ("mistral", "Mistral"),
+        ("custom", "Custom Endpoint"),
+    ];
+
+    let mut result = Vec::new();
+    for (id, name) in standard_providers {
+        if let Some(record) = map.remove(id) {
+            let decrypted_key = cloud_transcription::decrypt_api_key(&record.api_key);
+            let has_key = !decrypted_key.trim().is_empty() || id == "custom";
+            let masked = if has_key && !decrypted_key.trim().is_empty() {
+                cloud_transcription::mask_key(&decrypted_key)
+            } else {
+                String::new()
+            };
+            result.push(cloud_transcription::CloudProviderInfo {
+                id: id.to_string(),
+                name: name.to_string(),
+                configured: has_key,
+                masked_key: masked,
+                base_url: record.base_url,
+                custom_model: record.custom_model,
+            });
+        } else {
+            result.push(cloud_transcription::CloudProviderInfo {
+                id: id.to_string(),
+                name: name.to_string(),
+                configured: false,
+                masked_key: String::new(),
+                base_url: None,
+                custom_model: None,
+            });
+        }
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+async fn save_cloud_provider(
+    db: State<'_, DbState>,
+    provider: String,
+    api_key: String,
+    base_url: Option<String>,
+    custom_model: Option<String>,
+) -> CommandResult<()> {
+    let encrypted = cloud_transcription::encrypt_api_key(&api_key)
+        .map_err(|e| CommandError::Transcription(format!("Encryption failed: {}", e)))?;
+    db.0.save_cloud_provider(
+        &provider,
+        &encrypted,
+        base_url.as_deref(),
+        custom_model.as_deref(),
+    )
+    .map_err(CommandError::Database)?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn delete_cloud_provider(
+    db: State<'_, DbState>,
+    provider: String,
+) -> CommandResult<()> {
+    db.0.delete_cloud_provider(&provider).map_err(CommandError::Database)?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn test_cloud_connection(
+    db: State<'_, DbState>,
+    provider: String,
+    api_key: Option<String>,
+    base_url: Option<String>,
+) -> CommandResult<String> {
+    let key = if let Some(k) = api_key.filter(|k| !k.trim().is_empty()) {
+        k
+    } else if let Some(record) = db.0.get_cloud_provider(&provider).map_err(CommandError::Database)? {
+        cloud_transcription::decrypt_api_key(&record.api_key)
+    } else {
+        String::new()
+    };
+
+    let url = base_url.or_else(|| {
+        db.0.get_cloud_provider(&provider).ok().flatten().and_then(|r| r.base_url)
+    });
+
+    cloud_transcription::test_provider_connection(&provider, &key, url.as_deref())
+        .await
+        .map_err(CommandError::Transcription)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize logger
@@ -2343,6 +3117,14 @@ pub fn run() {
                 text_inject::TextInjector::new().expect("Failed to initialize text injector");
             app.manage(TextInjectorState(Arc::new(Mutex::new(text_injector))));
 
+            // Initialize translation HTTP client
+            let translation_client = Client::builder()
+                .user_agent("Wavee/2.0")
+                .timeout(Duration::from_secs(15))
+                .build()
+                .expect("Failed to build translation HTTP client");
+            app.manage(TranslationClientState(Arc::new(translation_client)));
+
             // Initialize rate limiters (100 requests per 60 seconds)
             app.manage(RecordingRateLimiter(Arc::new(RateLimiter::new(100, 60))));
             app.manage(TranscriptionRateLimiter(Arc::new(RateLimiter::new(50, 60))));
@@ -2383,6 +3165,11 @@ pub fn run() {
             get_model,
             set_model_downloaded,
             set_selected_model,
+            // Cloud providers (BYOK)
+            get_cloud_providers,
+            save_cloud_provider,
+            delete_cloud_provider,
+            test_cloud_connection,
             // Recording
             get_audio_input_devices,
             get_audio_output_devices,
@@ -2402,7 +3189,11 @@ pub fn run() {
             get_loaded_model,
             transcribe_audio,
             record_and_transcribe,
+            record_and_translate,
+            translate_text,
             transcribe_file,
+            transcribe_url,
+            transcribe_files_batch,
             // Download
             download_model,
             cancel_model_download,

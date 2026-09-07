@@ -13,9 +13,9 @@ export function SpeakingOverlay({ visible }: SpeakingOverlayProps) {
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
       <div className="relative flex items-center justify-center">
-        <div className="speaking-ring -mt-2" />
-        <div className="speaking-ring delay-150 -mt-2" />
-        <div className="speaking-ring delay-300 -mt-2" />
+        <div className="absolute size-24 -mt-2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.08),rgba(255,255,255,0))] animate-speaking-pulse opacity-90" />
+        <div className="absolute size-24 -mt-2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.08),rgba(255,255,255,0))] animate-speaking-pulse opacity-90 [animation-delay:150ms]" />
+        <div className="absolute size-24 -mt-2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.08),rgba(255,255,255,0))] animate-speaking-pulse opacity-90 [animation-delay:300ms]" />
         <div className="h-16 w-16 rounded-full bg-destructive/90 flex items-center justify-center text-destructive-foreground shadow-2xl">
           <svg
             xmlns="http://www.w3.org/2000/svg"

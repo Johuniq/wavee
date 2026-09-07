@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
-import { AlertTriangle, Clipboard, Keyboard, Type } from "lucide-react";
+import { AlertTriangle, Clipboard, Keyboard, Type } from "@/components/icons";
 import { useEffect, useState } from "react";
 
 interface HotkeyStepProps {
@@ -146,18 +146,16 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
           {/* HERO — Dark band */}
           <section className="hero-band-dark">
             <div className="flex flex-col items-center text-center gap-4 p-8 sm:p-10">
-              <p className="eyebrow-uppercase text-primary">
+              <p className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-primary">
                 <span className="inline-flex items-center gap-2">
                   <span className="h-1 w-1 rounded-full bg-primary" />
                   Step {STEP_INDEX} of {STEPS_TOTAL}
                 </span>
               </p>
-              <h2
-                className="display-lg text-on-dark"
-              >
+              <h2 className="text-[28px] font-medium leading-tight tracking-tight text-on-dark">
                 Set your <span className="text-primary">shortcut</span>.
               </h2>
-              <p className="body-md text-on-dark-soft max-w-md">
+              <p className="text-sm text-on-dark-soft max-w-md leading-relaxed">
                 Pick how Wavee activates, where the text goes, and your key combo.
               </p>
             </div>
@@ -166,14 +164,12 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
           {/* ACTIVATION MODE */}
           <section className="card-feature-cream">
             <div className="flex items-center gap-3 mb-5">
-              <div className="icon-plate">
+              <div className="flex items-center justify-center size-8 rounded-full bg-canvas-soft text-ink">
                 <Keyboard className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="eyebrow-uppercase text-ink-mid">Activation</p>
-                <h3
-                  className="title-lg text-ink mt-1"
-                >
+                <p className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-ink-mid">Activation</p>
+                <h3 className="text-[15px] font-semibold tracking-tight text-ink mt-1">
                   Choose a mode
                 </h3>
               </div>
@@ -211,15 +207,13 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <span
-                          className="title-sm text-ink"
-                        >
+                        <span className="text-xs font-semibold text-ink">
                           {option.title}
                         </span>
-                        <p className="body-sm text-body-muted mt-1">
+                        <p className="text-xs text-body-muted mt-1">
                           {option.description}
                         </p>
-                        <p className="caption text-body mt-2 font-mono">
+                        <p className="text-[11px] text-body mt-2 font-mono">
                           Default: {option.defaultKey}
                         </p>
                       </div>
@@ -233,14 +227,12 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
           {/* HOTKEY RECORDER */}
           <section className="card-feature-cream">
             <div className="flex items-center gap-3 mb-5">
-              <div className="icon-plate">
+              <div className="flex items-center justify-center size-8 rounded-full bg-canvas-soft text-ink">
                 <Type className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="eyebrow-uppercase text-ink-mid">Hotkey</p>
-                <h3
-                  className="title-lg text-ink mt-1"
-                >
+                <p className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-ink-mid">Hotkey</p>
+                <h3 className="text-[15px] font-semibold tracking-tight text-ink mt-1">
                   Capture a key combination
                 </h3>
               </div>
@@ -259,17 +251,17 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
             >
               {isRecordingHotkey ? (
                 <div className="space-y-2">
-                  <p className="body-sm-strong text-primary">
+                  <p className="text-xs font-semibold text-primary">
                     {recordedKeys.length > 0
                       ? `${recordedKeys.join(" + ")} + ...`
                       : "Press a key combination..."}
                   </p>
-                  <p className="caption text-body-muted">Press a key to finish</p>
+                  <p className="text-[11px] text-body-muted">Press a key to finish</p>
                 </div>
               ) : (
                 <div className="space-y-1">
-                  <p className="caption eyebrow-uppercase text-ink-mid">Current</p>
-                  <p className="font-mono title-lg text-ink mt-1">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.1em] leading-none text-ink-mid">Current</p>
+                  <p className="font-mono text-[15px] font-semibold tracking-tight text-ink mt-1">
                     {currentHotkey}
                   </p>
                 </div>
@@ -278,19 +270,18 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
 
             {conflict && (
               <div
-                className="mt-4 p-3.5 rounded-md border flex items-start gap-2.5"
-                style={{ borderColor: "rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.05)" }}
+                className="mt-4 p-3.5 rounded-md border flex items-start gap-2.5 border-amber-500/30 bg-amber-500/5"
               >
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "#d97706" }} />
-                <p className="body-sm" style={{ color: "#d97706" }}>{conflict}</p>
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+                <p className="text-xs text-amber-600">{conflict}</p>
               </div>
             )}
 
             <div className="mt-4 p-3.5 rounded-md border border-hairline bg-canvas-soft flex items-start gap-2.5">
               <Keyboard className="h-4 w-4 text-body-muted shrink-0 mt-0.5" />
               <div className="space-y-0.5">
-                <p className="body-sm text-ink">Combine modifiers + a letter</p>
-                <p className="caption text-body-muted">Avoid Ctrl+C, Ctrl+V, etc.</p>
+                <p className="text-xs text-ink">Combine modifiers + a letter</p>
+                <p className="text-[11px] text-body-muted">Avoid Ctrl+C, Ctrl+V, etc.</p>
               </div>
             </div>
           </section>
@@ -298,14 +289,12 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
           {/* OUTPUT MODE */}
           <section className="card-feature-cream">
             <div className="flex items-center gap-3 mb-5">
-              <div className="icon-plate">
+              <div className="flex items-center justify-center size-8 rounded-full bg-canvas-soft text-ink">
                 <Clipboard className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="eyebrow-uppercase text-ink-mid">Output</p>
-                <h3
-                  className="title-lg text-ink mt-1"
-                >
+                <p className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-ink-mid">Output</p>
+                <h3 className="text-[15px] font-semibold tracking-tight text-ink mt-1">
                   Where does the text go?
                 </h3>
               </div>
@@ -348,12 +337,10 @@ export function HotkeyStep({ onNext, onBack }: HotkeyStepProps) {
                         <Icon className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <span
-                          className="title-sm text-ink"
-                        >
+                        <span className="text-xs font-semibold text-ink">
                           {option.title}
                         </span>
-                        <p className="body-sm text-body-muted mt-1">
+                        <p className="text-xs text-body-muted mt-1">
                           {option.description}
                         </p>
                       </div>

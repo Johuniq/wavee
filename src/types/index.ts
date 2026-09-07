@@ -1,10 +1,21 @@
 // Wavee - Type Definitions
 
-// Available Whisper models for offline transcription
+export type CloudProviderId = "groq" | "openai" | "deepgram" | "mistral" | "custom";
+
+export interface CloudProviderInfo {
+  id: CloudProviderId;
+  name: string;
+  configured: boolean;
+  masked_key: string;
+  base_url?: string | null;
+  custom_model?: string | null;
+}
+
+// Available Whisper models for offline transcription & BYOK cloud models
 export interface WhisperModel {
   id: string;
   name: string;
-  size: string; // e.g., "75 MB", "1.5 GB"
+  size: string; // e.g., "75 MB", "1.5 GB", "Cloud API"
   sizeBytes: number;
   description: string;
   languages: string[];
@@ -13,6 +24,9 @@ export interface WhisperModel {
   recommended?: boolean;
   downloaded?: boolean;
   downloadProgress?: number; // 0-100
+  isCloud?: boolean;
+  provider?: CloudProviderId;
+  latencyEstimate?: string;
 }
 
 // App settings
@@ -46,6 +60,12 @@ export interface AppSettings {
 
   // Output mode
   clipboardMode: boolean; // true = copy to clipboard, false = inject text
+
+  // Translation
+  translationEnabled: boolean;
+  translationHotkey: string;
+  translationSourceLanguage: string;
+  translationTargetLanguage: string;
 
   // Advanced
   autoStartOnBoot: boolean;
@@ -130,6 +150,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   postProcessingEnabled: true,
   voiceCommandsEnabled: false,
   clipboardMode: false,
+  translationEnabled: false,
+  translationHotkey: "Alt+Shift+T",
+  translationSourceLanguage: "en",
+  translationTargetLanguage: "es",
   autoStartOnBoot: false,
   minimizeToTray: true,
   diagnosticsEnabled: true,
@@ -571,20 +595,29 @@ export function getDefaultLanguageForModel(
   return caps.defaultLanguage;
 }
 
-export type ModelBadgeCategory = "recommended" | "accurate" | "fast" | "compact";
+export type ModelBadgeCategory = "recommended" | "accurate" | "fast" | "compact" | "cloud" | "ultra-fast";
 
 export function getModelCategories(model: WhisperModel): ModelBadgeCategory[] {
   const categories: ModelBadgeCategory[] = [];
 
+  if (model.isCloud) {
+    categories.push("cloud");
+  }
+
   if (model.recommended) {
     categories.push("recommended");
+  }
+
+  if (model.provider === "groq" || model.provider === "deepgram") {
+    categories.push("ultra-fast");
   }
 
   if (
     model.id.startsWith("qwen3-asr-") ||
     model.id.includes("large") ||
     model.id === "medium" ||
-    model.id === "medium.en"
+    model.id === "medium.en" ||
+    model.id.includes("nova")
   ) {
     categories.push("accurate");
   }
@@ -598,7 +631,7 @@ export function getModelCategories(model: WhisperModel): ModelBadgeCategory[] {
     categories.push("fast");
   }
 
-  if (model.sizeBytes <= 200 * 1024 * 1024) {
+  if (!model.isCloud && model.sizeBytes <= 200 * 1024 * 1024) {
     categories.push("compact");
   }
 
@@ -767,8 +800,131 @@ export const QWEN3_ASR_MODELS: WhisperModel[] = [
   },
 ];
 
-export const ALL_MODELS = [
+export const CLOUD_MODELS: WhisperModel[] = [
+  {
+    id: "cloud:groq:whisper-large-v3",
+    name: "Groq Whisper Large v3",
+    size: "Cloud API",
+    sizeBytes: 0,
+    description:
+      "State-of-the-art Whisper accuracy with sub-second (~350ms) inference powered by Groq LPUs.",
+    languages: WHISPER_MULTILINGUAL_LANGUAGES,
+    defaultLanguage: "en",
+    autoDetect: true,
+    recommended: true,
+    isCloud: true,
+    provider: "groq",
+    latencyEstimate: "~350ms",
+  },
+  {
+    id: "cloud:groq:whisper-large-v3-turbo",
+    name: "Groq Whisper Large v3 Turbo",
+    size: "Cloud API",
+    sizeBytes: 0,
+    description:
+      "Turbocharged Whisper engine optimized for low-latency multilingual speech recognition.",
+    languages: WHISPER_MULTILINGUAL_LANGUAGES,
+    defaultLanguage: "en",
+    autoDetect: true,
+    isCloud: true,
+    provider: "groq",
+    latencyEstimate: "~250ms",
+  },
+  {
+    id: "cloud:groq:distil-whisper-large-v3-en",
+    name: "Groq Distil-Whisper English",
+    size: "Cloud API",
+    sizeBytes: 0,
+    description:
+      "Ultra-fast English dictation with near-zero latency and high conversational accuracy.",
+    languages: ["en"],
+    defaultLanguage: "en",
+    autoDetect: false,
+    isCloud: true,
+    provider: "groq",
+    latencyEstimate: "~180ms",
+  },
+  {
+    id: "cloud:openai:whisper-1",
+    name: "OpenAI Whisper-1",
+    size: "Cloud API",
+    sizeBytes: 0,
+    description:
+      "Official OpenAI Whisper model. Industry gold standard across 90+ spoken languages.",
+    languages: WHISPER_MULTILINGUAL_LANGUAGES,
+    defaultLanguage: "en",
+    autoDetect: true,
+    isCloud: true,
+    provider: "openai",
+    latencyEstimate: "~1.2s",
+  },
+  {
+    id: "cloud:deepgram:nova-3",
+    name: "Deepgram Nova-3",
+    size: "Cloud API",
+    sizeBytes: 0,
+    description:
+      "Deepgram's flagship conversational speech engine with high speed and smart formatting.",
+    languages: WHISPER_MULTILINGUAL_LANGUAGES,
+    defaultLanguage: "en",
+    autoDetect: true,
+    recommended: true,
+    isCloud: true,
+    provider: "deepgram",
+    latencyEstimate: "~300ms",
+  },
+  {
+    id: "cloud:deepgram:nova-2",
+    name: "Deepgram Nova-2",
+    size: "Cloud API",
+    sizeBytes: 0,
+    description:
+      "Enterprise-grade speech recognition with deep domain and multilingual comprehension.",
+    languages: WHISPER_MULTILINGUAL_LANGUAGES,
+    defaultLanguage: "en",
+    autoDetect: true,
+    isCloud: true,
+    provider: "deepgram",
+    latencyEstimate: "~450ms",
+  },
+  {
+    id: "cloud:mistral:voxtral-mini",
+    name: "Mistral Voxtral",
+    size: "Cloud API",
+    sizeBytes: 0,
+    description:
+      "Mistral speech recognition model with strong multi-language understanding.",
+    languages: WHISPER_MULTILINGUAL_LANGUAGES,
+    defaultLanguage: "en",
+    autoDetect: true,
+    isCloud: true,
+    provider: "mistral",
+    latencyEstimate: "~600ms",
+  },
+  {
+    id: "cloud:custom:custom-model",
+    name: "Custom Endpoint",
+    size: "Cloud API",
+    sizeBytes: 0,
+    description:
+      "Connect to any self-hosted or OpenAI-compatible transcription server (e.g. LocalAI, vLLM, RunPod).",
+    languages: WHISPER_MULTILINGUAL_LANGUAGES,
+    defaultLanguage: "en",
+    autoDetect: true,
+    isCloud: true,
+    provider: "custom",
+    latencyEstimate: "Custom",
+  },
+];
+
+export const ALL_LOCAL_MODELS = [
   ...WHISPER_MODELS,
   ...PARAKEET_MODELS,
   ...QWEN3_ASR_MODELS,
 ];
+
+export const ALL_MODELS = [
+  ...ALL_LOCAL_MODELS,
+  ...CLOUD_MODELS,
+];
+

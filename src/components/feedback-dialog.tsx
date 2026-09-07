@@ -18,7 +18,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn, openUrl } from "@/lib/utils";
-import { ExternalLink, Loader2, MessageSquareHeart, Star } from "lucide-react";
+import { ExternalLink, Loader2, MessageSquareHeart, Star } from "@/components/icons";
 import { useEffect, useState } from "react";
 
 interface FeedbackDialogProps {

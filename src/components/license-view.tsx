@@ -34,7 +34,7 @@ import {
   ShieldX,
   Sparkles,
   Trash2,
-} from "lucide-react";
+} from "@/components/icons";
 import { useEffect, useState } from "react";
 
 interface LicenseViewProps {

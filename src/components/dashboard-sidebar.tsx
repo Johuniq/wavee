@@ -12,7 +12,7 @@ import {
   RefreshCw,
   Settings,
   Sliders,
-} from "lucide-react";
+} from "@/components/icons";
 import { useEffect, useState } from "react";
 
 export type Page = "overview" | "history" | "models" | "transcribe" | "license" | "settings" | "advanced" | "vocabulary" | "help";
@@ -78,13 +78,6 @@ export function DashboardSidebar({ currentPage, onNavigate }: SidebarProps) {
   return (
     <aside className="flex h-full w-52 flex-col bg-canvas-soft border-r border-hairline">
 
-      {/* Eyebrow / section label */}
-      <div className="px-4 pt-2.5 pb-1 shrink-0">
-        <p className="caption-strong text-body-mid-0-40" style={{ color: '#c5c0b1', fontSize: '0.5625rem', letterSpacing: '0.08em' }}>
-          Workspace
-        </p>
-      </div>
-
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-2.5 py-1.5 space-y-0.5">
         {navItems.map((item, idx) => {
@@ -92,8 +85,7 @@ export function DashboardSidebar({ currentPage, onNavigate }: SidebarProps) {
             return (
               <p
                 key={`header-${idx}`}
-                className="px-2.5 pt-3 pb-1 caption-strong text-body-muted"
-                style={{ color: '#939084', fontSize: '0.5625rem', letterSpacing: '0.08em' }}
+                className="px-2.5 pt-3 pb-1 font-medium tracking-[0.08em] uppercase text-[9px] text-body-muted"
               >
                 {item.label}
               </p>
@@ -106,9 +98,17 @@ export function DashboardSidebar({ currentPage, onNavigate }: SidebarProps) {
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className={cn("sidebar-nav-item cursor-pointer", isActive && "active")}
+              className={cn(
+                "flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded-lg text-[13px] font-medium text-body bg-transparent border-none cursor-pointer transition-colors text-left tracking-[-0.005em] hover:text-ink",
+                isActive && "text-ink bg-canvas shadow-xs"
+              )}
             >
-              <span className="nav-indicator" />
+              <span
+                className={cn(
+                  "w-[3px] h-4 rounded-full bg-transparent -ml-2 transition-colors",
+                  isActive && "bg-primary"
+                )}
+              />
               <Icon className="h-4 w-4 shrink-0" strokeWidth={isActive ? 2.25 : 1.75} />
               <span className="truncate text-base">{item.label}</span>
             </button>

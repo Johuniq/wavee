@@ -1,5 +1,5 @@
 import { Logo } from "@/components/logo";
-import { Globe, Keyboard, Mic, Zap } from "lucide-react";
+import { Globe, Keyboard, Mic, Zap } from "@/components/icons";
 
 interface WelcomeStepProps {
   onNext: () => void;
@@ -37,12 +37,10 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
           <section className="hero-band-dark mb-6">
             <div className="flex flex-col items-center text-center gap-5 p-8 sm:p-10">
               <Logo size="md" />
-              <p className="display-lg text-on-dark">
+              <p className="text-[28px] font-medium leading-tight tracking-tight text-on-dark">
                 Welcome to <span className="text-primary">Wavee</span>.
               </p>
-              <p
-                className="body-lg text-on-dark-soft max-w-md"
-              >
+              <p className="text-[15px] leading-relaxed text-on-dark-soft max-w-md">
                 Your voice, at your cursor. Set up takes about 2 minutes.
               </p>
             </div>
@@ -51,14 +49,12 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
           {/* FEATURE GRID — Cream surface 2x2 */}
           <section className="card-feature-cream">
             <div className="flex items-center gap-3 mb-5">
-              <div className="icon-plate-orange">
+              <div className="flex items-center justify-center size-8 rounded-full bg-primary/12 text-primary">
                 <Zap className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="eyebrow-uppercase text-ink-mid">Why Wavee</p>
-                <h3
-                  className="title-lg text-ink mt-1"
-                >
+                <p className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-ink-mid">Why Wavee</p>
+                <h3 className="text-[15px] font-semibold tracking-tight text-ink mt-1">
                   Built for real workflows
                 </h3>
               </div>
@@ -70,20 +66,17 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
                 return (
                   <div
                     key={feature.title}
-                    className="rounded-md border border-hairline p-4 transition-colors hover:border-ink"
-                    style={{ background: "#fffefb" }}
+                    className="rounded-md border border-hairline bg-canvas p-4 transition-colors hover:border-ink"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="icon-plate shrink-0">
+                      <div className="flex items-center justify-center size-8 rounded-full bg-canvas-soft text-ink shrink-0">
                         <Icon className="h-4 w-4" />
                       </div>
-                      <h4
-                        className="title-sm text-ink"
-                      >
+                      <h4 className="text-xs font-semibold text-ink">
                         {feature.title}
                       </h4>
                     </div>
-                    <p className="body-sm text-body-muted mt-3 leading-relaxed">
+                    <p className="text-xs text-body-muted mt-3 leading-relaxed">
                       {feature.description}
                     </p>
                   </div>
@@ -97,12 +90,12 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
       {/* STICKY ACTION FOOTER */}
       <div className="shrink-0 border-t border-hairline bg-canvas-soft">
         <div className="max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-4 flex items-center justify-between gap-4 flex-wrap">
-          <p className="caption text-body-muted">
+          <p className="text-[11px] text-body-muted">
             Takes about 2 minutes to set up.
           </p>
           <button
             onClick={onNext}
-            className="paper-button-primary cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 bg-primary text-on-dark font-semibold text-sm px-[1.125rem] py-2 rounded-[10px] cursor-pointer transition-all hover:bg-[#e64500] active:scale-[0.98] whitespace-nowrap min-h-9"
           >
             Get started
           </button>

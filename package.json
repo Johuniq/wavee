@@ -32,6 +32,8 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
+    "@hugeicons/core-free-icons": "^4.3.0",
+    "@hugeicons/react": "^1.1.10",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.8",
@@ -78,7 +80,6 @@
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
-    "lucide-react": "^0.561.0",
     "motion": "^12.23.26",
     "next-themes": "^0.4.6",
     "react": "^19.1.0",

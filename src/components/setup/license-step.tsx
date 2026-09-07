@@ -15,7 +15,7 @@ import {
   Loader2,
   ShieldCheck,
   Sparkles,
-} from "lucide-react";
+} from "@/components/icons";
 import { useEffect, useState } from "react";
 
 interface LicenseStepProps {
@@ -112,7 +112,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
     return (
       <div className="flex h-full flex-col items-center justify-center bg-canvas">
         <Loader2 className="h-7 w-7 animate-spin text-body-muted" />
-        <p className="body-sm text-body-muted mt-3">Checking license...</p>
+        <p className="text-xs text-body-muted mt-3">Checking license...</p>
       </div>
     );
   }
@@ -124,22 +124,20 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
           {/* HERO — Dark band */}
           <section className="hero-band-dark">
             <div className="flex flex-col items-center text-center gap-4 p-8 sm:p-10">
-              <div className="icon-plate-dark">
+              <div className="flex items-center justify-center size-8 rounded-full bg-[#2f2a26] text-on-dark border border-[#36342e]">
                 <Key className="h-4 w-4 text-primary" />
               </div>
-              <p className="eyebrow-uppercase text-primary">
+              <p className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-primary">
                 <span className="inline-flex items-center gap-2">
                   <span className="h-1 w-1 rounded-full bg-primary" />
                   Step {STEP_INDEX} of {STEPS_TOTAL}
                 </span>
               </p>
-              <h2
-                className="display-lg text-on-dark"
-              >
+              <h2 className="text-[28px] font-medium leading-tight tracking-tight text-on-dark">
                 {showActivationForm ? "Activate " : "Choose how to "}
                 <span className="text-primary">get started</span>.
               </h2>
-              <p className="body-md text-on-dark-soft max-w-md">
+              <p className="text-sm text-on-dark-soft max-w-md leading-relaxed">
                 {showActivationForm
                   ? "Enter your license key to activate."
                   : "Try free for 7 days or activate an existing license."}
@@ -151,33 +149,31 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
           {error && (
             <div className="p-3.5 rounded-md border border-destructive/30 bg-destructive/5 flex items-start gap-2.5 text-destructive">
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-              <span className="body-sm">{error}</span>
+              <span className="text-xs">{error}</span>
             </div>
           )}
 
           {success && (
-            <div className="p-3.5 rounded-md border flex items-start gap-2.5" style={{ borderColor: "rgba(255,79,0,0.3)", background: "rgba(255,79,0,0.06)", color: "#ff4f00" }}>
+            <div className="p-3.5 rounded-md border flex items-start gap-2.5 border-primary/30 bg-primary/5 text-primary">
               <Check className="h-4 w-4 mt-0.5 shrink-0" />
-              <span className="body-sm">{success}</span>
+              <span className="text-xs">{success}</span>
             </div>
           )}
 
           {canProceed && !success && (
             <div
-              className="p-5 rounded-md border flex items-center gap-4"
-              style={{ borderColor: "rgba(255,79,0,0.3)", background: "rgba(255,79,0,0.06)" }}
+              className="p-5 rounded-md border flex items-center gap-4 border-primary/30 bg-primary/5"
             >
               <div
-                className="flex h-10 w-10 items-center justify-center rounded-full shrink-0"
-                style={{ background: "rgba(255,79,0,0.15)" }}
+                className="flex h-10 w-10 items-center justify-center rounded-full shrink-0 bg-primary/15"
               >
                 <ShieldCheck className="h-5 w-5 text-primary" />
               </div>
               <div className="min-w-0">
-                <p className="title-md text-primary">
+                <p className="text-sm font-semibold text-primary">
                   {isTrial ? "Trial active" : "License active"}
                 </p>
-                <p className="caption text-body mt-0.5">
+                <p className="text-[11px] text-body mt-0.5">
                   {isTrial
                     ? `${license?.trial_days_remaining ?? 7} days remaining`
                     : "Your license is activated"}
@@ -190,14 +186,12 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
           {isActive ? null : !showActivationForm ? (
             <section className="card-feature-cream">
               <div className="flex items-center gap-3 mb-5">
-                <div className="icon-plate">
+                <div className="flex items-center justify-center size-8 rounded-full bg-canvas-soft text-ink">
                   <Sparkles className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="eyebrow-uppercase text-ink-mid">Options</p>
-                  <h3
-                    className="title-lg text-ink mt-1"
-                  >
+                  <p className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-ink-mid">Options</p>
+                  <h3 className="text-[15px] font-semibold tracking-tight text-ink mt-1">
                     Pick a starting point
                   </h3>
                 </div>
@@ -213,7 +207,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
                   )}
                 >
                   <div className="flex items-start gap-4">
-                    <div className="icon-plate shrink-0">
+                    <div className="flex items-center justify-center size-8 rounded-full bg-canvas-soft text-ink shrink-0">
                       {isStartingTrial ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
@@ -221,12 +215,10 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <h4
-                        className="title-md text-ink"
-                      >
+                      <h4 className="text-sm font-semibold text-ink">
                         Start 7-day free trial
                       </h4>
-                      <p className="body-sm text-body-muted mt-1.5">
+                      <p className="text-xs text-body-muted mt-1.5">
                         Try all features free for 7 days. No credit card required.
                       </p>
                     </div>
@@ -238,16 +230,14 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
                   className="w-full text-left rounded-md border border-hairline bg-canvas p-4 transition-colors hover:border-ink cursor-pointer"
                 >
                   <div className="flex items-start gap-4">
-                    <div className="icon-plate shrink-0">
+                    <div className="flex items-center justify-center size-8 rounded-full bg-canvas-soft text-ink shrink-0">
                       <Key className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">
-                      <h4
-                        className="title-md text-ink"
-                      >
+                      <h4 className="text-sm font-semibold text-ink">
                         I have a license key
                       </h4>
-                      <p className="body-sm text-body-muted mt-1.5">
+                      <p className="text-xs text-body-muted mt-1.5">
                         Already purchased? Enter your key to activate.
                       </p>
                     </div>
@@ -267,26 +257,24 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
           ) : (
             <section className="card-feature-cream">
               <div className="flex items-center gap-3 mb-5">
-                <div className="icon-plate">
+                <div className="flex items-center justify-center size-8 rounded-full bg-canvas-soft text-ink">
                   <Key className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="eyebrow-uppercase text-ink-mid">Activate</p>
-                  <h3
-                    className="title-lg text-ink mt-1"
-                  >
+                  <p className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-ink-mid">Activate</p>
+                  <h3 className="text-[15px] font-semibold tracking-tight text-ink mt-1">
                     Enter your license key
                   </h3>
                 </div>
               </div>
 
-              <p className="body-sm text-body-muted mb-4">
+              <p className="text-xs text-body-muted mb-4">
                 Your license key was sent to your email after purchase.
               </p>
 
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="eyebrow-uppercase text-ink-mid block">
+                  <label className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-ink-mid block">
                     License key
                   </label>
                   <input
@@ -295,8 +283,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
                     value={licenseKey}
                     onChange={(e) => setLicenseKey(e.target.value)}
                     disabled={isActivating}
-                    className="paper-input w-full h-11 px-4 font-mono text-sm disabled:opacity-50"
-                    style={{ borderRadius: "8px" }}
+                    className="paper-input w-full h-11 px-4 font-mono text-sm disabled:opacity-50 rounded-lg"
                   />
                 </div>
 
@@ -341,7 +328,7 @@ export function LicenseStep({ onNext, onBack }: LicenseStepProps) {
               Continue
             </button>
           ) : (
-            <p className="caption text-body-muted">Start a trial or enter a key to continue.</p>
+            <p className="text-[11px] text-body-muted">Start a trial or enter a key to continue.</p>
           )}
         </div>
       </div>

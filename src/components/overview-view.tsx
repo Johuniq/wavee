@@ -9,6 +9,7 @@ import {
   Circle,
   Cpu,
   Flame,
+  Globe,
   Headphones,
   History,
   Keyboard,
@@ -21,7 +22,7 @@ import {
   Type,
   Waves,
   Zap
-} from "lucide-react";
+} from "@/components/icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface OverviewViewProps {
@@ -652,24 +653,32 @@ export function OverviewView({ onNavigate, trialDaysRemaining }: OverviewViewPro
                   value={currentHotkey}
                   hint={settings.hotkeyMode === "push-to-talk" ? "Push to talk" : "Toggle"}
                 />
+                {settings.translationEnabled && (
+                  <SetupRow
+                    icon={<Globe className="h-3 w-3" />}
+                    label="Translation"
+                    value={settings.translationHotkey}
+                    hint={`${settings.translationSourceLanguage.toUpperCase()} → ${settings.translationTargetLanguage.toUpperCase()}`}
+                  />
+                )}
                 <SetupRow
-                  icon={<Cpu className="h-3 w-3" />}
+                  icon={selectedModel?.isCloud ? <Zap className="h-3 w-3 text-primary" /> : <Cpu className="h-3 w-3" />}
                   label="Model"
-                  value={selectedModel?.name ?? "Not installed"}
-                  hint={selectedModel?.downloaded ? "Ready" : "Needs download"}
+                  value={selectedModel?.name ?? "Not configured"}
+                  hint={selectedModel?.isCloud ? "Cloud (BYOK)" : selectedModel?.downloaded ? "Ready" : "Needs download"}
                   onClick={() => onNavigate("models")}
                 />
                 <SetupRow
                   icon={<Activity className="h-3 w-3" />}
-                  label="Speed gain"
-                  value="~3x"
-                  hint="vs typing"
+                  label="Latency / Gain"
+                  value={selectedModel?.latencyEstimate ? selectedModel.latencyEstimate : "~3x"}
+                  hint={selectedModel?.isCloud ? "Cloud latency" : "vs typing"}
                 />
                 <SetupRow
                   icon={<Waves className="h-3 w-3" />}
                   label="Processing"
-                  value="Local"
-                  hint="On-device only"
+                  value={selectedModel?.isCloud ? "Cloud BYOK" : "Local"}
+                  hint={selectedModel?.isCloud ? "Direct encrypted" : "On-device only"}
                 />
               </ul>
             </div>

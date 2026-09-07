@@ -50,8 +50,9 @@ import {
   X,
   Zap,
   Circle,
-} from "lucide-react";
-import { useEffect, useState } from "react";
+} from "@/components/icons";
+import { CloudModelsTab } from "@/components/cloud-models-tab";
+import { useEffect, useMemo, useState } from "react";
 
 interface ModelsViewProps {
   onClose: () => void;
@@ -80,6 +81,20 @@ export function ModelsView(_props: ModelsViewProps) {
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [pageError, setPageError] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<"local" | "cloud">(() => {
+    return selectedModel?.isCloud ? "cloud" : "local";
+  });
+
+  const localModels = useMemo(
+    () => availableModels.filter((m) => !m.isCloud),
+    [availableModels]
+  );
+  const cloudModels = useMemo(
+    () => availableModels.filter((m) => m.isCloud),
+    [availableModels]
+  );
+
   const languageOptions = selectedModel
     ? getModelLanguageOptions(selectedModel)
     : [];
@@ -256,7 +271,7 @@ export function ModelsView(_props: ModelsViewProps) {
     if (category === "accurate") {
       return <Gauge className="h-3 w-3" />;
     }
-    if (category === "fast") {
+    if (category === "fast" || category === "ultra-fast" || category === "cloud") {
       return <Zap className="h-3 w-3" />;
     }
     return <HardDrive className="h-3 w-3" />;
@@ -267,6 +282,8 @@ export function ModelsView(_props: ModelsViewProps) {
     accurate: "Accurate",
     fast: "Fast",
     compact: "Small",
+    cloud: "Cloud BYOK",
+    "ultra-fast": "Ultra-fast",
   };
 
   const categoryAccent: Record<ModelBadgeCategory, string> = {
@@ -274,11 +291,13 @@ export function ModelsView(_props: ModelsViewProps) {
     accurate: "bg-canvas-soft text-ink",
     fast: "bg-canvas-soft text-ink",
     compact: "bg-canvas-soft text-ink",
+    cloud: "bg-primary/10 text-primary",
+    "ultra-fast": "bg-primary/10 text-primary",
   };
 
   const isBusy = Boolean(downloadingModelId || deletingModelId);
   const hasModels = availableModels.length > 0;
-  const downloadedCount = availableModels.filter(m => m.downloaded).length;
+  const downloadedCount = localModels.filter((m) => m.downloaded).length;
   const currentLanguageName =
     languageOptions.find((l) => l.code === selectedLanguage)?.name ??
     (selectedLanguage === "auto" ? "Auto detect" : selectedLanguage.toUpperCase());
@@ -287,13 +306,61 @@ export function ModelsView(_props: ModelsViewProps) {
     <div className="flex h-full flex-col overflow-hidden bg-canvas">
       {/* ─── HEADER ─── */}
       <div className="shrink-0 border-b border-hairline">
-        <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-3 sm:py-4">
-          <p className="eyebrow-uppercase text-ink-mid">Models</p>
-          <h1
-            className="display-sm text-ink mt-1"
-          >
-            Choose your <span className="text-primary">engine</span>.
-          </h1>
+        <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-3 sm:py-4 flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <p className="eyebrow-uppercase text-ink-mid">Models</p>
+            <h1 className="display-sm text-ink mt-0.5">
+              Choose your <span className="text-primary">engine</span>.
+            </h1>
+          </div>
+
+          {/* Segmented Tab Controls - Zapier styled */}
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-canvas-soft border border-hairline">
+            <button
+              onClick={() => setActiveTab("local")}
+              className={cn(
+                "caption-strong px-3.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 text-xs",
+                activeTab === "local"
+                  ? "bg-ink text-on-dark shadow-sm"
+                  : "text-body-muted hover:text-ink hover:bg-canvas"
+              )}
+            >
+              <HardDrive className="h-3.5 w-3.5" />
+              Local Models
+              <span
+                className={cn(
+                  "caption px-1.5 py-0.2 rounded-full text-[10px] ml-0.5",
+                  activeTab === "local"
+                    ? "bg-white/20 text-white"
+                    : "bg-black/5 text-body-muted"
+                )}
+              >
+                {localModels.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab("cloud")}
+              className={cn(
+                "caption-strong px-3.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 text-xs",
+                activeTab === "cloud"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-body-muted hover:text-ink hover:bg-canvas"
+              )}
+            >
+              <Zap className="h-3.5 w-3.5" />
+              Cloud Models (BYOK)
+              <span
+                className={cn(
+                  "caption-strong px-1.5 py-0.2 rounded-full text-[10px] ml-0.5",
+                  activeTab === "cloud"
+                    ? "bg-black/20 text-white"
+                    : "bg-primary/10 text-primary"
+                )}
+              >
+                BYOK
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -326,6 +393,15 @@ export function ModelsView(_props: ModelsViewProps) {
                 {isRetrying ? "Retrying..." : "Retry"}
               </button>
             </div>
+          </div>
+        ) : activeTab === "cloud" ? (
+          <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-4 xl:py-5">
+            <CloudModelsTab
+              cloudModels={cloudModels}
+              selectedModel={selectedModel}
+              onSelectModel={handleSelectModel}
+              isBusy={isBusy}
+            />
           </div>
         ) : (
           <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-4 xl:py-5 space-y-4 xl:space-y-5">
@@ -439,12 +515,12 @@ export function ModelsView(_props: ModelsViewProps) {
                   </h2>
                 </div>
                 <p className="caption text-body-muted">
-                  {availableModels.length} total · {downloadedCount} downloaded
+                  {localModels.length} total · {downloadedCount} downloaded
                 </p>
               </div>
 
               <div className="grid grid-cols-1 min-[640px]:grid-cols-2 @3xl:grid-cols-2 gap-3 sm:gap-4">
-                {availableModels.map((model) => {
+                {localModels.map((model) => {
                   const isActive = selectedModel?.id === model.id;
                   const isDownloading = downloadingModelId === model.id;
                   const isCanceling = cancelingModelId === model.id;

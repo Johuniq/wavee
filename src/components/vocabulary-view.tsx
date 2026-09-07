@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
-import { BookText, Trash2, Wand2 } from "lucide-react";
+import { BookText, Trash2, Wand2 } from "@/components/icons";
 import { useState } from "react";
 
 interface VocabularyViewProps {

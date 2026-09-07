@@ -38,6 +38,10 @@ pub struct AppSettings {
     /// User-defined domain vocabulary. Stored as a JSON array so we can
     /// support an arbitrary number of entries without a schema change.
     pub custom_vocabulary: Vec<VocabularyEntry>,
+    pub translation_enabled: bool,
+    pub translation_hotkey: String,
+    pub translation_source_language: String,
+    pub translation_target_language: String,
 }
 
 impl Default for AppSettings {
@@ -60,6 +64,10 @@ impl Default for AppSettings {
             diagnostics_enabled: true,
             recording_overlay_position: "top-center".to_string(),
             custom_vocabulary: Vec::new(),
+            translation_enabled: false,
+            translation_hotkey: "Alt+Shift+T".to_string(),
+            translation_source_language: "en".to_string(),
+            translation_target_language: "es".to_string(),
         }
     }
 }
@@ -117,6 +125,15 @@ pub struct AppState {
     pub setup_complete: bool,
     pub current_setup_step: i32,
     pub selected_model_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CloudProviderRecord {
+    pub id: String,
+    pub api_key: String,
+    pub base_url: Option<String>,
+    pub custom_model: Option<String>,
+    pub is_active: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -227,6 +244,24 @@ impl Database {
             [],
         );
 
+        // Add translation settings columns if they don't exist (migration for existing DBs)
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN translation_enabled INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN translation_hotkey TEXT NOT NULL DEFAULT 'Alt+Shift+T'",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN translation_source_language TEXT NOT NULL DEFAULT 'en'",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN translation_target_language TEXT NOT NULL DEFAULT 'es'",
+            [],
+        );
+
         // Migration: Update default hotkeys if they are still the old ones
         // This ensures existing users get the new non-conflicting defaults
         let _ = conn.execute(
@@ -313,10 +348,19 @@ impl Database {
             "ALTER TABLE license ADD COLUMN usage INTEGER NOT NULL DEFAULT 0",
             [],
         );
-        let _ = conn.execute(
-            "ALTER TABLE license ADD COLUMN validations INTEGER NOT NULL DEFAULT 0",
+        // Cloud providers table (BYOK)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS cloud_providers (
+                id TEXT PRIMARY KEY,
+                api_key TEXT NOT NULL DEFAULT '',
+                base_url TEXT,
+                custom_model TEXT,
+                is_active INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )",
             [],
-        );
+        )?;
 
         Ok(())
     }
@@ -489,7 +533,8 @@ impl Database {
         conn.query_row(
             "SELECT push_to_talk_key, toggle_key, hotkey_mode, language, selected_model_id,
                     show_recording_indicator, show_recording_overlay, play_audio_feedback, auto_start_on_boot, minimize_to_tray,
-                    post_processing_enabled, voice_commands_enabled, clipboard_mode, auto_check_for_updates, recording_overlay_position, custom_vocabulary, diagnostics_enabled
+                    post_processing_enabled, voice_commands_enabled, clipboard_mode, auto_check_for_updates, recording_overlay_position, custom_vocabulary, diagnostics_enabled,
+                    translation_enabled, translation_hotkey, translation_source_language, translation_target_language
              FROM settings WHERE id = 1",
             [],
             |row| {
@@ -514,6 +559,10 @@ impl Database {
                     recording_overlay_position: row.get(14).unwrap_or_else(|_| "top-center".to_string()),
                     custom_vocabulary,
                     diagnostics_enabled: row.get::<_, i32>(16).unwrap_or(1) == 1,
+                    translation_enabled: row.get::<_, i32>(17).unwrap_or(0) == 1,
+                    translation_hotkey: row.get(18).unwrap_or_else(|_| "Alt+Shift+T".to_string()),
+                    translation_source_language: row.get(19).unwrap_or_else(|_| "en".to_string()),
+                    translation_target_language: row.get(20).unwrap_or_else(|_| "es".to_string()),
                 })
             },
         )
@@ -542,6 +591,10 @@ impl Database {
                 recording_overlay_position = ?15,
                 custom_vocabulary = ?16,
                 diagnostics_enabled = ?17,
+                translation_enabled = ?18,
+                translation_hotkey = ?19,
+                translation_source_language = ?20,
+                translation_target_language = ?21,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = 1",
             params![
@@ -562,6 +615,10 @@ impl Database {
                 settings.recording_overlay_position,
                 vocab_json,
                 settings.diagnostics_enabled as i32,
+                settings.translation_enabled as i32,
+                settings.translation_hotkey,
+                settings.translation_source_language,
+                settings.translation_target_language,
             ],
         )?;
         Ok(())
@@ -586,6 +643,10 @@ impl Database {
             "auto_check_for_updates",
             "recording_overlay_position",
             "diagnostics_enabled",
+            "translation_enabled",
+            "translation_hotkey",
+            "translation_source_language",
+            "translation_target_language",
         ];
 
         if !ALLOWED_KEYS.contains(&key) {
@@ -914,6 +975,82 @@ impl Database {
              WHERE id = 1",
             [],
         )?;
+        Ok(())
+    }
+
+    // ==================== Cloud Provider Operations (BYOK) ====================
+
+    pub fn get_cloud_providers(&self) -> Result<Vec<CloudProviderRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, api_key, base_url, custom_model, is_active FROM cloud_providers ORDER BY id ASC"
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(CloudProviderRecord {
+                id: row.get(0)?,
+                api_key: row.get(1)?,
+                base_url: row.get(2)?,
+                custom_model: row.get(3)?,
+                is_active: row.get::<_, i32>(4)? == 1,
+            })
+        })?;
+
+        let mut providers = Vec::new();
+        for row in rows {
+            providers.push(row?);
+        }
+        Ok(providers)
+    }
+
+    pub fn get_cloud_provider(&self, id: &str) -> Result<Option<CloudProviderRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, api_key, base_url, custom_model, is_active FROM cloud_providers WHERE id = ?1"
+        )?;
+
+        let mut rows = stmt.query_map(params![id], |row| {
+            Ok(CloudProviderRecord {
+                id: row.get(0)?,
+                api_key: row.get(1)?,
+                base_url: row.get(2)?,
+                custom_model: row.get(3)?,
+                is_active: row.get::<_, i32>(4)? == 1,
+            })
+        })?;
+
+        if let Some(row) = rows.next() {
+            Ok(Some(row?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn save_cloud_provider(
+        &self,
+        id: &str,
+        api_key: &str,
+        base_url: Option<&str>,
+        custom_model: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO cloud_providers (id, api_key, base_url, custom_model, is_active, updated_at)
+             VALUES (?1, ?2, ?3, ?4, 1, CURRENT_TIMESTAMP)
+             ON CONFLICT(id) DO UPDATE SET
+                api_key = excluded.api_key,
+                base_url = excluded.base_url,
+                custom_model = excluded.custom_model,
+                is_active = 1,
+                updated_at = CURRENT_TIMESTAMP",
+            params![id, api_key, base_url, custom_model],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_cloud_provider(&self, id: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM cloud_providers WHERE id = ?1", params![id])?;
         Ok(())
     }
 }

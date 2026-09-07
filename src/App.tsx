@@ -8,7 +8,7 @@ import { checkForUpdates } from "@/lib/updater-api";
 import { useAppStore, useIsInitialized } from "@/store";
 import { useHotkey } from "@/hooks/use-hotkey";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/icons";
 import { useEffect, useState } from "react";
 import "./App.css";
 

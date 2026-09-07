@@ -13,7 +13,7 @@ import {
   isLanguageSupportedByModel,
   type WhisperModel,
 } from "@/types";
-import { Check, Cpu, HardDrive, Loader2, Sparkles, Star } from "lucide-react";
+import { Check, Cpu, HardDrive, Loader2, Sparkles, Star } from "@/components/icons";
 import { useEffect, useMemo, useState } from "react";
 
 interface ModelSelectStepProps {
@@ -143,18 +143,16 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
           {/* HERO — Dark band */}
           <section className="hero-band-dark">
             <div className="flex flex-col items-center text-center gap-4 p-8 sm:p-10">
-              <p className="eyebrow-uppercase text-primary">
+              <p className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-primary">
                 <span className="inline-flex items-center gap-2">
                   <span className="h-1 w-1 rounded-full bg-primary" />
                   Step {STEP_INDEX} of {STEPS_TOTAL}
                 </span>
               </p>
-              <h2
-                className="display-lg text-on-dark"
-              >
+              <h2 className="text-[28px] font-medium leading-tight tracking-tight text-on-dark">
                 Choose your <span className="text-primary">engine</span>.
               </h2>
-              <p className="body-md text-on-dark-soft max-w-md">
+              <p className="text-sm text-on-dark-soft max-w-md leading-relaxed">
                 Larger models are more accurate but need more storage. Pick one to get started.
               </p>
             </div>
@@ -163,14 +161,12 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
           {/* MODEL CARDS */}
           <section className="card-feature-cream">
             <div className="flex items-center gap-3 mb-5">
-              <div className="icon-plate-orange">
+              <div className="flex items-center justify-center size-8 rounded-full bg-primary/12 text-primary">
                 <Sparkles className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="eyebrow-uppercase text-ink-mid">Models</p>
-                <h3
-                  className="title-lg text-ink mt-1"
-                >
+                <p className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-ink-mid">Models</p>
+                <h3 className="text-[15px] font-semibold tracking-tight text-ink mt-1">
                   {models.length} available
                 </h3>
               </div>
@@ -209,35 +205,33 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span
-                            className="title-sm text-ink"
-                          >
+                          <span className="text-xs font-semibold text-ink">
                             {model.name}
                           </span>
                           {isSelected && (
                             <span
-                              className="caption-strong px-2 py-0.5 rounded-full"
+                              className="text-[11px] font-medium uppercase tracking-[0.08em] px-2 py-0.5 rounded-full"
                               style={{ background: "rgba(255,79,0,0.1)", color: "#ff4f00" }}
                             >
                               Selected
                             </span>
                           )}
                           {isRecommended && !isSelected && (
-                            <span className="caption-strong text-ink bg-canvas-soft px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                            <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink bg-canvas-soft px-2 py-0.5 rounded-full inline-flex items-center gap-1">
                               <Star className="h-3 w-3" />
                               Recommended
                             </span>
                           )}
                         </div>
-                        <p className="body-sm text-body-muted mt-1.5">
+                        <p className="text-xs text-body-muted mt-1.5">
                           {model.description}
                         </p>
                         <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-                          <span className="inline-flex items-center gap-1.5 caption px-2 py-1 rounded-md bg-canvas-soft text-body">
+                          <span className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md bg-canvas-soft text-body">
                             <HardDrive className="h-3 w-3" />
                             {model.size}
                           </span>
-                          <span className="caption px-2 py-1 rounded-md bg-canvas-soft text-body">
+                          <span className="text-[11px] px-2 py-1 rounded-md bg-canvas-soft text-body">
                             {getModelLanguageLabel(model)}
                           </span>
                         </div>
@@ -251,8 +245,8 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
                               />
                             </div>
                             <div className="flex items-center justify-between">
-                              <p className="caption text-body-muted">Downloading...</p>
-                              <p className="caption-strong text-primary tabular-nums">
+                              <p className="text-[11px] text-body-muted">Downloading...</p>
+                              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-primary tabular-nums">
                                 {Math.round(downloadProgress)}%
                               </p>
                             </div>
@@ -260,7 +254,7 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
                         )}
 
                         {model.downloaded && !isThisDownloading && (
-                          <div className="mt-2.5 flex items-center gap-1.5 caption-strong" style={{ color: "#ff4f00" }}>
+                          <div className="mt-2.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-primary">
                             <Check className="h-3 w-3" />
                             Downloaded
                           </div>
@@ -274,10 +268,9 @@ export function ModelSelectStep({ onNext, onBack }: ModelSelectStepProps) {
 
             {downloadError && (
               <div
-                className="mt-4 p-3.5 rounded-md border flex items-start gap-2.5"
-                style={{ borderColor: "rgba(207,32,47,0.3)", background: "rgba(207,32,47,0.05)", color: "#cf202f" }}
+                className="mt-4 p-3.5 rounded-md border flex items-start gap-2.5 border-[#cf202f]/30 bg-[#cf202f]/5 text-[#cf202f]"
               >
-                <p className="body-sm">{downloadError}</p>
+                <p className="text-xs">{downloadError}</p>
               </div>
             )}
           </section>

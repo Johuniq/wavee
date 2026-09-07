@@ -1,37 +1,45 @@
 import { Textarea } from "@/components/ui/textarea";
-import { addTranscription, reportError, transcribeFile } from "@/lib/voice-api";
+import { addTranscription, reportError, transcribeFile, transcribeFilesBatch, transcribeUrl } from "@/lib/voice-api";
 import { useAppStore } from "@/store";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   AlertCircle,
   Circle,
   FileAudio,
+  Globe,
   Headphones,
   Loader2,
+  Sparkles,
   Upload,
   X,
-} from "lucide-react";
-import { useState } from "react";
+} from "@/components/icons";
+import { useState, useCallback } from "react";
 
 interface TranscribeViewProps {
   onClose: () => void;
 }
 
+type InputMode = "file" | "url";
+
 export function TranscribeView(_props: TranscribeViewProps) {
   const { settings } = useAppStore();
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string>("");
+  const [inputMode, setInputMode] = useState<InputMode>("file");
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+  const [fileNames, setFileNames] = useState<string[]>([]);
   const [isSelectingFile, setIsSelectingFile] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcription, setTranscription] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [enableSpeakerDetection, setEnableSpeakerDetection] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const getErrorMessage = (err: unknown) =>
     err instanceof Error ? err.message : String(err || "Something went wrong");
 
-  const handleSelectFile = async () => {
+  const handleSelectFiles = async () => {
     if (isSelectingFile || isTranscribing) return;
 
     try {
@@ -39,7 +47,7 @@ export function TranscribeView(_props: TranscribeViewProps) {
       setError(null);
       setWarning(null);
       const selected = await open({
-        multiple: false,
+        multiple: true,
         filters: [
           {
             name: "Audio",
@@ -57,24 +65,24 @@ export function TranscribeView(_props: TranscribeViewProps) {
         ],
       });
 
-      if (selected && typeof selected === "string") {
-        setSelectedFile(selected);
-        setFileName(selected.split(/[/\\]/).pop() || selected);
+      if (selected && Array.isArray(selected)) {
+        setSelectedFiles(selected);
+        setFileNames(selected.map((f) => f.split(/[/\\]/).pop() || f));
       }
     } catch (err) {
       const message = getErrorMessage(err);
       console.error("File selection failed:", err);
       setError(message);
       await reportError("filesystem", message, "error", {
-        userAction: "Select audio file",
+        userAction: "Select audio files",
       }).catch(console.error);
     } finally {
       setIsSelectingFile(false);
     }
   };
 
-  const handleTranscribe = async () => {
-    if (!selectedFile || isTranscribing) return;
+  const handleTranscribeFiles = async () => {
+    if (selectedFiles.length === 0 || isTranscribing) return;
 
     setIsTranscribing(true);
     setError(null);
@@ -83,10 +91,51 @@ export function TranscribeView(_props: TranscribeViewProps) {
 
     const startTime = Date.now();
     try {
-      const text = await transcribeFile(
-        selectedFile,
-        settings.postProcessingEnabled
-      );
+      const texts = await transcribeFilesBatch(selectedFiles);
+      const combined = texts.filter((t) => t.trim().length > 0).join("\n\n");
+      setTranscription(combined);
+
+      if (combined) {
+        const durationMs = Date.now() - startTime;
+        try {
+          await addTranscription(
+            combined,
+            settings.selectedModelId || "base",
+            settings.language,
+            durationMs
+          );
+        } catch (historyErr) {
+          const message = getErrorMessage(historyErr);
+          console.error("Failed to save to history:", historyErr);
+          setWarning("Transcription completed, but history could not be saved.");
+          await reportError("database", message, "warning", {
+            userAction: "Save batch transcription to history",
+          }).catch(console.error);
+        }
+      }
+    } catch (err) {
+      const message = getErrorMessage(err);
+      console.error("Batch transcription failed:", err);
+      setError(message);
+      await reportError("transcription", message, "error", {
+        userAction: "Transcribe files batch",
+      }).catch(console.error);
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const handleTranscribeUrl = async () => {
+    if (!urlInput.trim() || isTranscribing) return;
+
+    setIsTranscribing(true);
+    setError(null);
+    setWarning(null);
+    setTranscription("");
+
+    const startTime = Date.now();
+    try {
+      const text = await transcribeUrl(urlInput.trim(), enableSpeakerDetection);
       setTranscription(text);
 
       if (text) {
@@ -103,17 +152,17 @@ export function TranscribeView(_props: TranscribeViewProps) {
           console.error("Failed to save to history:", historyErr);
           setWarning("Transcription completed, but history could not be saved.");
           await reportError("database", message, "warning", {
-            userAction: "Save file transcription to history",
+            userAction: "Save URL transcription to history",
           }).catch(console.error);
         }
       }
     } catch (err) {
       const message = getErrorMessage(err);
-      console.error("Transcription failed:", err);
+      console.error("URL transcription failed:", err);
       setError(message);
       await reportError("transcription", message, "error", {
-        userAction: "Transcribe file",
-        context: { file: selectedFile },
+        userAction: "Transcribe URL",
+        context: { url: urlInput.trim() },
       }).catch(console.error);
     } finally {
       setIsTranscribing(false);
@@ -134,12 +183,49 @@ export function TranscribeView(_props: TranscribeViewProps) {
   };
 
   const handleClear = () => {
-    setSelectedFile(null);
-    setFileName("");
+    setSelectedFiles([]);
+    setFileNames([]);
     setTranscription("");
     setError(null);
     setWarning(null);
+    setUrlInput("");
   };
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    if (isTranscribing) return;
+
+    const items = Array.from(e.dataTransfer.files);
+    if (items.length === 0) return;
+
+    const paths = items.map((f) => f.path);
+    const names = items.map((f) => f.name);
+
+    setSelectedFiles(paths);
+    setFileNames(names);
+    setInputMode("file");
+    setError(null);
+    setWarning(null);
+  }, [isTranscribing]);
+
+  const canTranscribe =
+    (inputMode === "file" && selectedFiles.length > 0) ||
+    (inputMode === "url" && urlInput.trim().length > 0);
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-canvas">
@@ -150,7 +236,7 @@ export function TranscribeView(_props: TranscribeViewProps) {
           <h1
             className="display-sm text-ink mt-1"
           >
-            From audio file to <span className="text-primary">text</span>.
+            From audio file or URL to <span className="text-primary">text</span>.
           </h1>
         </div>
       </div>
@@ -179,23 +265,23 @@ export function TranscribeView(_props: TranscribeViewProps) {
             </div>
           )}
 
-          {/* ─── HERO STATUS BAND — Dark coffee-ink ─── */}
+          {/* ─── HERO STATUS BAND ─── */}
           <section className="hero-band-dark">
             <div className="grid grid-cols-1 @xl:grid-cols-[1.4fr_1fr] gap-4 @xl:gap-6 p-4 sm:p-5 @xl:p-6 items-start @xl:items-center">
               <div className="min-w-0">
                 <p className="eyebrow-uppercase text-primary mb-2">
                   <span className="inline-flex items-center gap-2">
                     <Circle className="h-1.5 w-1.5 fill-primary text-primary" />
-                    Local transcription
+                    Audio import & transcription
                   </span>
                 </p>
                 <h2
                   className="display-md text-on-dark"
                 >
-                  Drop in a file. Get <span className="text-primary">words</span>.
+                  Drop in files, paste a URL. Get <span className="text-primary">words</span>.
                 </h2>
                 <p className="body-sm text-on-dark-soft mt-2 max-w-xl">
-                  Wavee processes audio entirely on your machine. Pick a recording and we'll turn it into clean, copyable text.
+                  Drag and drop audio files, batch-upload recordings, or paste a YouTube or direct audio link. Wavee turns them into clean, copyable text.
                 </p>
               </div>
 
@@ -206,7 +292,7 @@ export function TranscribeView(_props: TranscribeViewProps) {
                   </div>
                   <div className="min-w-0">
                     <p className="caption-strong text-on-dark">Supported formats</p>
-                    <p className="caption text-on-dark-soft mt-0.5">8 common audio & video types</p>
+                    <p className="caption text-on-dark-soft mt-0.5">8 common audio & video types + URLs</p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-1">
@@ -224,11 +310,32 @@ export function TranscribeView(_props: TranscribeViewProps) {
             </div>
           </section>
 
-          {/* ─── FILE UPLOAD — Cream surface with large drop zone ─── */}
-          {!selectedFile ? (
+          {/* ─── INPUT MODE TOGGLE ─── */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setInputMode("file"); setError(null); setWarning(null); }}
+              className={`paper-button-outline size-sm cursor-pointer ${inputMode === "file" ? "border-ink text-ink" : "border-hairline text-body-muted"}`}
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Files
+            </button>
+            <button
+              onClick={() => { setInputMode("url"); setError(null); setWarning(null); }}
+              className={`paper-button-outline size-sm cursor-pointer ${inputMode === "url" ? "border-ink text-ink" : "border-hairline text-body-muted"}`}
+            >
+              <Globe className="h-3.5 w-3.5" />
+              URL / YouTube
+            </button>
+          </div>
+
+          {/* ─── FILE INPUT ─── */}
+          {inputMode === "file" && !selectedFiles.length ? (
             <section
-              className="card-feature-cream cursor-pointer group transition-all hover:border-ink"
-              onClick={handleSelectFile}
+              className={`card-feature-cream cursor-pointer group transition-all hover:border-ink ${isDragOver ? "border-primary bg-primary/5" : ""}`}
+              onClick={handleSelectFiles}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
             >
               <div className="flex flex-col items-center justify-center text-center py-7 sm:py-9 px-5">
                 <div className="icon-plate-orange mb-4 group-hover:scale-105 transition-transform">
@@ -238,21 +345,22 @@ export function TranscribeView(_props: TranscribeViewProps) {
                 <h3
                   className="display-md text-ink"
                 >
-                  Select an audio file
+                  Drop files or browse
                 </h3>
                 <p className="body-sm text-body-muted mt-2 max-w-md">
-                  Recordings, voice notes, meeting clips, interviews — anything with audio.
+                  Drag and drop audio files here, or click to browse. You can select multiple files for batch transcription.
                 </p>
                 <button
                   className="paper-button-primary mt-4 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={isSelectingFile}
+                  onClick={(e) => { e.stopPropagation(); handleSelectFiles(); }}
                 >
                   {isSelectingFile ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                   {isSelectingFile ? "Opening..." : "Browse files"}
                 </button>
               </div>
             </section>
-          ) : (
+          ) : inputMode === "file" && selectedFiles.length > 0 ? (
             <section className="card-feature-cream">
               <div className="flex items-center gap-2.5 mb-3">
                 <div className="icon-plate">
@@ -263,52 +371,120 @@ export function TranscribeView(_props: TranscribeViewProps) {
                   <h3
                     className="title-md text-ink mt-0.5"
                   >
-                    Ready to transcribe
+                    Ready to transcribe {selectedFiles.length > 1 ? `${selectedFiles.length} files` : "file"}
                   </h3>
                 </div>
               </div>
 
-              {/* File row */}
-              <div
-                className="flex items-center gap-2.5 sm:gap-3 p-3 rounded-md border border-hairline mb-3"
-                style={{ background: '#fffefb' }}
-              >
-                <div className="icon-plate shrink-0">
-                  <FileAudio className="h-3.5 w-3.5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p
-                    className="body-sm-strong text-ink truncate"
-                    title={fileName}
+              <div className="space-y-2 mb-3">
+                {fileNames.map((name, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-2.5 sm:gap-3 p-3 rounded-md border border-hairline"
+                    style={{ background: '#fffefb' }}
                   >
-                    {fileName}
-                  </p>
-                  <p className="caption text-body-muted mt-0.5">
-                    Loaded · awaiting transcription
-                  </p>
-                </div>
+                    <div className="icon-plate shrink-0">
+                      <FileAudio className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className="body-sm-strong text-ink truncate"
+                        title={name}
+                      >
+                        {name}
+                      </p>
+                      <p className="caption text-body-muted mt-0.5">
+                        Loaded · awaiting transcription
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleClear();
-                  }}
-                  className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline text-body-muted hover:border-destructive hover:text-destructive transition-colors shrink-0"
-                  aria-label="Remove file"
+                  onClick={handleTranscribeFiles}
+                  disabled={isTranscribing}
+                  className="paper-button-primary w-full sm:w-auto"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  {isTranscribing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  {isTranscribing ? "Transcribing..." : `Transcribe ${selectedFiles.length > 1 ? `${selectedFiles.length} files` : "file"}`}
+                </button>
+                <button
+                  onClick={handleClear}
+                  disabled={isTranscribing}
+                  className="paper-button-outline size-md cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Clear
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {/* ─── URL INPUT ─── */}
+          {inputMode === "url" && (
+            <section className="card-feature-cream">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="icon-plate">
+                  <Globe className="h-3.5 w-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="eyebrow-uppercase text-ink-mid">Step 1</p>
+                  <h3
+                    className="title-md text-ink mt-0.5"
+                  >
+                    Paste an audio or YouTube URL
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 mb-3">
+                <input
+                  type="text"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleTranscribeUrl(); }}
+                  placeholder="https://www.youtube.com/watch?v=... or direct audio link"
+                  className="paper-input flex-1"
+                  disabled={isTranscribing}
+                />
+                <button
+                  onClick={handleTranscribeUrl}
+                  disabled={isTranscribing || !urlInput.trim()}
+                  className="paper-button-primary w-full sm:w-auto whitespace-nowrap"
+                >
+                  {isTranscribing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  {isTranscribing ? "Transcribing..." : "Transcribe URL"}
                 </button>
               </div>
 
-              <button
-                onClick={handleTranscribe}
-                disabled={isTranscribing}
-                className="paper-button-primary w-full sm:w-auto"
-              >
-                {isTranscribing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                {isTranscribing ? "Transcribing..." : "Transcribe file"}
-              </button>
+              <p className="caption text-body-muted">
+                {settings.selectedModelId.startsWith("cloud:deepgram")
+                  ? "YouTube links and direct audio URLs are supported. Deepgram will handle extraction and transcription."
+                  : "YouTube links require yt-dlp for local models. For smoother YouTube transcription, switch to Deepgram in Models settings."}
+              </p>
             </section>
           )}
+
+          {/* ─── OPTIONS ─── */}
+          <section className="paper-card">
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={enableSpeakerDetection}
+                  onChange={(e) => setEnableSpeakerDetection(e.target.checked)}
+                  disabled={isTranscribing}
+                  className="h-4 w-4 rounded border-hairline accent-primary"
+                />
+                <Sparkles className="h-4 w-4 text-ink-mid" />
+                <span className="body-sm text-ink">Enable speaker detection</span>
+              </label>
+              <span className="caption text-body-muted">
+                {enableSpeakerDetection ? "Diarization enabled for supported cloud providers" : "Available with Deepgram and select cloud models"}
+              </span>
+            </div>
+          </section>
 
           {/* ─── TRANSCRIPTION RESULT ─── */}
           {transcription && (

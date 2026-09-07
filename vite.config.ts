@@ -29,7 +29,7 @@ export default defineConfig(async () => ({
           // Split vendor chunks
           "react-vendor": ["react", "react-dom"],
           "ui-vendor": [
-            "lucide-react",
+            "@hugeicons/react",
             "@radix-ui/react-dialog",
             "@radix-ui/react-dropdown-menu",
           ],

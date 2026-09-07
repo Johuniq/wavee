@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { AlertCircle, MessageSquare, RefreshCw } from "lucide-react";
+import { AlertCircle, MessageSquare, RefreshCw } from "@/components/icons";
 import { Component, ErrorInfo, ReactNode } from "react";
 
 interface Props {

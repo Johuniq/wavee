@@ -32,7 +32,7 @@ import {
   Search,
   Trash2,
   X,
-} from "lucide-react";
+} from "@/components/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 

@@ -53,8 +53,8 @@ arboard = "3.4"
 # Async runtime utilities
 tokio = { version = "1", features = ["sync", "rt-multi-thread"] }
 
-# For downloading AI models (using rustls to avoid openssl dependency)
-reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls", "json"] }
+# For downloading AI models and cloud transcription requests (using rustls to avoid openssl dependency)
+reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls", "json", "multipart"] }
 futures-util = "0.3"
 
 # For model/config paths
@@ -73,6 +73,9 @@ hostname = "0.4"
 regex = "1"
 lazy_static = "1.4"
 
+# URL encoding for translation requests
+urlencoding = "2.1"
+
 # Cryptographic hashing for device fingerprint
 sha2 = "0.10"
 hex = "0.4"
@@ -89,8 +92,8 @@ qwen3-asr = { path = "vendor/qwen3-asr", default-features = false }
 # Audio processing
 hound = "3.5"
 
-# Byte order for audio conversion
-byteorder = "1.5"
+# URL parsing for audio URL validation
+url = "2.5"
 
 # UUID for unique identifiers
 uuid = { version = "1", features = ["v4"] }

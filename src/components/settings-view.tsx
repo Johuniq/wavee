@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Circle,
   Clipboard,
+  Globe,
   Keyboard,
   Maximize2,
   Monitor,
@@ -25,10 +26,11 @@ import {
   Volume2,
   Waves,
   Zap,
-} from "lucide-react";
+} from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 
 import { Logo } from "@/components/logo";
+import { LANGUAGE_NAMES } from "@/types";
 
 interface SettingsViewProps {
   onClose: () => void;
@@ -279,6 +281,112 @@ export function SettingsView(_props: SettingsViewProps) {
                   onRecord={() => handleRecordHotkey("toggle")}
                 />
               </div>
+            </div>
+          </section>
+
+          {/* ─── TRANSLATION SETTINGS — Cream surface ─── */}
+          <section className="card-feature-cream">
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="icon-plate">
+                <Globe className="h-3.5 w-3.5" />
+              </div>
+              <div className="min-w-0">
+                <p className="eyebrow-uppercase text-ink-mid">Translation</p>
+                <h3
+                  className="title-md text-ink mt-0.5"
+                >
+                  Dictation translation
+                </h3>
+              </div>
+            </div>
+
+            <div className="space-y-3.5">
+              <SettingRow
+                icon={<Globe className="h-3.5 w-3.5" />}
+                iconClass={settings.translationEnabled ? "bg-primary/10 text-primary" : ""}
+                title="Enable translation"
+                description="Dictate in one language and paste the text in another"
+                checked={settings.translationEnabled}
+                onChange={(checked) => updateSettings({ translationEnabled: checked })}
+              />
+
+              {settings.translationEnabled && (
+                <>
+                  <div className="h-px bg-hairline-soft" />
+
+                  <HotkeyCaptureField
+                    label="Translation hotkey"
+                    value={settings.translationHotkey}
+                    isRecording={recordingPushToTalk}
+                    secondsLeft={recordingSecondsLeft}
+                    onRecord={() => {
+                      setRecordingPushToTalk(true);
+                      setRecordingToggle(false);
+                      setRecordingSecondsLeft(5);
+                    }}
+                  />
+
+                  <div className="grid grid-cols-1 min-[520px]:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="eyebrow-uppercase text-ink-mid">Source language</Label>
+                      <Select
+                        value={settings.translationSourceLanguage}
+                        onValueChange={(value) =>
+                          updateSettings({ translationSourceLanguage: value })
+                        }
+                      >
+                        <SelectTrigger
+                          className="paper-input border border-hairline h-9 cursor-pointer"
+                          style={{ background: '#ffffff', borderRadius: '8px' }}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-60">
+                          {Object.entries(LANGUAGE_NAMES)
+                            .filter(([code]) => code !== "auto")
+                            .map(([code, name]) => (
+                              <SelectItem key={code} value={code}>
+                                {name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="caption text-body-muted">
+                        Language you will speak in
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="eyebrow-uppercase text-ink-mid">Target language</Label>
+                      <Select
+                        value={settings.translationTargetLanguage}
+                        onValueChange={(value) =>
+                          updateSettings({ translationTargetLanguage: value })
+                        }
+                      >
+                        <SelectTrigger
+                          className="paper-input border border-hairline h-9 cursor-pointer"
+                          style={{ background: '#ffffff', borderRadius: '8px' }}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-60">
+                          {Object.entries(LANGUAGE_NAMES)
+                            .filter(([code]) => code !== "auto")
+                            .map(([code, name]) => (
+                              <SelectItem key={code} value={code}>
+                                {name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="caption text-body-muted">
+                        Language to translate to
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </section>
 

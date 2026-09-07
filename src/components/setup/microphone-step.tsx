@@ -6,7 +6,7 @@ import {
   Loader2,
   Mic,
   MicOff,
-} from "lucide-react";
+} from "@/components/icons";
 import { useState } from "react";
 
 interface MicrophoneStepProps {
@@ -77,18 +77,16 @@ export function MicrophoneStep({ onNext, onBack }: MicrophoneStepProps) {
           {/* HERO — Dark band */}
           <section className="hero-band-dark">
             <div className="flex flex-col items-center text-center gap-4 p-8 sm:p-10">
-              <p className="eyebrow-uppercase text-primary">
+              <p className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-primary">
                 <span className="inline-flex items-center gap-2">
                   <span className="h-1 w-1 rounded-full bg-primary" />
                   Step {STEP_INDEX} of {STEPS_TOTAL}
                 </span>
               </p>
-              <h2
-                className="display-lg text-on-dark"
-              >
+              <h2 className="text-[28px] font-medium leading-tight tracking-tight text-on-dark">
                 Allow <span className="text-primary">microphone</span> access.
               </h2>
-              <p className="body-md text-on-dark-soft max-w-md">
+              <p className="text-sm text-on-dark-soft max-w-md leading-relaxed">
                 Wavee needs to hear you. We capture audio natively — no cloud calls.
               </p>
             </div>
@@ -97,14 +95,12 @@ export function MicrophoneStep({ onNext, onBack }: MicrophoneStepProps) {
           {/* MIC TEST PANEL */}
           <section className="card-feature-cream">
             <div className="flex items-center gap-3 mb-6">
-              <div className="icon-plate">
+              <div className="flex items-center justify-center size-8 rounded-full bg-canvas-soft text-ink">
                 <Mic className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="eyebrow-uppercase text-ink-mid">Test</p>
-                <h3
-                  className="title-lg text-ink mt-1"
-                >
+                <p className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-ink-mid">Test</p>
+                <h3 className="text-[15px] font-semibold tracking-tight text-ink mt-1">
                   Microphone access
                 </h3>
               </div>
@@ -140,13 +136,13 @@ export function MicrophoneStep({ onNext, onBack }: MicrophoneStepProps) {
               </div>
 
               {isTestingMic && (
-                <p className="body-sm text-body-muted mt-5 animate-pulse">
+                <p className="text-xs text-body-muted mt-5 animate-pulse">
                   Speak to test your microphone...
                 </p>
               )}
 
               {status === "granted" && !isTestingMic && testCompleted && (
-                <p className="body-sm-strong text-primary mt-5 flex items-center gap-1.5">
+                <p className="text-xs font-semibold text-primary mt-5 flex items-center gap-1.5">
                   <Check className="h-4 w-4" />
                   Microphone ready
                 </p>
@@ -156,13 +152,12 @@ export function MicrophoneStep({ onNext, onBack }: MicrophoneStepProps) {
             {/* Info / Error messages */}
             {status === "denied" && (
               <div
-                className="p-4 rounded-md border flex items-start gap-3"
-                style={{ borderColor: "rgba(207,32,47,0.3)", background: "rgba(207,32,47,0.05)" }}
+                className="p-4 rounded-md border flex items-start gap-3 border-[#cf202f]/30 bg-[#cf202f]/5"
               >
                 <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                 <div className="space-y-1 min-w-0">
-                  <p className="body-sm-strong text-ink">Permission denied</p>
-                  <p className="body-sm text-body-muted">
+                  <p className="text-xs font-semibold text-ink">Permission denied</p>
+                  <p className="text-xs text-body-muted">
                     The browser test failed, but don't worry — Wavee uses native audio capture which may still work.
                   </p>
                 </div>
@@ -173,8 +168,8 @@ export function MicrophoneStep({ onNext, onBack }: MicrophoneStepProps) {
               <div className="p-4 rounded-md border border-hairline bg-canvas-soft flex items-start gap-3">
                 <Info className="h-5 w-5 text-body-muted shrink-0 mt-0.5" />
                 <div className="space-y-1 min-w-0">
-                  <p className="body-sm-strong text-ink">Native audio capture</p>
-                  <p className="body-sm text-body-muted">
+                  <p className="text-xs font-semibold text-ink">Native audio capture</p>
+                  <p className="text-xs text-body-muted">
                     Wavee uses native audio capture. Test your mic here, or skip if the browser blocks it.
                   </p>
                 </div>
@@ -242,7 +237,7 @@ export function MicrophoneStep({ onNext, onBack }: MicrophoneStepProps) {
               Continue
             </button>
           ) : (
-            <p className="caption text-body-muted">Test or skip to continue.</p>
+            <p className="text-[11px] text-body-muted">Test or skip to continue.</p>
           )}
         </div>
       </div>

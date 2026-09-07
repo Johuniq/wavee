@@ -21,7 +21,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
-} from "lucide-react";
+} from "@/components/icons";
 import { useState } from "react";
 
 interface TrialExpiredViewProps {

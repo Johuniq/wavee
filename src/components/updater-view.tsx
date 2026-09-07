@@ -17,7 +17,7 @@ import {
   Loader2,
   RefreshCw,
   Sparkles,
-} from "lucide-react";
+} from "@/components/icons";
 import { useCallback, useEffect, useState } from "react";
 
 export function UpdaterView() {

@@ -8,7 +8,7 @@ import {
   MessageSquareHeart,
   RefreshCcw,
   Wrench
-} from "lucide-react";
+} from "@/components/icons";
 import { useState } from "react";
 
 interface HelpItem {

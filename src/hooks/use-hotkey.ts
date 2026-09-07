@@ -12,6 +12,9 @@ import {
   addTranscription,
   showRecordingOverlay,
   hideRecordingOverlay,
+  recordAndTranslate,
+  type HotkeyRegistration,
+  type HotkeyEventPayload,
 } from "@/lib/voice-api";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { useAppStore } from "@/store";
@@ -26,6 +29,7 @@ export function useHotkey() {
     setErrorMessage,
   } = useAppStore();
   const isRecordingRef = useRef(false);
+  const isTranslationActiveRef = useRef(false);
   const unlistenPressedRef = useRef<UnlistenFn | null>(null);
   const unlistenReleasedRef = useRef<UnlistenFn | null>(null);
 
@@ -62,18 +66,13 @@ export function useHotkey() {
   }, []);
 
   // Handle recording start
-  const handleRecordingStart = useCallback(async () => {
+  const handleRecordingStart = useCallback(async (sourceLanguage?: string) => {
     if (isRecordingRef.current) return;
 
     try {
       const model = selectedModelRef.current;
-      const lang = settingsRef.current.language;
+      const lang = sourceLanguage || settingsRef.current.language;
 
-      // Start recording first so audio capture isn't blocked by the model
-      // load. The Rust backend caches the loaded model by (model_id,
-      // language), so a steady-state press completes in <50ms; only the
-      // very first press (or a model/language change) pays the 3-4s ONNX
-      // load, and that happens during the background preload effect.
       const recordingPromise = startRecording();
 
       if (model?.id) {
@@ -92,7 +91,7 @@ export function useHotkey() {
     }
   }, [setRecordingStatus, setErrorMessage, showOverlay]);
 
-  // Handle recording stop
+  // Handle recording stop (regular dictation)
   const handleRecordingStop = useCallback(async () => {
     if (!isRecordingRef.current) return;
 
@@ -135,10 +134,60 @@ export function useHotkey() {
     hideOverlay,
   ]);
 
+  // Handle recording stop with translation
+  const handleRecordingStopWithTranslation = useCallback(async (sourceLanguage: string, targetLanguage: string) => {
+    if (!isRecordingRef.current) return;
+
+    try {
+      setRecordingStatus("processing");
+      hideOverlay();
+
+      const text = await recordAndTranslate(sourceLanguage, targetLanguage, settingsRef.current.postProcessingEnabled);
+
+      if (text && text.trim()) {
+        await injectText(text);
+
+        const model = selectedModelRef.current;
+        if (model?.id) {
+          const durationMs = 0;
+          await addTranscription(text, model.id, sourceLanguage, durationMs);
+        }
+
+        setLastTranscription(text);
+      }
+
+      isRecordingRef.current = false;
+      setRecordingStatus("idle");
+    } catch (error) {
+      console.error("Failed to stop recording with translation:", error);
+      isRecordingRef.current = false;
+      hideOverlay();
+      setErrorMessage(
+        error instanceof Error ? error.message : "Failed to translate",
+      );
+      setRecordingStatus("error");
+      setTimeout(() => setRecordingStatus("idle"), 2000);
+    }
+  }, [setRecordingStatus, setLastTranscription, setErrorMessage, hideOverlay]);
+
   // Register hotkey + set up listeners. Re-runs only when the bound hotkey
   // string or the enabled state actually changes.
   useEffect(() => {
-    if (!isEnabled || !currentHotkey) {
+    if (!isEnabled) {
+      return;
+    }
+
+    const registrations: HotkeyRegistration[] = [];
+
+    if (currentHotkey) {
+      registrations.push({ hotkey: currentHotkey, label: "dictation" });
+    }
+
+    if (settings.translationEnabled && settings.translationHotkey) {
+      registrations.push({ hotkey: settings.translationHotkey, label: "translate" });
+    }
+
+    if (registrations.length === 0) {
       return;
     }
 
@@ -148,7 +197,7 @@ export function useHotkey() {
     // only after a real registration is in place.
     (async () => {
       try {
-        await registerHotkey(currentHotkey);
+        await registerHotkey(registrations);
         if (cancelled) {
           await unregisterHotkeys().catch(console.error);
         }
@@ -157,53 +206,48 @@ export function useHotkey() {
       }
     })();
 
-    // The global-shortcut plugin reports "pressed" and "released" events
-    // but the platform can fire them in either order, and on Windows
-    // they're often both reported on a single press-release. We treat any
-    // event as a user-initiated interaction:
-    //
-    //   * Push-to-talk: first event starts, second event stops.
-    //   * Toggle: each event flips the state, but events arriving within
-    //     PAIR_MS are debounced so a press-release pair counts as one tap.
-    //
-    // The visible overlay mirrors the recording state via
-    // handleRecordingStart / handleRecordingStop, so the indicator always
-    // appears when recording starts and disappears when it stops.
-
-    let lastEventAt = 0;
-    let pendingAction: "start" | "stop" | null = null;
-    const PAIR_MS = 250;
-
-    const trigger = () => {
-      const mode = settingsRef.current.hotkeyMode;
-      if (mode === "push-to-talk") {
-        if (pendingAction === "start") {
-          pendingAction = "stop";
-          handleRecordingStop();
-        } else {
-          pendingAction = "start";
-          handleRecordingStart();
+    const trigger = (label: string) => {
+      if (label === "translate") {
+        if (settingsRef.current.translationEnabled && settingsRef.current.translationHotkey) {
+          if (settingsRef.current.hotkeyMode === "push-to-talk") {
+            if (isTranslationActiveRef.current) {
+              isTranslationActiveRef.current = false;
+              handleRecordingStopWithTranslation(
+                settingsRef.current.translationSourceLanguage,
+                settingsRef.current.translationTargetLanguage,
+              );
+            } else {
+              isTranslationActiveRef.current = true;
+              handleRecordingStart(settingsRef.current.translationSourceLanguage);
+            }
+          } else {
+            if (isRecordingRef.current) {
+              handleRecordingStop();
+            } else {
+              handleRecordingStart(settingsRef.current.translationSourceLanguage);
+            }
+          }
         }
       } else {
-        if (isRecordingRef.current) {
-          handleRecordingStop();
+        const mode = settingsRef.current.hotkeyMode;
+        if (mode === "push-to-talk") {
+          if (isRecordingRef.current) {
+            handleRecordingStop();
+          } else {
+            handleRecordingStart();
+          }
         } else {
-          handleRecordingStart();
+          if (isRecordingRef.current) {
+            handleRecordingStop();
+          } else {
+            handleRecordingStart();
+          }
         }
       }
     };
 
-    const onEvent = () => {
-      const now = Date.now();
-      const mode = settingsRef.current.hotkeyMode;
-
-      // In toggle mode, collapse paired events (press+release) to one tap
-      if (mode === "toggle" && now - lastEventAt < PAIR_MS) {
-        lastEventAt = now;
-        return;
-      }
-      lastEventAt = now;
-      trigger();
+    const onEvent = (payload: HotkeyEventPayload) => {
+      trigger(payload.label);
     };
 
     onHotkeyPressed(onEvent)
@@ -238,7 +282,18 @@ export function useHotkey() {
       unlistenReleasedRef.current = null;
       unregisterHotkeys().catch(console.error);
     };
-  }, [isEnabled, currentHotkey, handleRecordingStart, handleRecordingStop]);
+  }, [
+    isEnabled,
+    currentHotkey,
+    settings.translationEnabled,
+    settings.translationHotkey,
+    settings.translationSourceLanguage,
+    settings.translationTargetLanguage,
+    settings.hotkeyMode,
+    handleRecordingStart,
+    handleRecordingStop,
+    handleRecordingStopWithTranslation,
+  ]);
 
   // Preload the selected model in the background as soon as setup is
   // complete. This makes the first hotkey press feel instant — the heavy
@@ -252,9 +307,6 @@ export function useHotkey() {
     if (!selectedModelId) return;
     if (!selectedModelDownloaded) return;
 
-    // Mark not-ready until this load finishes; if the user spams the
-    // hotkey while the load is in flight, the second await will still
-    // hit the Rust fast-path so the press isn't blocked twice.
     setModelReady(false);
 
     let cancelled = false;

@@ -32,6 +32,10 @@ export interface DbAppSettings {
   recording_overlay_position: string;
   diagnostics_enabled: boolean;
   custom_vocabulary: DbVocabularyEntry[];
+  translation_enabled: boolean;
+  translation_hotkey: string;
+  translation_source_language: string;
+  translation_target_language: string;
 }
 
 export interface DbAppState {
@@ -201,6 +205,10 @@ export function dbSettingsToFrontend(db: DbAppSettings): AppSettings {
       ? db.custom_vocabulary
       : [],
     diagnosticsEnabled: db.diagnostics_enabled,
+    translationEnabled: db.translation_enabled ?? false,
+    translationHotkey: db.translation_hotkey ?? "Alt+Shift+T",
+    translationSourceLanguage: db.translation_source_language ?? "en",
+    translationTargetLanguage: db.translation_target_language ?? "es",
   };
 }
 
@@ -226,6 +234,10 @@ export function frontendSettingsToDb(settings: AppSettings): DbAppSettings {
       spoken: entry.spoken,
       written: entry.written,
     })),
+    translation_enabled: settings.translationEnabled,
+    translation_hotkey: settings.translationHotkey,
+    translation_source_language: settings.translationSourceLanguage,
+    translation_target_language: settings.translationTargetLanguage,
   };
 }
 

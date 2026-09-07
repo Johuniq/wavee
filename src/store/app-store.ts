@@ -11,15 +11,37 @@ import {
   dbUpdateSettings,
   frontendSettingsToDb,
 } from "@/lib/database-api";
+import { getCloudProviders } from "@/lib/cloud-api";
 import type {
   AppSettings,
   AppState,
+  CloudProviderInfo,
   ModelStatus,
   RecordingStatus,
   WhisperModel,
 } from "@/types";
-import { DEFAULT_SETTINGS } from "@/types";
+import { CLOUD_MODELS, DEFAULT_SETTINGS } from "@/types";
 import { create } from "zustand";
+
+function buildMergedModels(
+  localModels: WhisperModel[],
+  providers: CloudProviderInfo[]
+): WhisperModel[] {
+  const providerMap = new Map<string, boolean>();
+  for (const p of providers) {
+    providerMap.set(p.id, p.configured);
+  }
+
+  const cloud = CLOUD_MODELS.map((m) => {
+    const isConfigured = Boolean(m.provider && providerMap.get(m.provider));
+    return {
+      ...m,
+      downloaded: isConfigured,
+    };
+  });
+
+  return [...localModels, ...cloud];
+}
 
 interface AppStore extends AppState {
   // Initialization
@@ -46,11 +68,15 @@ interface AppStore extends AppState {
   setModelReady: (ready: boolean) => void;
   modelReady: boolean;
 
+  // Cloud providers
+  cloudProviders: CloudProviderInfo[];
+  refreshCloudProviders: () => Promise<void>;
+
   // Settings actions
   updateSettings: (settings: Partial<AppSettings>) => void;
   resetSettings: () => void;
 
-  // Available models from DB
+  // Available models (Local + Cloud BYOK)
   availableModels: WhisperModel[];
 
   // Utility
@@ -59,6 +85,7 @@ interface AppStore extends AppState {
 
 const initialState: AppState & {
   availableModels: WhisperModel[];
+  cloudProviders: CloudProviderInfo[];
   isInitialized: boolean;
   modelReady: boolean;
 } = {
@@ -75,6 +102,7 @@ const initialState: AppState & {
   downloadProgress: 0,
   settings: DEFAULT_SETTINGS,
   availableModels: [],
+  cloudProviders: [],
 };
 
 export const useAppStore = create<AppStore>()((set, get) => ({
@@ -84,25 +112,20 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   initializeFromDb: async () => {
     console.log("[Store] Starting initialization from database...");
     try {
-      // Load app state from database
-      console.log("[Store] Fetching app state...");
-      const dbState = await dbGetAppState();
-      console.log("[Store] App state:", dbState);
-      
-      console.log("[Store] Fetching settings...");
-      const dbSettings = await dbGetSettings();
-      console.log("[Store] Settings:", dbSettings);
-      
-      console.log("[Store] Fetching models...");
-      const dbModels = await dbGetModels();
-      console.log("[Store] Models:", dbModels);
+      const [dbState, dbSettings, dbModels, providers] = await Promise.all([
+        dbGetAppState(),
+        dbGetSettings(),
+        dbGetModels(),
+        getCloudProviders(),
+      ]);
 
       const settings = dbSettingsToFrontend(dbSettings);
-      const models = dbModelsToFrontend(dbModels);
+      const localModels = dbModelsToFrontend(dbModels);
+      const mergedModels = buildMergedModels(localModels, providers);
 
-      // Find selected model
+      // Find selected model (either local or cloud)
       const selectedModel = dbState.selected_model_id
-        ? models.find((m) => m.id === dbState.selected_model_id) || null
+        ? mergedModels.find((m) => m.id === dbState.selected_model_id) || null
         : null;
 
       // Determine model status
@@ -111,15 +134,6 @@ export const useAppStore = create<AppStore>()((set, get) => ({
         modelStatus = "downloaded";
       }
 
-      console.log("[Store] Setting state with:", {
-        isFirstLaunch: dbState.is_first_launch,
-        setupComplete: dbState.setup_complete,
-        currentSetupStep: dbState.current_setup_step,
-        selectedModel,
-        modelStatus,
-        availableModels: models.length,
-      });
-
       set({
         isInitialized: true,
         isFirstLaunch: dbState.is_first_launch,
@@ -127,14 +141,15 @@ export const useAppStore = create<AppStore>()((set, get) => ({
         currentSetupStep: dbState.current_setup_step,
         selectedModel,
         modelStatus,
+        modelReady: Boolean(selectedModel?.downloaded),
         settings,
-        availableModels: models,
+        availableModels: mergedModels,
+        cloudProviders: providers,
       });
-      
+
       console.log("[Store] Initialization complete!");
     } catch (error) {
       console.error("Failed to initialize from database:", error);
-      // Keep default state if DB fails (for dev mode in browser)
       set({ isInitialized: true });
     }
   },
@@ -142,13 +157,11 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   // Setup actions
   setSetupComplete: (complete) => {
     set({ setupComplete: complete, isFirstLaunch: !complete });
-    // Sync to database
     dbSetSetupComplete(complete).catch(console.error);
   },
 
   setCurrentSetupStep: (step) => {
     set({ currentSetupStep: step });
-    // Sync to database
     dbSetCurrentSetupStep(step).catch(console.error);
   },
 
@@ -173,12 +186,13 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   setModelStatus: (status) => set({ modelStatus: status }),
 
   setSelectedModel: (model) => {
+    const isReady = Boolean(model?.downloaded);
     set({
       selectedModel: model,
-      modelReady: false, // require a fresh preload for the new model
+      modelReady: isReady,
+      modelStatus: model?.downloaded ? "downloaded" : "not-downloaded",
       settings: { ...get().settings, selectedModelId: model?.id || "" },
     });
-    // Sync to database
     dbSetSelectedModel(model?.id || null).catch(console.error);
   },
 
@@ -192,26 +206,49 @@ export const useAppStore = create<AppStore>()((set, get) => ({
     );
     set({ availableModels: models });
 
-    // Update selected model if it's the one being downloaded
     const selectedModel = get().selectedModel;
     if (selectedModel?.id === modelId) {
       set({
         selectedModel: { ...selectedModel, downloaded: true },
         modelStatus: "downloaded",
+        modelReady: true,
       });
     }
 
-    // Sync to database
     dbSetModelDownloaded(modelId, true, path).catch(console.error);
   },
 
   setModelReady: (ready) => set({ modelReady: ready }),
 
+  // Cloud providers refresh
+  refreshCloudProviders: async () => {
+    try {
+      const providers = await getCloudProviders();
+      const currentModels = get().availableModels;
+      const localModels = currentModels.filter((m) => !m.isCloud);
+      const mergedModels = buildMergedModels(localModels, providers);
+
+      const currentSelected = get().selectedModel;
+      const updatedSelected = currentSelected
+        ? mergedModels.find((m) => m.id === currentSelected.id) || currentSelected
+        : null;
+
+      set({
+        cloudProviders: providers,
+        availableModels: mergedModels,
+        selectedModel: updatedSelected,
+        modelStatus: updatedSelected?.downloaded ? "downloaded" : "not-downloaded",
+        modelReady: Boolean(updatedSelected?.downloaded),
+      });
+    } catch (err) {
+      console.error("Failed to refresh cloud providers:", err);
+    }
+  },
+
   // Settings actions
   updateSettings: (newSettings) => {
     const updatedSettings = { ...get().settings, ...newSettings };
     set({ settings: updatedSettings });
-    // Sync to database
     dbUpdateSettings(frontendSettingsToDb(updatedSettings)).catch(
       console.error
     );
@@ -241,5 +278,7 @@ export const useSetupState = () =>
   }));
 export const useAvailableModels = () =>
   useAppStore((state) => state.availableModels);
+export const useCloudProviders = () =>
+  useAppStore((state) => state.cloudProviders);
 export const useIsInitialized = () =>
   useAppStore((state) => state.isInitialized);

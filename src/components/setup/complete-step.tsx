@@ -1,6 +1,6 @@
 import { Logo } from "@/components/logo";
 import { useAppStore } from "@/store";
-import { Check, Cpu, Keyboard, Mic, Sparkles } from "lucide-react";
+import { Check, Cpu, Keyboard, Mic, Sparkles } from "@/components/icons";
 
 interface CompleteStepProps {
   onFinish: () => void;
@@ -28,23 +28,20 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
           >
             <div className="flex flex-col items-center text-center gap-4 p-8 sm:p-12">
               <div
-                className="h-14 w-14 rounded-full flex items-center justify-center"
-                style={{ background: "rgba(255,79,0,0.15)", color: "#ff4f00" }}
+                className="h-14 w-14 rounded-full flex items-center justify-center bg-primary/15 text-primary"
               >
                 <Check className="h-7 w-7" strokeWidth={2.5} />
               </div>
-              <p className="eyebrow-uppercase text-primary">
+              <p className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-primary">
                 <span className="inline-flex items-center gap-2">
                   <span className="h-1 w-1 rounded-full bg-primary" />
                   All set
                 </span>
               </p>
-              <h2
-                className="display-lg text-on-dark"
-              >
+              <h2 className="text-[28px] font-medium leading-tight tracking-tight text-on-dark">
                 You're <span className="text-primary">ready</span> to dictate.
               </h2>
-              <p className="body-md text-on-dark-soft max-w-md">
+              <p className="text-sm text-on-dark-soft max-w-md leading-relaxed">
                 Wavee is installed, configured, and waiting for your voice.
               </p>
             </div>
@@ -53,14 +50,12 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
           {/* CONFIGURATION SUMMARY */}
           <section className="card-feature-cream">
             <div className="flex items-center gap-3 mb-5">
-              <div className="icon-plate">
+              <div className="flex items-center justify-center size-8 rounded-full bg-canvas-soft text-ink">
                 <Sparkles className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="eyebrow-uppercase text-ink-mid">Setup</p>
-                <h3
-                  className="title-lg text-ink mt-1"
-                >
+                <p className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-ink-mid">Setup</p>
+                <h3 className="text-[15px] font-semibold tracking-tight text-ink mt-1">
                   Your configuration
                 </h3>
               </div>
@@ -69,16 +64,14 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
             <div className="space-y-2.5">
               <div className="flex items-center justify-between p-3.5 rounded-md border border-hairline bg-canvas">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="icon-plate">
+                  <div className="flex items-center justify-center size-8 rounded-full bg-canvas-soft text-ink">
                     <Mic className="h-4 w-4" />
                   </div>
-                  <span
-                    className="title-sm text-ink"
-                  >
+                  <span className="text-xs font-semibold text-ink">
                     Microphone
                   </span>
                 </div>
-                <span className="caption-strong inline-flex items-center gap-1.5" style={{ color: "#ff4f00" }}>
+                <span className="text-[11px] font-medium uppercase tracking-[0.08em] inline-flex items-center gap-1.5 text-primary">
                   <Check className="h-3.5 w-3.5" />
                   Ready
                 </span>
@@ -86,32 +79,28 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
 
               <div className="flex items-center justify-between p-3.5 rounded-md border border-hairline bg-canvas">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="icon-plate">
+                  <div className="flex items-center justify-center size-8 rounded-full bg-canvas-soft text-ink">
                     <Cpu className="h-4 w-4" />
                   </div>
-                  <span
-                    className="title-sm text-ink"
-                  >
+                  <span className="text-xs font-semibold text-ink">
                     Model
                   </span>
                 </div>
-                <span className="body-sm-strong text-ink truncate ml-3">
+                <span className="text-xs font-semibold text-ink truncate ml-3">
                   {selectedModel?.name || "Base"}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3.5 rounded-md border border-hairline bg-canvas">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="icon-plate">
+                  <div className="flex items-center justify-center size-8 rounded-full bg-canvas-soft text-ink">
                     <Keyboard className="h-4 w-4" />
                   </div>
-                  <span
-                    className="title-sm text-ink"
-                  >
+                  <span className="text-xs font-semibold text-ink">
                     Hotkey
                   </span>
                 </div>
-                <code className="caption-strong text-ink font-mono px-2.5 py-1 rounded-md bg-canvas-soft">
+                <code className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink font-mono px-2.5 py-1 rounded-md bg-canvas-soft">
                   {currentHotkey}
                 </code>
               </div>
@@ -121,14 +110,12 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
           {/* HOW TO USE */}
           <section className="card-feature-cream">
             <div className="flex items-center gap-3 mb-5">
-              <div className="icon-plate-orange">
+              <div className="flex items-center justify-center size-8 rounded-full bg-primary/12 text-primary">
                 <Sparkles className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="eyebrow-uppercase text-ink-mid">Get started</p>
-                <h3
-                  className="title-lg text-ink mt-1"
-                >
+                <p className="text-[11px] font-medium tracking-[0.1em] uppercase leading-none text-ink-mid">Get started</p>
+                <h3 className="text-[15px] font-semibold tracking-tight text-ink mt-1">
                   How to use
                 </h3>
               </div>
@@ -137,21 +124,19 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
             <ol className="space-y-3">
               <li className="flex items-start gap-3">
                 <span
-                  className="flex h-6 w-6 items-center justify-center rounded-full shrink-0"
-                  style={{ background: "rgba(255,79,0,0.1)", color: "#ff4f00" }}
+                  className="flex h-6 w-6 items-center justify-center rounded-full shrink-0 bg-primary/10 text-primary"
                 >
-                  <span className="caption-strong tabular-nums">1</span>
+                  <span className="text-[11px] font-medium uppercase tracking-[0.08em] tabular-nums">1</span>
                 </span>
-                <span className="body-md text-ink pt-0.5">Click where you want to type.</span>
+                <span className="text-sm text-ink pt-0.5">Click where you want to type.</span>
               </li>
               <li className="flex items-start gap-3">
                 <span
-                  className="flex h-6 w-6 items-center justify-center rounded-full shrink-0"
-                  style={{ background: "rgba(255,79,0,0.1)", color: "#ff4f00" }}
+                  className="flex h-6 w-6 items-center justify-center rounded-full shrink-0 bg-primary/10 text-primary"
                 >
-                  <span className="caption-strong tabular-nums">2</span>
+                  <span className="text-[11px] font-medium uppercase tracking-[0.08em] tabular-nums">2</span>
                 </span>
-                <span className="body-md text-ink pt-0.5">
+                <span className="text-sm text-ink pt-0.5">
                   {settings.hotkeyMode === "push-to-talk"
                     ? `Hold ${currentHotkey} and speak.`
                     : `Press ${currentHotkey} to start.`}
@@ -159,12 +144,11 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
               </li>
               <li className="flex items-start gap-3">
                 <span
-                  className="flex h-6 w-6 items-center justify-center rounded-full shrink-0"
-                  style={{ background: "rgba(255,79,0,0.1)", color: "#ff4f00" }}
+                  className="flex h-6 w-6 items-center justify-center rounded-full shrink-0 bg-primary/10 text-primary"
                 >
-                  <span className="caption-strong tabular-nums">3</span>
+                  <span className="text-[11px] font-medium uppercase tracking-[0.08em] tabular-nums">3</span>
                 </span>
-                <span className="body-md text-ink pt-0.5">
+                <span className="text-sm text-ink pt-0.5">
                   {settings.hotkeyMode === "push-to-talk"
                     ? "Release to insert the text."
                     : `Press ${currentHotkey} again to stop.`}
@@ -176,9 +160,7 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
           {/* FOOTER LOGO CARD */}
           <div className="flex items-center justify-center gap-2.5 pt-2 pb-1">
             <Logo size="sm" />
-            <span
-              className="title-sm text-ink"
-            >
+            <span className="text-xs font-semibold text-ink">
               Wavee
             </span>
           </div>
