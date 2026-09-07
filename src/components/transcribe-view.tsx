@@ -1,5 +1,5 @@
 import { Textarea } from "@/components/ui/textarea";
-import { addTranscription, reportError, transcribeFile, transcribeFilesBatch, transcribeUrl } from "@/lib/voice-api";
+import { addTranscription, reportError, transcribeFilesBatch, transcribeUrl } from "@/lib/voice-api";
 import { useAppStore } from "@/store";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
@@ -11,7 +11,6 @@ import {
   Loader2,
   Sparkles,
   Upload,
-  X,
 } from "@/components/icons";
 import { useState, useCallback } from "react";
 
@@ -213,7 +212,7 @@ export function TranscribeView(_props: TranscribeViewProps) {
     const items = Array.from(e.dataTransfer.files);
     if (items.length === 0) return;
 
-    const paths = items.map((f) => f.path);
+    const paths = items.map((f) => (f as any).path);
     const names = items.map((f) => f.name);
 
     setSelectedFiles(paths);
@@ -222,10 +221,6 @@ export function TranscribeView(_props: TranscribeViewProps) {
     setError(null);
     setWarning(null);
   }, [isTranscribing]);
-
-  const canTranscribe =
-    (inputMode === "file" && selectedFiles.length > 0) ||
-    (inputMode === "url" && urlInput.trim().length > 0);
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-canvas">
