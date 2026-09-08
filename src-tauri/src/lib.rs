@@ -4,6 +4,7 @@ mod audio;
 pub mod cloud_transcription;
 pub mod database;
 pub mod downloader;
+pub mod ai_formatting;
 mod error_reporting;
 pub mod license;
 pub mod post_process;
@@ -14,7 +15,7 @@ mod translation;
 
 use audio::{AudioCaptureSource, AudioInputDevice, AudioOutputDevice, AudioRecorder};
 use cloud_transcription::build_http_client;
-use database::{AppSettings, AppState, Database, LicenseData, TranscriptionHistory, VocabularyEntry, WhisperModel};
+use database::{AppSettings, AppState, Database, LicenseData, TranscriptionHistory, VocabularyEntry, WhisperModel, AiFormattingProviderRecord};
 use downloader::{DownloadProgress, ModelDownloader};
 use error_reporting::{ErrorCategory, ErrorReport, ErrorReporter, ErrorSeverity, ErrorStats};
 use license::{
@@ -3040,6 +3041,192 @@ async fn test_cloud_connection(
         .map_err(CommandError::Transcription)
 }
 
+// ==================== AI Formatting Provider Commands (BYOK) ====================
+
+#[tauri::command]
+async fn get_ai_formatting_providers(
+    db: State<'_, DbState>,
+) -> CommandResult<Vec<ai_formatting::AiFormattingProviderInfo>> {
+    let records = db.0.get_ai_formatting_providers().map_err(CommandError::Database)?;
+    let mut map: HashMap<String, AiFormattingProviderRecord> = records
+        .into_iter()
+        .map(|r| (r.id.clone(), r))
+        .collect();
+
+    let standard_providers = vec![
+        ("gemini", "Gemini"),
+        ("anthropic", "Anthropic"),
+        ("openai", "OpenAI"),
+        ("deepseek", "DeepSeek"),
+        ("custom", "Custom Endpoint"),
+    ];
+
+    let mut result = Vec::new();
+    for (id, name) in standard_providers {
+        if let Some(record) = map.remove(id) {
+            let decrypted_key = cloud_transcription::decrypt_api_key(&record.api_key);
+            let has_key = !decrypted_key.trim().is_empty() || id == "custom";
+            let masked = if has_key && !decrypted_key.trim().is_empty() {
+                cloud_transcription::mask_key(&decrypted_key)
+            } else {
+                String::new()
+            };
+            result.push(ai_formatting::AiFormattingProviderInfo {
+                id: id.to_string(),
+                name: name.to_string(),
+                configured: has_key,
+                masked_key: masked,
+                base_url: record.base_url,
+                custom_model: record.custom_model,
+            });
+        } else {
+            result.push(ai_formatting::AiFormattingProviderInfo {
+                id: id.to_string(),
+                name: name.to_string(),
+                configured: false,
+                masked_key: String::new(),
+                base_url: None,
+                custom_model: None,
+            });
+        }
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+async fn save_ai_formatting_provider(
+    db: State<'_, DbState>,
+    provider: String,
+    api_key: String,
+    base_url: Option<String>,
+    custom_model: Option<String>,
+) -> CommandResult<()> {
+    let encrypted = cloud_transcription::encrypt_api_key(&api_key)
+        .map_err(|e| CommandError::Transcription(format!("Encryption failed: {}", e)))?;
+    db.0.save_ai_formatting_provider(
+        &provider,
+        &encrypted,
+        base_url.as_deref(),
+        custom_model.as_deref(),
+    )
+    .map_err(CommandError::Database)?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn delete_ai_formatting_provider(
+    db: State<'_, DbState>,
+    provider: String,
+) -> CommandResult<()> {
+    db.0.delete_ai_formatting_provider(&provider).map_err(CommandError::Database)?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn test_ai_formatting_connection(
+    db: State<'_, DbState>,
+    provider: String,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    model: Option<String>,
+) -> CommandResult<String> {
+    let key = if let Some(k) = api_key.filter(|k| !k.trim().is_empty()) {
+        k
+    } else if let Some(record) = db.0.get_ai_formatting_provider(&provider).map_err(CommandError::Database)? {
+        cloud_transcription::decrypt_api_key(&record.api_key)
+    } else {
+        String::new()
+    };
+
+    let url = base_url.or_else(|| {
+        db.0.get_ai_formatting_provider(&provider).ok().flatten().and_then(|r| r.base_url)
+    });
+
+    let model = model.or_else(|| {
+        db.0.get_ai_formatting_provider(&provider).ok().flatten().and_then(|r| r.custom_model)
+    });
+
+    ai_formatting::test_ai_provider_connection(&provider, &key, url.as_deref(), model.as_deref())
+        .await
+        .map_err(CommandError::Transcription)
+}
+
+#[tauri::command]
+async fn format_text_with_ai(
+    db: State<'_, DbState>,
+    license_manager: State<'_, LicenseManagerState>,
+    text: String,
+    style: String,
+    provider: Option<String>,
+    model: Option<String>,
+) -> CommandResult<String> {
+    let db = db.0.clone();
+    let license_manager = license_manager.0.clone();
+
+    ensure_app_access_verified(&db, &license_manager).await?;
+
+    if text.trim().is_empty() {
+        return Ok(String::new());
+    }
+
+    let settings = db.get_settings().map_err(CommandError::Database)?;
+
+    // Use provided values or fall back to settings
+    let provider_id = provider.unwrap_or_else(|| settings.ai_formatting_provider_id.clone());
+    let model_name = model.unwrap_or_else(|| settings.ai_formatting_model.clone());
+
+    let record = db
+        .get_ai_formatting_provider(&provider_id)
+        .map_err(CommandError::Database)?
+        .ok_or_else(|| {
+            CommandError::Transcription(format!(
+                "AI formatting provider '{}' is not configured. Please add an API key in AI Formatting settings.",
+                provider_id
+            ))
+        })?;
+
+    let api_key = cloud_transcription::decrypt_api_key(&record.api_key);
+    let base_url = record.base_url.as_deref();
+    let custom_model = record.custom_model.as_deref().or(Some(&model_name));
+
+    let style_prompt = ai_formatting_style_prompt(&style);
+
+    let formatted = ai_formatting::format_text_with_ai(
+        &provider_id,
+        custom_model.unwrap_or("gpt-4o-mini"),
+        &api_key,
+        base_url,
+        style_prompt,
+        &text,
+    )
+    .await
+    .map_err(CommandError::Transcription)?;
+
+    Ok(formatted)
+}
+
+/// Map a style id to its system prompt. Mirrors the frontend
+/// `AI_FORMATTING_STYLES` definitions so the backend can format
+/// independently of the frontend.
+fn ai_formatting_style_prompt(style: &str) -> &'static str {
+    match style {
+        "personal" => "You are a helpful dictation assistant. The user has spoken the following text which was transcribed from voice. Your job is to lightly clean up obvious transcription errors, punctuation, and filler words while preserving the speaker's casual, conversational tone and personality. Do not over-edit or change the speaker's voice. Return only the formatted text, with no preamble or explanation.",
+        "clean" => "You are a professional dictation editor. The user has spoken the following text which was transcribed from voice. Your job is to produce clean, professional prose: fix grammar, remove filler words (um, uh, like, you know), add proper punctuation, ensure proper sentence structure, and create clean paragraph breaks. Return only the formatted text, with no preamble or explanation.",
+        "writing" => "You are an editor helping someone turn spoken dictation into polished written content. Format the following transcribed text as a well-structured article or blog post. Use proper paragraphs, fix grammar and flow, and polish the prose to sound professional and engaging. Return only the formatted text, with no preamble or explanation.",
+        "notes" => "You are a note-taking assistant. Extract the key points and important information from the following transcribed dictation. Format as concise bullet points or short phrases, capturing the essential information. Remove filler words and redundant phrasing. Return only the formatted notes, with no preamble or explanation.",
+        "email" => "You are a professional email assistant. Format the following transcribed dictation as a polished business email. Add an appropriate greeting, structure the body with clear paragraphs, and include a professional sign-off. Ensure the tone is appropriate and professional. Return only the formatted email text, with no preamble or explanation.",
+        "code" => "You are a coding assistant. The following text was transcribed from voice and contains spoken programming terms, code snippets, and technical instructions. Convert spoken descriptions of code into clean, properly formatted code. Apply appropriate casing (camelCase, PascalCase, snake_case), insert code symbols (brackets, braces, operators) that were spoken as words, and organize into logical blocks. Preserve any literal code. Return only the formatted code, with no preamble or explanation.",
+        "social" => "You are a social media assistant. The following text was transcribed from casual voice dictation. Format it for social media: keep a conversational and engaging tone, use short paragraphs or sentences, add appropriate line breaks, and make it easy to read. Return only the formatted text, with no preamble or explanation.",
+        "academic" => "You are an academic writing assistant. The following text was transcribed from voice. Rewrite it in a formal academic style: use precise language, proper sentence structure, formal tone, and structured paragraphs. Remove colloquialisms and filler words. Return only the formatted text, with no preamble or explanation.",
+        "business" => "You are a business communication assistant. The following text was transcribed from voice. Format it as a professional business document: use clear, concise language, structured paragraphs, bullet points where appropriate, and a professional tone. Return only the formatted text, with no preamble or explanation.",
+        "transcript" => "You are a transcription editor. The following text was transcribed from voice. Create a clean transcript-style output: preserve the original meaning and content, but fix obvious transcription errors, add proper punctuation, and organize into readable paragraphs. Do not change the tone or style of the original speech. Return only the formatted text, with no preamble or explanation.",
+        "legal" => "You are a legal transcription assistant. The following text was transcribed from voice. Rewrite it in a formal legal style: use precise terminology, structured paragraphs, and proper legal phrasing. Maintain the original meaning while ensuring legal accuracy. Return only the formatted text, with no preamble or explanation.",
+        "meeting" => "You are a meeting minutes assistant. The following text was transcribed from a meeting recording. Format it as professional meeting minutes: include a brief summary, list key discussion points, highlight decisions made, and extract action items with responsible parties and deadlines. Use clear headings and bullet points. Return only the formatted text, with no preamble or explanation.",
+        "journaling" => "You are a journaling assistant. The following text was transcribed from a personal voice journal entry. Format it as a thoughtful, well-structured journal entry: preserve the personal, reflective tone, organize thoughts into coherent paragraphs, add proper punctuation, and maintain the authentic voice of the writer. Return only the formatted text, with no preamble or explanation.",
+        _ => "You are a professional dictation editor. Clean up the following transcribed text: fix grammar, add proper punctuation, and create clean paragraph breaks. Return only the formatted text, with no preamble or explanation.",
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize logger
@@ -3109,6 +3296,20 @@ pub fn run() {
             // Setup system tray
             setup_tray(app)?;
 
+            // Handle startup args (e.g. --minimized from autostart). When the
+            // app is launched via autostart we hide the main window so it
+            // sits in the tray until the user opens it. This only applies
+            // when autostart is actually enabled — toggling it off in
+            // settings does not remove an existing launch argument, but the
+            // window visibility is driven by the stored setting at runtime.
+            let args: Vec<String> = std::env::args().collect();
+            let is_minimized = args.contains(&"--minimized".to_string());
+            if is_minimized {
+                if let Some(main_window) = app.get_webview_window("main") {
+                    let _ = main_window.hide();
+                }
+            }
+
             info!("Application initialized successfully");
 
             // Note: Hotkey is registered from the frontend via register_hotkey command
@@ -3119,9 +3320,37 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" {
-                    debug!("Window close requested, hiding to tray");
-                    let _ = window.hide();
-                    api.prevent_close();
+                    // Respect the user's "Minimize to tray" setting. When
+                    // disabled, closing the window should exit the app
+                    // entirely instead of hiding it in the tray.
+                    let minimize_to_tray = {
+                        let app_handle = window.app_handle();
+                        match app_handle.try_state::<DbState>() {
+                            Some(db_state) => {
+                                match db_state.0.get_settings() {
+                                    Ok(settings) => settings.minimize_to_tray,
+                                    Err(err) => {
+                                        warn!("Failed to read settings for close behavior: {}", err);
+                                        // Default to hiding on error to avoid accidental exits
+                                        true
+                                    }
+                                }
+                            }
+                            None => {
+                                warn!("DbState not available; defaulting to minimize-to-tray");
+                                true
+                            }
+                        }
+                    };
+
+                    if minimize_to_tray {
+                        debug!("Window close requested, hiding to tray");
+                        let _ = window.hide();
+                        api.prevent_close();
+                    } else {
+                        debug!("Window close requested and minimize-to-tray disabled; exiting app");
+                        window.app_handle().exit(0);
+                    }
                 }
             }
         })
@@ -3145,6 +3374,12 @@ pub fn run() {
             save_cloud_provider,
             delete_cloud_provider,
             test_cloud_connection,
+            // AI Formatting providers (BYOK)
+            get_ai_formatting_providers,
+            save_ai_formatting_provider,
+            delete_ai_formatting_provider,
+            test_ai_formatting_connection,
+            format_text_with_ai,
             // Recording
             get_audio_input_devices,
             get_audio_output_devices,

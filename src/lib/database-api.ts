@@ -35,8 +35,12 @@ export interface DbAppSettings {
   translation_enabled: boolean;
   translation_hotkey: string;
   translation_source_language: string;
-  translation_target_language: string;
-  translation_api_key: string;
+   translation_target_language: string;
+   translation_api_key: string;
+   ai_formatting_enabled: boolean;
+   ai_formatting_provider_id: string;
+   ai_formatting_style: string;
+   ai_formatting_model: string;
 }
 
 export interface DbAppState {
@@ -183,7 +187,13 @@ export async function dbGetAppDataDir(): Promise<string> {
 // Conversion Helpers (DB <-> Frontend types)
 // ============================================
 
-import type { AppSettings, ModelCapabilities, WhisperModel } from "@/types";
+import type {
+  AiFormattingProviderId,
+  AiFormattingStyle,
+  AppSettings,
+  ModelCapabilities,
+  WhisperModel,
+} from "@/types";
 import { MODEL_CAPABILITIES, WHISPER_MULTILINGUAL_LANGUAGES } from "@/types";
 
 export function dbSettingsToFrontend(db: DbAppSettings): AppSettings {
@@ -211,6 +221,12 @@ export function dbSettingsToFrontend(db: DbAppSettings): AppSettings {
     translationSourceLanguage: db.translation_source_language ?? "en",
     translationTargetLanguage: db.translation_target_language ?? "es",
     translationApiKey: db.translation_api_key ?? "",
+
+    aiFormattingEnabled: db.ai_formatting_enabled ?? false,
+    aiFormattingProviderId:
+      (db.ai_formatting_provider_id as AiFormattingProviderId) ?? "openai",
+    aiFormattingStyle: (db.ai_formatting_style as AiFormattingStyle) ?? "clean",
+    aiFormattingModel: db.ai_formatting_model ?? "gpt-4o-mini",
   };
 }
 
@@ -241,6 +257,11 @@ export function frontendSettingsToDb(settings: AppSettings): DbAppSettings {
     translation_source_language: settings.translationSourceLanguage,
     translation_target_language: settings.translationTargetLanguage,
     translation_api_key: settings.translationApiKey,
+
+    ai_formatting_enabled: settings.aiFormattingEnabled,
+    ai_formatting_provider_id: settings.aiFormattingProviderId,
+    ai_formatting_style: settings.aiFormattingStyle,
+    ai_formatting_model: settings.aiFormattingModel,
   };
 }
 

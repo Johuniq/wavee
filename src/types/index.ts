@@ -11,6 +11,154 @@ export interface CloudProviderInfo {
   custom_model?: string | null;
 }
 
+// ==================== AI Formatting Providers (BYOK) ====================
+
+export type AiFormattingProviderId = "gemini" | "anthropic" | "openai" | "deepseek" | "custom";
+
+export interface AiFormattingProviderInfo {
+  id: AiFormattingProviderId;
+  name: string;
+  configured: boolean;
+  masked_key: string;
+  base_url?: string | null;
+  custom_model?: string | null;
+}
+
+// ==================== AI Formatting Styles ====================
+
+export type AiFormattingStyle =
+  | "personal"
+  | "clean"
+  | "writing"
+  | "notes"
+  | "email"
+  | "code"
+  | "social"
+  | "academic"
+  | "business"
+  | "transcript"
+  | "legal"
+  | "meeting"
+  | "journaling";
+
+export interface AiFormattingStyleInfo {
+  id: AiFormattingStyle;
+  name: string;
+  description: string;
+  icon?: React.ElementType;
+  prompt: string;
+}
+
+export const AI_FORMATTING_STYLES: AiFormattingStyleInfo[] = [
+  {
+    id: "personal",
+    name: "Personal Dictation",
+    description: "Light cleanup — fixes obvious errors and punctuation while preserving your natural conversational tone.",
+    prompt:
+      "You are a helpful dictation assistant. The user has spoken the following text which was transcribed from voice. Your job is to lightly clean up obvious transcription errors, punctuation, and filler words while preserving the speaker's casual, conversational tone and personality. Do not over-edit or change the speaker's voice. Return only the formatted text, with no preamble or explanation.",
+  },
+  {
+    id: "clean",
+    name: "Clean Dictation",
+    description: "Polished prose — removes filler words, fixes grammar, and produces crisp, professional sentences.",
+    prompt:
+      "You are a professional dictation editor. The user has spoken the following text which was transcribed from voice. Your job is to produce clean, professional prose: fix grammar, remove filler words (um, uh, like, you know), add proper punctuation, ensure proper sentence structure, and create clean paragraph breaks. Return only the formatted text, with no preamble or explanation.",
+  },
+  {
+    id: "writing",
+    name: "Writing",
+    description: "Treat dictation as a draft article — polish into structured, engaging written content.",
+    prompt:
+      "You are an editor helping someone turn spoken dictation into polished written content. Format the following transcribed text as a well-structured article or blog post. Use proper paragraphs, fix grammar and flow, and polish the prose to sound professional and engaging. Return only the formatted text, with no preamble or explanation.",
+  },
+  {
+    id: "notes",
+    name: "Notes",
+    description: "Extract key points into concise, scannable bullet lists or short phrases.",
+    prompt:
+      "You are a note-taking assistant. Extract the key points and important information from the following transcribed dictation. Format as concise bullet points or short phrases, capturing the essential information. Remove filler words and redundant phrasing. Return only the formatted notes, with no preamble or explanation.",
+  },
+  {
+    id: "email",
+    name: "Email",
+    description: "Format dictation as a polished business email with greeting, body, and sign-off.",
+    prompt:
+      "You are a professional email assistant. Format the following transcribed dictation as a polished business email. Add an appropriate greeting, structure the body with clear paragraphs, and include a professional sign-off. Ensure the tone is appropriate and professional. Return only the formatted email text, with no preamble or explanation.",
+  },
+  {
+    id: "code",
+    name: "Code",
+    description: "Convert spoken programming terms into clean, properly formatted code.",
+    prompt:
+      "You are a coding assistant. The following text was transcribed from voice and contains spoken programming terms, code snippets, and technical instructions. Convert spoken descriptions of code into clean, properly formatted code. Apply appropriate casing (camelCase, PascalCase, snake_case), insert code symbols (brackets, braces, operators) that were spoken as words, and organize into logical blocks. Preserve any literal code. Return only the formatted code, with no preamble or explanation.",
+  },
+  {
+    id: "social",
+    name: "Social",
+    description: "Casual, social-media-friendly text with short paragraphs and engaging tone.",
+    prompt:
+      "You are a social media assistant. The following text was transcribed from casual voice dictation. Format it for social media: keep a conversational and engaging tone, use short paragraphs or sentences, add appropriate line breaks, and make it easy to read. Return only the formatted text, with no preamble or explanation.",
+  },
+  {
+    id: "academic",
+    name: "Academic",
+    description: "Formal academic tone with precise language and structured paragraphs.",
+    prompt:
+      "You are an academic writing assistant. The following text was transcribed from voice. Rewrite it in a formal academic style: use precise language, proper sentence structure, formal tone, and structured paragraphs. Remove colloquialisms and filler words. Return only the formatted text, with no preamble or explanation.",
+  },
+  {
+    id: "business",
+    name: "Business",
+    description: "Professional business document with clear structure and concise language.",
+    prompt:
+      "You are a business communication assistant. The following text was transcribed from voice. Format it as a professional business document: use clear, concise language, structured paragraphs, bullet points where appropriate, and a professional tone. Return only the formatted text, with no preamble or explanation.",
+  },
+  {
+    id: "transcript",
+    name: "Transcript",
+    description: "Clean verbatim transcript — preserves original meaning with proper punctuation and paragraphing.",
+    prompt:
+      "You are a transcription editor. The following text was transcribed from voice. Create a clean transcript-style output: preserve the original meaning and content, but fix obvious transcription errors, add proper punctuation, and organize into readable paragraphs. Do not change the tone or style of the original speech. Return only the formatted text, with no preamble or explanation.",
+  },
+  {
+    id: "legal",
+    name: "Legal",
+    description: "Formal legal language with precise terminology and structured clauses.",
+    prompt:
+      "You are a legal transcription assistant. The following text was transcribed from voice. Rewrite it in a formal legal style: use precise terminology, structured paragraphs, and proper legal phrasing. Maintain the original meaning while ensuring legal accuracy. Return only the formatted text, with no preamble or explanation.",
+  },
+  {
+    id: "meeting",
+    name: "Meeting Minutes",
+    description: "Structured meeting notes with action items and decisions highlighted.",
+    prompt:
+      "You are a meeting minutes assistant. The following text was transcribed from a meeting recording. Format it as professional meeting minutes: include a brief summary, list key discussion points, highlight decisions made, and extract action items with responsible parties and deadlines. Use clear headings and bullet points. Return only the formatted text, with no preamble or explanation.",
+  },
+  {
+    id: "journaling",
+    name: "Journaling",
+    description: "Thoughtful, reflective journal entry with natural flow and personal tone.",
+    prompt:
+      "You are a journaling assistant. The following text was transcribed from a personal voice journal entry. Format it as a thoughtful, well-structured journal entry: preserve the personal, reflective tone, organize thoughts into coherent paragraphs, add proper punctuation, and maintain the authentic voice of the writer. Return only the formatted text, with no preamble or explanation.",
+  },
+];
+
+export const AI_FORMATTING_STYLE_LABELS: Record<AiFormattingStyle, string> = {
+  personal: "Personal Dictation",
+  clean: "Clean Dictation",
+  writing: "Writing",
+  notes: "Notes",
+  email: "Email",
+  code: "Code",
+  social: "Social",
+  academic: "Academic",
+  business: "Business",
+  transcript: "Transcript",
+  legal: "Legal",
+  meeting: "Meeting Minutes",
+  journaling: "Journaling",
+};
+
 // Available Whisper models for offline transcription & BYOK cloud models
 export interface WhisperModel {
   id: string;
@@ -67,6 +215,12 @@ export interface AppSettings {
   translationSourceLanguage: string;
   translationTargetLanguage: string;
   translationApiKey: string;
+
+  // AI Formatting (BYOK)
+  aiFormattingEnabled: boolean;
+  aiFormattingProviderId: AiFormattingProviderId;
+  aiFormattingStyle: AiFormattingStyle;
+  aiFormattingModel: string;
 
   // Advanced
   autoStartOnBoot: boolean;
@@ -156,10 +310,17 @@ export const DEFAULT_SETTINGS: AppSettings = {
   translationSourceLanguage: "en",
   translationTargetLanguage: "es",
   translationApiKey: "",
+
+  // AI Formatting (BYOK)
+  aiFormattingEnabled: false,
+  aiFormattingProviderId: "openai",
+  aiFormattingStyle: "clean",
+  aiFormattingModel: "gpt-4o-mini",
+
   autoStartOnBoot: false,
   minimizeToTray: true,
   diagnosticsEnabled: true,
-   autoCheckForUpdates: false,
+  autoCheckForUpdates: false,
   customVocabulary: [
     { spoken: "wave e", written: "Wavee" },
     { spoken: "t a u r i", written: "Tauri" },

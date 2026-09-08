@@ -32,6 +32,11 @@ const VocabularyView = lazy(() =>
     default: m.VocabularyView,
   })),
 );
+const AiFormattingView = lazy(() =>
+  import("@/components/ai-formatting-view").then((m) => ({
+    default: m.AiFormattingView,
+  })),
+);
 const OverviewView = lazy(() =>
   import("@/components/overview-view").then((m) => ({
     default: m.OverviewView,
@@ -114,6 +119,14 @@ export function MainView({ currentPage, trialDaysRemaining, onLicenseChange, onN
     return (
       <Suspense fallback={<ViewLoadingFallback />}>
         <VocabularyView onClose={() => navigate("overview")} />
+      </Suspense>
+    );
+  }
+
+  if (currentPage === "ai-formatting") {
+    return (
+      <Suspense fallback={<ViewLoadingFallback />}>
+        <AiFormattingView onClose={() => navigate("overview")} />
       </Suspense>
     );
   }

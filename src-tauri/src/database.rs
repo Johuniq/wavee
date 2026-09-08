@@ -43,6 +43,10 @@ pub struct AppSettings {
     pub translation_source_language: String,
     pub translation_target_language: String,
     pub translation_api_key: Option<String>,
+    pub ai_formatting_enabled: bool,
+    pub ai_formatting_provider_id: String,
+    pub ai_formatting_style: String,
+    pub ai_formatting_model: String,
 }
 
 impl Default for AppSettings {
@@ -70,6 +74,10 @@ impl Default for AppSettings {
             translation_source_language: "en".to_string(),
             translation_target_language: "es".to_string(),
             translation_api_key: None,
+            ai_formatting_enabled: false,
+            ai_formatting_provider_id: "openai".to_string(),
+            ai_formatting_style: "clean".to_string(),
+            ai_formatting_model: "gpt-4o-mini".to_string(),
         }
     }
 }
@@ -131,6 +139,15 @@ pub struct AppState {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CloudProviderRecord {
+    pub id: String,
+    pub api_key: String,
+    pub base_url: Option<String>,
+    pub custom_model: Option<String>,
+    pub is_active: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AiFormattingProviderRecord {
     pub id: String,
     pub api_key: String,
     pub base_url: Option<String>,
@@ -268,6 +285,24 @@ impl Database {
             [],
         );
 
+        // Add AI formatting settings columns if they don't exist (migration for existing DBs)
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN ai_formatting_enabled INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN ai_formatting_provider_id TEXT NOT NULL DEFAULT 'openai'",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN ai_formatting_style TEXT NOT NULL DEFAULT 'clean'",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN ai_formatting_model TEXT NOT NULL DEFAULT 'gpt-4o-mini'",
+            [],
+        );
+
         // Migration: Update default hotkeys if they are still the old ones
         // This ensures existing users get the new non-conflicting defaults
         let _ = conn.execute(
@@ -397,6 +432,20 @@ impl Database {
         // Drop old table and rename new one
         let _ = conn.execute("DROP TABLE IF EXISTS cloud_providers", []);
         let _ = conn.execute("ALTER TABLE cloud_providers_new RENAME TO cloud_providers", []);
+
+        // AI formatting providers table (BYOK for LLM formatting)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS ai_formatting_providers (
+                id TEXT PRIMARY KEY,
+                api_key TEXT NOT NULL DEFAULT '',
+                base_url TEXT,
+                custom_model TEXT,
+                is_active INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        )?;
 
         Ok(())
     }
@@ -570,8 +619,9 @@ impl Database {
             "SELECT push_to_talk_key, toggle_key, hotkey_mode, language, selected_model_id,
                     show_recording_indicator, show_recording_overlay, play_audio_feedback, auto_start_on_boot, minimize_to_tray,
                     post_processing_enabled, voice_commands_enabled, clipboard_mode, auto_check_for_updates, recording_overlay_position, custom_vocabulary, diagnostics_enabled,
-                    translation_enabled, translation_hotkey, translation_source_language, translation_target_language, translation_api_key
-             FROM settings WHERE id = 1",
+                    translation_enabled, translation_hotkey, translation_source_language, translation_target_language, translation_api_key,
+                    ai_formatting_enabled, ai_formatting_provider_id, ai_formatting_style, ai_formatting_model
+                 FROM settings WHERE id = 1",
             [],
             |row| {
                 let vocab_json: String = row.get(15).unwrap_or_else(|_| "[]".to_string());
@@ -600,6 +650,10 @@ impl Database {
                     translation_source_language: row.get(19).unwrap_or_else(|_| "en".to_string()),
                     translation_target_language: row.get(20).unwrap_or_else(|_| "es".to_string()),
                     translation_api_key: row.get(21).unwrap_or(None),
+                    ai_formatting_enabled: row.get::<_, i32>(22).unwrap_or(0) == 1,
+                    ai_formatting_provider_id: row.get(23).unwrap_or_else(|_| "openai".to_string()),
+                    ai_formatting_style: row.get(24).unwrap_or_else(|_| "clean".to_string()),
+                    ai_formatting_model: row.get(25).unwrap_or_else(|_| "gpt-4o-mini".to_string()),
                 })
             },
         )
@@ -633,6 +687,10 @@ impl Database {
                 translation_source_language = ?20,
                 translation_target_language = ?21,
                 translation_api_key = ?22,
+                ai_formatting_enabled = ?23,
+                ai_formatting_provider_id = ?24,
+                ai_formatting_style = ?25,
+                ai_formatting_model = ?26,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = 1",
             params![
@@ -657,8 +715,12 @@ impl Database {
                 settings.translation_hotkey,
                 settings.translation_source_language,
                 settings.translation_target_language,
-                settings.translation_api_key,
-            ],
+                 settings.translation_api_key,
+                 settings.ai_formatting_enabled as i32,
+                 settings.ai_formatting_provider_id,
+                 settings.ai_formatting_style,
+                 settings.ai_formatting_model,
+             ],
         )?;
         Ok(())
     }
@@ -687,6 +749,10 @@ impl Database {
             "translation_source_language",
             "translation_target_language",
             "translation_api_key",
+            "ai_formatting_enabled",
+            "ai_formatting_provider_id",
+            "ai_formatting_style",
+            "ai_formatting_model",
         ];
 
         if !ALLOWED_KEYS.contains(&key) {
@@ -1091,6 +1157,82 @@ impl Database {
     pub fn delete_cloud_provider(&self, id: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute("DELETE FROM cloud_providers WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    // ==================== AI Formatting Provider Operations (BYOK) ====================
+
+    pub fn get_ai_formatting_providers(&self) -> Result<Vec<AiFormattingProviderRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, api_key, base_url, custom_model, is_active FROM ai_formatting_providers ORDER BY id ASC"
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(AiFormattingProviderRecord {
+                id: row.get(0)?,
+                api_key: row.get(1)?,
+                base_url: row.get(2)?,
+                custom_model: row.get(3)?,
+                is_active: row.get::<_, i32>(4)? == 1,
+            })
+        })?;
+
+        let mut providers = Vec::new();
+        for row in rows {
+            providers.push(row?);
+        }
+        Ok(providers)
+    }
+
+    pub fn get_ai_formatting_provider(&self, id: &str) -> Result<Option<AiFormattingProviderRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, api_key, base_url, custom_model, is_active FROM ai_formatting_providers WHERE id = ?1"
+        )?;
+
+        let mut rows = stmt.query_map(params![id], |row| {
+            Ok(AiFormattingProviderRecord {
+                id: row.get(0)?,
+                api_key: row.get(1)?,
+                base_url: row.get(2)?,
+                custom_model: row.get(3)?,
+                is_active: row.get::<_, i32>(4)? == 1,
+            })
+        })?;
+
+        if let Some(row) = rows.next() {
+            Ok(Some(row?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn save_ai_formatting_provider(
+        &self,
+        id: &str,
+        api_key: &str,
+        base_url: Option<&str>,
+        custom_model: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO ai_formatting_providers (id, api_key, base_url, custom_model, is_active, updated_at)
+             VALUES (?1, ?2, ?3, ?4, 1, CURRENT_TIMESTAMP)
+             ON CONFLICT(id) DO UPDATE SET
+                api_key = excluded.api_key,
+                base_url = excluded.base_url,
+                custom_model = excluded.custom_model,
+                is_active = 1,
+                updated_at = CURRENT_TIMESTAMP",
+            params![id, api_key, base_url, custom_model],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_ai_formatting_provider(&self, id: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM ai_formatting_providers WHERE id = ?1", params![id])?;
         Ok(())
     }
 }

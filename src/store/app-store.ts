@@ -12,10 +12,12 @@ import {
   frontendSettingsToDb,
 } from "@/lib/database-api";
 import { getCloudProviders } from "@/lib/cloud-api";
+import { getAiFormattingProviders } from "@/lib/ai-formatting-api";
 import type {
   AppSettings,
   AppState,
   CloudProviderInfo,
+  AiFormattingProviderInfo,
   ModelStatus,
   RecordingStatus,
   WhisperModel,
@@ -72,6 +74,10 @@ interface AppStore extends AppState {
   cloudProviders: CloudProviderInfo[];
   refreshCloudProviders: () => Promise<void>;
 
+  // AI formatting providers (BYOK)
+  aiFormattingProviders: AiFormattingProviderInfo[];
+  refreshAiFormattingProviders: () => Promise<void>;
+
   // Settings actions
   updateSettings: (settings: Partial<AppSettings>) => void;
   resetSettings: () => void;
@@ -86,6 +92,7 @@ interface AppStore extends AppState {
 const initialState: AppState & {
   availableModels: WhisperModel[];
   cloudProviders: CloudProviderInfo[];
+  aiFormattingProviders: AiFormattingProviderInfo[];
   isInitialized: boolean;
   modelReady: boolean;
 } = {
@@ -103,6 +110,7 @@ const initialState: AppState & {
   settings: DEFAULT_SETTINGS,
   availableModels: [],
   cloudProviders: [],
+  aiFormattingProviders: [],
 };
 
 export const useAppStore = create<AppStore>()((set, get) => ({
@@ -112,11 +120,12 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   initializeFromDb: async () => {
     console.log("[Store] Starting initialization from database...");
     try {
-      const [dbState, dbSettings, dbModels, providers] = await Promise.all([
+      const [dbState, dbSettings, dbModels, providers, aiProviders] = await Promise.all([
         dbGetAppState(),
         dbGetSettings(),
         dbGetModels(),
         getCloudProviders(),
+        getAiFormattingProviders(),
       ]);
 
       const settings = dbSettingsToFrontend(dbSettings);
@@ -142,9 +151,10 @@ export const useAppStore = create<AppStore>()((set, get) => ({
         selectedModel,
         modelStatus,
         modelReady: Boolean(selectedModel?.downloaded),
-        settings,
+        settings: settings,
         availableModels: mergedModels,
         cloudProviders: providers,
+        aiFormattingProviders: aiProviders,
       });
 
       console.log("[Store] Initialization complete!");
@@ -220,7 +230,7 @@ export const useAppStore = create<AppStore>()((set, get) => ({
 
   setModelReady: (ready) => set({ modelReady: ready }),
 
-  // Cloud providers refresh
+   // Cloud providers refresh
   refreshCloudProviders: async () => {
     try {
       const providers = await getCloudProviders();
@@ -242,6 +252,16 @@ export const useAppStore = create<AppStore>()((set, get) => ({
       });
     } catch (err) {
       console.error("Failed to refresh cloud providers:", err);
+    }
+  },
+
+  // AI formatting providers refresh
+  refreshAiFormattingProviders: async () => {
+    try {
+      const providers = await getAiFormattingProviders();
+      set({ aiFormattingProviders: providers });
+    } catch (err) {
+      console.error("Failed to refresh AI formatting providers:", err);
     }
   },
 
@@ -280,5 +300,7 @@ export const useAvailableModels = () =>
   useAppStore((state) => state.availableModels);
 export const useCloudProviders = () =>
   useAppStore((state) => state.cloudProviders);
+export const useAiFormattingProviders = () =>
+  useAppStore((state) => state.aiFormattingProviders);
 export const useIsInitialized = () =>
   useAppStore((state) => state.isInitialized);

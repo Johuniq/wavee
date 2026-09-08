@@ -12,10 +12,11 @@ import {
   RefreshCw,
   Settings,
   Sliders,
+  Sparkles,
 } from "@/components/icons";
 import { useEffect, useState } from "react";
 
-export type Page = "overview" | "history" | "models" | "transcribe" | "license" | "settings" | "advanced" | "vocabulary" | "help";
+export type Page = "overview" | "history" | "models" | "transcribe" | "license" | "settings" | "advanced" | "vocabulary" | "help" | "ai-formatting";
 
 type NavItem =
   | { type: "item"; id: Page; label: string; icon: React.ElementType }
@@ -34,6 +35,7 @@ const navItems: NavItem[] = [
   { type: "item", id: "settings", label: "Settings", icon: Settings },
   { type: "item", id: "advanced", label: "Advanced", icon: Sliders },
   { type: "item", id: "vocabulary", label: "Vocabulary", icon: BookText },
+  { type: "item", id: "ai-formatting", label: "AI Formatting", icon: Sparkles },
   { type: "header", label: "Support" },
   { type: "item", id: "help", label: "Help", icon: HelpCircle },
 ];

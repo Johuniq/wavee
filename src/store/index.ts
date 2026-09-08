@@ -6,4 +6,6 @@ export {
   useRecordingStatus,
   useSettings,
   useSetupState,
+  useCloudProviders,
+  useAiFormattingProviders,
 } from "./app-store";

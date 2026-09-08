@@ -13,9 +13,15 @@ import {
   showRecordingOverlay,
   hideRecordingOverlay,
   recordAndTranslate,
+  postProcessText,
+  formatTextWithAi,
+  extractVoiceCommands,
+  processVoiceCommands,
+  stripVoiceCommandTokens,
   type HotkeyRegistration,
   type HotkeyEventPayload,
 } from "@/lib/voice-api";
+import { playFeedbackSound } from "@/lib/preferences-api";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { useAppStore } from "@/store";
 
@@ -83,6 +89,11 @@ export function useHotkey() {
       isRecordingRef.current = true;
       setRecordingStatus("recording");
       showOverlay();
+
+      // Play start feedback sound if enabled
+      if (settingsRef.current.playAudioFeedback) {
+        playFeedbackSound("start");
+      }
     } catch (error) {
       console.error("Failed to start recording:", error);
       setErrorMessage(
@@ -90,6 +101,52 @@ export function useHotkey() {
       );
     }
   }, [setRecordingStatus, setErrorMessage, showOverlay]);
+
+  /**
+   * Apply post-processing and voice commands to transcribed text based
+   * on the user's settings.
+   *
+   * The backend `post_process_text` command handles BOTH voice commands
+   * (producing control markers like [[UNDO]]) AND smart text formatting
+   * (camelCase, file paths, etc.) in a single pass. When voice commands
+   * are enabled but smart text processing is disabled, we use the
+   * dedicated `extract_voice_commands` command which skips formatting.
+   *
+   * AI formatting is applied AFTER post-processing (and AFTER voice commands
+   * are stripped) so that the LLM receives the cleaned-up transcription
+   * rather than raw voice-command markers.
+   */
+  const processTranscription = useCallback(
+    async (
+      text: string,
+      appSettings: {
+        postProcessingEnabled: boolean;
+        voiceCommandsEnabled: boolean;
+        aiFormattingEnabled: boolean;
+      }
+    ): Promise<string> => {
+      let result = text;
+
+      if (appSettings.voiceCommandsEnabled && appSettings.postProcessingEnabled) {
+        result = await postProcessText(result);
+        result = await processVoiceCommands(result);
+      } else if (appSettings.voiceCommandsEnabled) {
+        result = await extractVoiceCommands(result);
+        result = await processVoiceCommands(result);
+      } else if (appSettings.postProcessingEnabled) {
+        result = await postProcessText(result);
+      } else {
+        result = stripVoiceCommandTokens(result);
+      }
+
+      if (appSettings.aiFormattingEnabled && result.trim()) {
+        result = await formatTextWithAi(result);
+      }
+
+      return result;
+    },
+    [],
+  );
 
   // Handle recording stop (regular dictation)
   const handleRecordingStop = useCallback(async () => {
@@ -104,17 +161,30 @@ export function useHotkey() {
       const text = await transcribeAudio(audioData);
 
       if (text) {
-        await injectText(text);
+        const processed = await processTranscription(text, {
+          postProcessingEnabled: settingsRef.current.postProcessingEnabled,
+          voiceCommandsEnabled: settingsRef.current.voiceCommandsEnabled,
+          aiFormattingEnabled: settingsRef.current.aiFormattingEnabled,
+        });
+
+        if (processed) {
+          await injectText(processed);
+        }
 
         const model = selectedModelRef.current;
         const lang = settingsRef.current.language;
         if (model?.id) {
           // Convert audio samples to duration in milliseconds (samples at 16kHz)
           const durationMs = Math.round((audioData.length / 16000) * 1000);
-          await addTranscription(text, model.id, lang, durationMs);
+          await addTranscription(processed || text, model.id, lang, durationMs);
         }
 
-        setLastTranscription(text);
+        setLastTranscription(processed || text);
+      }
+
+      // Play stop feedback sound if enabled
+      if (settingsRef.current.playAudioFeedback) {
+        playFeedbackSound("stop");
       }
 
       isRecordingRef.current = false;
@@ -123,6 +193,10 @@ export function useHotkey() {
       console.error("Failed to stop recording:", error);
       isRecordingRef.current = false;
       hideOverlay();
+      // Play stop feedback sound even on error if enabled
+      if (settingsRef.current.playAudioFeedback) {
+        playFeedbackSound("stop");
+      }
       setErrorMessage(
         error instanceof Error ? error.message : "Failed to transcribe",
       );
@@ -158,12 +232,21 @@ export function useHotkey() {
         setLastTranscription(text);
       }
 
+      // Play stop feedback sound if enabled
+      if (settingsRef.current.playAudioFeedback) {
+        playFeedbackSound("stop");
+      }
+
       isRecordingRef.current = false;
       setRecordingStatus("idle");
     } catch (error) {
       console.error("Failed to stop recording with translation:", error);
       isRecordingRef.current = false;
       hideOverlay();
+      // Play stop feedback sound even on error if enabled
+      if (settingsRef.current.playAudioFeedback) {
+        playFeedbackSound("stop");
+      }
       setErrorMessage(
         error instanceof Error ? error.message : "Failed to translate",
       );

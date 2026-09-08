@@ -217,6 +217,15 @@ export async function postProcessText(text: string): Promise<string> {
   return await invoke<string>("post_process_text", { text });
 }
 
+/**
+ * Apply AI formatting to transcribed text.
+ * Requires aiFormattingEnabled in settings — reads provider/style config
+ * directly from the backend.
+ */
+export async function formatTextWithAi(text: string): Promise<string> {
+  return await invoke<string>("format_text_with_ai", { text });
+}
+
 export async function extractVoiceCommands(text: string): Promise<string> {
   return await invoke<string>("extract_voice_commands", { text });
 }
@@ -426,7 +435,7 @@ const VOICE_COMMANDS: Record<string, () => Promise<void>> = {
   },
 };
 
-function stripVoiceCommandTokens(text: string): string {
+export function stripVoiceCommandTokens(text: string): string {
   let result = text;
 
   for (const command of Object.keys(VOICE_COMMANDS)) {
@@ -440,7 +449,7 @@ function stripVoiceCommandTokens(text: string): string {
  * Process voice commands in text and execute them
  * Returns the text with commands removed, and executes the commands
  */
-async function processVoiceCommands(text: string): Promise<string> {
+export async function processVoiceCommands(text: string): Promise<string> {
   let result = text;
 
   for (const [command, action] of Object.entries(VOICE_COMMANDS)) {
