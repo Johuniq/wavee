@@ -10,6 +10,7 @@ pub mod post_process;
 pub mod security;
 mod text_inject;
 pub mod transcription;
+mod translation;
 
 use audio::{AudioCaptureSource, AudioInputDevice, AudioOutputDevice, AudioRecorder};
 use cloud_transcription::build_http_client;
@@ -22,9 +23,9 @@ use license::{
 };
 use log::{debug, error, info, warn};
 use post_process::PostProcessor;
-use reqwest::Client;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{
@@ -207,7 +208,6 @@ pub struct TextInjectorState(pub Arc<Mutex<text_inject::TextInjector>>);
 // Rate limiter: 100 requests per minute per action
 pub struct RecordingRateLimiter(pub Arc<RateLimiter>);
 pub struct TranscriptionRateLimiter(pub Arc<RateLimiter>);
-pub struct TranslationClientState(pub Arc<Client>);
 
 // Error type for commands
 #[derive(Debug, thiserror::Error)]
@@ -935,13 +935,12 @@ async fn record_and_transcribe(
 #[tauri::command]
 async fn translate_text(
     _db: State<'_, DbState>,
-    client: State<'_, TranslationClientState>,
+    app: tauri::AppHandle,
     text: String,
     source_language: String,
     target_language: String,
+    api_key: Option<String>,
 ) -> CommandResult<String> {
-    let client = client.0.clone();
-
     if text.trim().is_empty() {
         return Ok(String::new());
     }
@@ -955,48 +954,41 @@ async fn translate_text(
         return Ok(String::new());
     }
 
-    let langpair = format!("{}|{}", source_language, target_language);
-    let encoded = urlencoding::encode(&sanitized);
-
-    let url = format!(
-        "https://api.mymemory.translated.net/get?q={}&langpair={}",
-        encoded, langpair
+    let _ = app.emit(
+        "translation-status",
+        serde_json::json!({
+            "status": "translating",
+            "source": source_language,
+            "target": target_language,
+        }),
     );
 
-    debug!("Translating text via MyMemory: {} -> {}", source_language, target_language);
+    let client = build_http_client(30).map_err(CommandError::Transcription)?;
+    let result = translation::translate(
+        &client,
+        &sanitized,
+        &source_language,
+        &target_language,
+        api_key.as_deref(),
+    )
+    .await
+    .map_err(CommandError::Transcription)?;
 
-    let response = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| CommandError::Transcription(format!("Translation request failed: {}", e)))?;
+    let _ = app.emit(
+        "translation-status",
+        serde_json::json!({
+            "status": "complete",
+            "source": source_language,
+            "target": target_language,
+        }),
+    );
 
-    if !response.status().is_success() {
-        return Err(CommandError::Transcription(format!(
-            "Translation service returned error: {}",
-            response.status()
-        )));
-    }
-
-    let json: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| CommandError::Transcription(format!("Failed to parse translation response: {}", e)))?;
-
-    let translated = json
-        .get("responseData")
-        .and_then(|d| d.get("translatedText"))
-        .and_then(|t| t.as_str())
-        .unwrap_or("");
-
-    if translated.is_empty() {
-        return Err(CommandError::Transcription(
-            "Translation returned empty result".to_string(),
-        ));
-    }
-
-    info!("Translation completed: {} chars -> {} chars", sanitized.len(), translated.len());
-    Ok(translated.to_string())
+    info!(
+        "MyMemory translation completed: {} chars -> {} chars",
+        sanitized.len(),
+        result.len()
+    );
+    Ok(result)
 }
 
 #[tauri::command]
@@ -1005,19 +997,18 @@ async fn record_and_translate(
     license_manager: State<'_, LicenseManagerState>,
     recorder: State<'_, RecorderState>,
     transcriber: State<'_, TranscriberState>,
-    client: State<'_, TranslationClientState>,
+    app: tauri::AppHandle,
     source_language: String,
     target_language: String,
+    api_key: Option<String>,
 ) -> CommandResult<String> {
     let db = db.0.clone();
     let license_manager = license_manager.0.clone();
     let recorder = recorder.0.clone();
     let transcriber = transcriber.0.clone();
-    let client = client.0.clone();
 
     ensure_app_access_verified(&db, &license_manager).await?;
 
-    // Stop recording first
     let samples = {
         let mut recorder_guard = recorder.lock().unwrap();
         if let Some(ref mut rec) = *recorder_guard {
@@ -1032,7 +1023,6 @@ async fn record_and_translate(
         }
     };
 
-    // Transcribe in source language
     let settings = db.get_settings().map_err(CommandError::Database)?;
     let mut text = if settings.selected_model_id.starts_with("cloud:") {
         if let Some((provider, model)) = cloud_transcription::parse_cloud_model_id(&settings.selected_model_id) {
@@ -1057,45 +1047,34 @@ async fn record_and_translate(
         return Ok(String::new());
     }
 
-    // Translate if source != target
     if source_language != target_language {
-        let sanitized = sanitize_text(&text, 100_000).map_err(CommandError::PostProcessing)?;
-        if !sanitized.is_empty() {
-            let langpair = format!("{}|{}", source_language, target_language);
-            let encoded = urlencoding::encode(&sanitized);
-            let url = format!(
-                "https://api.mymemory.translated.net/get?q={}&langpair={}",
-                encoded, langpair
-            );
+        let _ = app.emit(
+            "translation-status",
+            serde_json::json!({
+                "status": "translating",
+                "source": source_language,
+                "target": target_language,
+            }),
+        );
 
-            debug!("Translating text via MyMemory: {} -> {}", source_language, target_language);
+        text = translation::translate(
+            &build_http_client(30).map_err(CommandError::Transcription)?,
+            &text,
+            &source_language,
+            &target_language,
+            api_key.as_deref(),
+        )
+        .await
+        .map_err(CommandError::Transcription)?;
 
-            let response = client
-                .get(&url)
-                .send()
-                .await
-                .map_err(|e| CommandError::Transcription(format!("Translation request failed: {}", e)))?;
-
-            if response.status().is_success() {
-                let json: serde_json::Value = response
-                    .json()
-                    .await
-                    .map_err(|e| CommandError::Transcription(format!("Failed to parse translation response: {}", e)))?;
-
-                let translated = json
-                    .get("responseData")
-                    .and_then(|d| d.get("translatedText"))
-                    .and_then(|t| t.as_str())
-                    .unwrap_or("");
-
-                if !translated.is_empty() {
-                    text = translated.to_string();
-                    info!("Translation completed");
-                }
-            } else {
-                warn!("Translation service returned error: {}", response.status());
-            }
-        }
+        let _ = app.emit(
+            "translation-status",
+            serde_json::json!({
+                "status": "complete",
+                "source": source_language,
+                "target": target_language,
+            }),
+        );
     }
 
     Ok(text)
@@ -2049,7 +2028,11 @@ fn add_transcription(
         "parakeet-v3",
         "qwen3-asr-0.6b",
     ];
-    if !VALID_MODEL_IDS.contains(&model_id.as_str()) {
+    
+    // Allow cloud model IDs that start with "cloud:"
+    let is_valid = VALID_MODEL_IDS.contains(&model_id.as_str()) || model_id.starts_with("cloud:");
+    
+    if !is_valid {
         return Err(CommandError::Database(
             rusqlite::Error::InvalidParameterName("Invalid model ID".to_string()),
         ));
@@ -3117,15 +3100,7 @@ pub fn run() {
                 text_inject::TextInjector::new().expect("Failed to initialize text injector");
             app.manage(TextInjectorState(Arc::new(Mutex::new(text_injector))));
 
-            // Initialize translation HTTP client
-            let translation_client = Client::builder()
-                .user_agent("Wavee/2.0")
-                .timeout(Duration::from_secs(15))
-                .build()
-                .expect("Failed to build translation HTTP client");
-            app.manage(TranslationClientState(Arc::new(translation_client)));
-
-            // Initialize rate limiters (100 requests per 60 seconds)
+// Initialize rate limiters (100 requests per 60 seconds)
             app.manage(RecordingRateLimiter(Arc::new(RateLimiter::new(100, 60))));
             app.manage(TranscriptionRateLimiter(Arc::new(RateLimiter::new(50, 60))));
 

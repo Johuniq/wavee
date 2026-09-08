@@ -109,7 +109,9 @@ export function useHotkey() {
         const model = selectedModelRef.current;
         const lang = settingsRef.current.language;
         if (model?.id) {
-          await addTranscription(text, model.id, lang, audioData.length);
+          // Convert audio samples to duration in milliseconds (samples at 16kHz)
+          const durationMs = Math.round((audioData.length / 16000) * 1000);
+          await addTranscription(text, model.id, lang, durationMs);
         }
 
         setLastTranscription(text);
@@ -142,7 +144,7 @@ export function useHotkey() {
       setRecordingStatus("processing");
       hideOverlay();
 
-      const text = await recordAndTranslate(sourceLanguage, targetLanguage, settingsRef.current.postProcessingEnabled);
+      const text = await recordAndTranslate(sourceLanguage, targetLanguage, settingsRef.current.postProcessingEnabled, settingsRef.current.translationApiKey);
 
       if (text && text.trim()) {
         await injectText(text);
@@ -150,7 +152,7 @@ export function useHotkey() {
         const model = selectedModelRef.current;
         if (model?.id) {
           const durationMs = 0;
-          await addTranscription(text, model.id, sourceLanguage, durationMs);
+          await addTranscription(text, `translation:${sourceLanguage}->${targetLanguage}`, sourceLanguage, durationMs);
         }
 
         setLastTranscription(text);

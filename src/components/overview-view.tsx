@@ -30,6 +30,19 @@ interface OverviewViewProps {
   trialDaysRemaining?: number;
 }
 
+// Format model name for display - converts cloud:provider:model to "Provider: Model"
+function formatModelName(modelId: string): string {
+  if (modelId.startsWith("cloud:")) {
+    const parts = modelId.split(":");
+    if (parts.length >= 3) {
+      const provider = parts[1].charAt(0).toUpperCase() + parts[1].slice(1);
+      const model = parts.slice(2).join(":");
+      return `${provider}: ${model}`;
+    }
+  }
+  return modelId;
+}
+
 export function OverviewView({ onNavigate, trialDaysRemaining }: OverviewViewProps) {
   const {
     settings,
@@ -579,7 +592,7 @@ export function OverviewView({ onNavigate, trialDaysRemaining }: OverviewViewPro
                       <div className="flex items-center gap-2 sm:gap-2.5 mt-1.5 caption text-body-muted flex-wrap">
                         <span className="flex items-center gap-1">
                           <Cpu className="h-2.5 w-2.5" />
-                          {item.model_id}
+                          {formatModelName(item.model_id)}
                         </span>
                         <span className="h-1 w-1 rounded-full bg-body-mid" />
                         <span>

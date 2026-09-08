@@ -42,6 +42,7 @@ pub struct AppSettings {
     pub translation_hotkey: String,
     pub translation_source_language: String,
     pub translation_target_language: String,
+    pub translation_api_key: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -68,6 +69,7 @@ impl Default for AppSettings {
             translation_hotkey: "Alt+Shift+T".to_string(),
             translation_source_language: "en".to_string(),
             translation_target_language: "es".to_string(),
+            translation_api_key: None,
         }
     }
 }
@@ -261,6 +263,10 @@ impl Database {
             "ALTER TABLE settings ADD COLUMN translation_target_language TEXT NOT NULL DEFAULT 'es'",
             [],
         );
+        let _ = conn.execute(
+            "ALTER TABLE settings ADD COLUMN translation_api_key TEXT",
+            [],
+        );
 
         // Migration: Update default hotkeys if they are still the old ones
         // This ensures existing users get the new non-conflicting defaults
@@ -365,6 +371,32 @@ impl Database {
             )",
             [],
         )?;
+
+        // Migration: fix any existing cloud_providers table with incorrect schema
+        // This handles cases where the table might have been created with wrong column names
+        let _ = conn.execute(
+            "CREATE TABLE IF NOT EXISTS cloud_providers_new (
+                id TEXT PRIMARY KEY,
+                api_key TEXT NOT NULL DEFAULT '',
+                base_url TEXT,
+                custom_model TEXT,
+                is_active INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        );
+        
+        // Try to migrate data from old table if it exists with different schema
+        let _ = conn.execute(
+            "INSERT OR REPLACE INTO cloud_providers_new (id, api_key, base_url, custom_model, is_active, created_at, updated_at)
+             SELECT id, api_key, base_url, custom_model, is_active, created_at, updated_at FROM cloud_providers",
+            [],
+        );
+        
+        // Drop old table and rename new one
+        let _ = conn.execute("DROP TABLE IF EXISTS cloud_providers", []);
+        let _ = conn.execute("ALTER TABLE cloud_providers_new RENAME TO cloud_providers", []);
 
         Ok(())
     }
@@ -538,7 +570,7 @@ impl Database {
             "SELECT push_to_talk_key, toggle_key, hotkey_mode, language, selected_model_id,
                     show_recording_indicator, show_recording_overlay, play_audio_feedback, auto_start_on_boot, minimize_to_tray,
                     post_processing_enabled, voice_commands_enabled, clipboard_mode, auto_check_for_updates, recording_overlay_position, custom_vocabulary, diagnostics_enabled,
-                    translation_enabled, translation_hotkey, translation_source_language, translation_target_language
+                    translation_enabled, translation_hotkey, translation_source_language, translation_target_language, translation_api_key
              FROM settings WHERE id = 1",
             [],
             |row| {
@@ -567,6 +599,7 @@ impl Database {
                     translation_hotkey: row.get(18).unwrap_or_else(|_| "Alt+Shift+T".to_string()),
                     translation_source_language: row.get(19).unwrap_or_else(|_| "en".to_string()),
                     translation_target_language: row.get(20).unwrap_or_else(|_| "es".to_string()),
+                    translation_api_key: row.get(21).unwrap_or(None),
                 })
             },
         )
@@ -599,6 +632,7 @@ impl Database {
                 translation_hotkey = ?19,
                 translation_source_language = ?20,
                 translation_target_language = ?21,
+                translation_api_key = ?22,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = 1",
             params![
@@ -623,6 +657,7 @@ impl Database {
                 settings.translation_hotkey,
                 settings.translation_source_language,
                 settings.translation_target_language,
+                settings.translation_api_key,
             ],
         )?;
         Ok(())
@@ -651,6 +686,7 @@ impl Database {
             "translation_hotkey",
             "translation_source_language",
             "translation_target_language",
+            "translation_api_key",
         ];
 
         if !ALLOWED_KEYS.contains(&key) {

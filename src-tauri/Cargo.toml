@@ -88,6 +88,7 @@ getrandom = { version = "0.2", features = ["std"] }
 whisper-rs = "0.16"
 transcribe-rs = { version = "0.3.11", features = ["onnx"] }
 qwen3-asr = { path = "vendor/qwen3-asr", default-features = false }
+ort = { path = "vendor/ort", default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-native", "copy-dylibs", "api-24"] }
 
 # Audio processing
 hound = "3.5"
@@ -139,4 +140,5 @@ tempfile = "3.23.0"
 httpmock = "0.7"
 
 [patch.crates-io]
+esaxx-rs = { path = "vendor/esaxx-rs" }
 ort = { path = "vendor/ort" }

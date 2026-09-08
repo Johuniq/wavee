@@ -36,6 +36,7 @@ export interface DbAppSettings {
   translation_hotkey: string;
   translation_source_language: string;
   translation_target_language: string;
+  translation_api_key: string;
 }
 
 export interface DbAppState {
@@ -209,6 +210,7 @@ export function dbSettingsToFrontend(db: DbAppSettings): AppSettings {
     translationHotkey: db.translation_hotkey ?? "Alt+Shift+T",
     translationSourceLanguage: db.translation_source_language ?? "en",
     translationTargetLanguage: db.translation_target_language ?? "es",
+    translationApiKey: db.translation_api_key ?? "",
   };
 }
 
@@ -238,6 +240,7 @@ export function frontendSettingsToDb(settings: AppSettings): DbAppSettings {
     translation_hotkey: settings.translationHotkey,
     translation_source_language: settings.translationSourceLanguage,
     translation_target_language: settings.translationTargetLanguage,
+    translation_api_key: settings.translationApiKey,
   };
 }
 

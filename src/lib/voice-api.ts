@@ -495,24 +495,28 @@ export async function stopTranscribeAndInject(
 export async function translateText(
   text: string,
   sourceLanguage: string,
-  targetLanguage: string
+  targetLanguage: string,
+  apiKey?: string
 ): Promise<string> {
   return await invoke<string>("translate_text", {
     text,
     sourceLanguage,
     targetLanguage,
+    apiKey,
   });
 }
 
 export async function recordAndTranslate(
   sourceLanguage: string,
   targetLanguage: string,
-  enablePostProcessing: boolean = true
+  enablePostProcessing: boolean = true,
+  apiKey?: string
 ): Promise<string | null> {
   try {
     const text = await invoke<string>("record_and_translate", {
       sourceLanguage,
       targetLanguage,
+      apiKey,
     });
 
     if (text && enablePostProcessing) {

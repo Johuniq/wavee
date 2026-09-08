@@ -1,4 +1,16 @@
 import {
+  AlertCircle,
+  Check,
+  Circle,
+  Copy,
+  Key,
+  Loader2,
+  ShieldCheck,
+  ShieldX,
+  Sparkles,
+  Trash2,
+} from "@/components/icons";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -23,18 +35,6 @@ import {
 } from "@/lib/license-api";
 import { cn, openUrl } from "@/lib/utils";
 import { reportError } from "@/lib/voice-api";
-import {
-  AlertCircle,
-  Check,
-  Circle,
-  Copy,
-  Key,
-  Loader2,
-  ShieldCheck,
-  ShieldX,
-  Sparkles,
-  Trash2,
-} from "@/components/icons";
 import { useEffect, useState } from "react";
 
 interface LicenseViewProps {
@@ -335,7 +335,7 @@ export function LicenseView({ onClose: _onClose, onLicenseChange }: LicenseViewP
                         <AlertDialogCancel className="paper-button-secondary">Cancel</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={handleDeactivate}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          className="bg-destructive text-white hover:bg-destructive/90"
                         >
                           Deactivate
                         </AlertDialogAction>

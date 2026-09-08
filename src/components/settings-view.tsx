@@ -1,17 +1,3 @@
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { useToast } from "@/hooks/use-toast";
-import { setAutoStart } from "@/lib/preferences-api";
-import { cn } from "@/lib/utils";
-import { hideRecordingOverlay, reportError } from "@/lib/voice-api";
-import { useAppStore } from "@/store";
 import {
   AlertCircle,
   Circle,
@@ -27,6 +13,20 @@ import {
   Waves,
   Zap,
 } from "@/components/icons";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
+import { setAutoStart } from "@/lib/preferences-api";
+import { cn } from "@/lib/utils";
+import { hideRecordingOverlay, reportError } from "@/lib/voice-api";
+import { useAppStore } from "@/store";
 import { useEffect, useRef, useState } from "react";
 
 import { Logo } from "@/components/logo";
@@ -223,9 +223,6 @@ export function SettingsView(_props: SettingsViewProps) {
           {/* ─── HOTKEY SETTINGS — Cream surface ─── */}
           <section className="card-feature-cream">
             <div className="flex items-center gap-2.5 mb-4">
-              <div className="icon-plate">
-                <Keyboard className="h-3.5 w-3.5" />
-              </div>
               <div className="min-w-0">
                 <p className="eyebrow-uppercase text-ink-mid">Hotkey</p>
                 <h3
@@ -287,9 +284,6 @@ export function SettingsView(_props: SettingsViewProps) {
           {/* ─── TRANSLATION SETTINGS — Cream surface ─── */}
           <section className="card-feature-cream">
             <div className="flex items-center gap-2.5 mb-4">
-              <div className="icon-plate">
-                <Globe className="h-3.5 w-3.5" />
-              </div>
               <div className="min-w-0">
                 <p className="eyebrow-uppercase text-ink-mid">Translation</p>
                 <h3
@@ -385,6 +379,25 @@ export function SettingsView(_props: SettingsViewProps) {
                       </p>
                     </div>
                   </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="eyebrow-uppercase text-ink-mid">
+                      MyMemory API key (optional)
+                    </Label>
+                    <input
+                      type="password"
+                      className="paper-input border border-hairline h-9 w-full px-3 py-1.5 text-sm"
+                      style={{ background: '#ffffff', borderRadius: '8px' }}
+                      placeholder="Leave empty for free tier (5,000 chars/day)"
+                      value={settings.translationApiKey}
+                      onChange={(e) =>
+                        updateSettings({ translationApiKey: e.target.value })
+                      }
+                    />
+                    <p className="caption text-body-muted">
+                      Optional: add your own key for higher limits.
+                    </p>
+                  </div>
                 </>
               )}
             </div>
@@ -393,9 +406,6 @@ export function SettingsView(_props: SettingsViewProps) {
           {/* ─── RECORDING — White surface ─── */}
           <section className="paper-card">
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="icon-plate">
-                <Volume2 className="h-3.5 w-3.5" />
-              </div>
               <div className="min-w-0">
                 <p className="eyebrow-uppercase text-ink-mid">Recording</p>
                 <h3
@@ -465,9 +475,6 @@ export function SettingsView(_props: SettingsViewProps) {
           {/* ─── SYSTEM — White surface ─── */}
           <section className="paper-card">
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="icon-plate">
-                <Monitor className="h-3.5 w-3.5" />
-              </div>
               <div className="min-w-0">
                 <p className="eyebrow-uppercase text-ink-mid">System</p>
                 <h3
@@ -518,9 +525,6 @@ export function SettingsView(_props: SettingsViewProps) {
           {/* ─── UPDATES — White surface ─── */}
           <section className="paper-card">
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="icon-plate">
-                <RefreshCw className="h-3.5 w-3.5" />
-              </div>
               <div className="min-w-0">
                 <p className="eyebrow-uppercase text-ink-mid">Updates</p>
                 <h3
@@ -546,9 +550,6 @@ export function SettingsView(_props: SettingsViewProps) {
           {/* ─── PROCESSING — White surface ─── */}
           <section className="paper-card">
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="icon-plate">
-                <Sparkles className="h-3.5 w-3.5" />
-              </div>
               <div className="min-w-0">
                 <p className="eyebrow-uppercase text-ink-mid">Processing</p>
                 <h3
@@ -582,9 +583,6 @@ export function SettingsView(_props: SettingsViewProps) {
           {/* ─── OUTPUT — White surface ─── */}
           <section className="paper-card">
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="icon-plate">
-                <Clipboard className="h-3.5 w-3.5" />
-              </div>
               <div className="min-w-0">
                 <p className="eyebrow-uppercase text-ink-mid">Output</p>
                 <h3

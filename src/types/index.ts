@@ -66,6 +66,7 @@ export interface AppSettings {
   translationHotkey: string;
   translationSourceLanguage: string;
   translationTargetLanguage: string;
+  translationApiKey: string;
 
   // Advanced
   autoStartOnBoot: boolean;
@@ -154,6 +155,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   translationHotkey: "Alt+Shift+T",
   translationSourceLanguage: "en",
   translationTargetLanguage: "es",
+  translationApiKey: "",
   autoStartOnBoot: false,
   minimizeToTray: true,
   diagnosticsEnabled: true,

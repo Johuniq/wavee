@@ -50,6 +50,27 @@ const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
 
 type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
 
+// Format model name for display - converts cloud:provider:model to "Provider: Model"
+function formatModelName(modelId: string): string {
+  if (modelId.startsWith("translation:")) {
+    const parts = modelId.split(":");
+    if (parts.length >= 2) {
+      const langs = parts.slice(1).join(":").replace(/->/g, " → ");
+      return `Translation (${langs})`;
+    }
+    return "Translation";
+  }
+  if (modelId.startsWith("cloud:")) {
+    const parts = modelId.split(":");
+    if (parts.length >= 3) {
+      const provider = parts[1].charAt(0).toUpperCase() + parts[1].slice(1);
+      const model = parts.slice(2).join(":");
+      return `${provider}: ${model}`;
+    }
+  }
+  return modelId;
+}
+
 export function HistoryView(_props: { onClose: () => void }) {
   const [history, setHistory] = useState<TranscriptionHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -495,7 +516,7 @@ export function HistoryView(_props: { onClose: () => void }) {
                         <div className="flex items-center gap-1.5 sm:gap-2 mt-2.5 flex-wrap">
                           <span className="inline-flex items-center gap-1 caption px-2 py-0.5 rounded-md bg-canvas-soft text-body">
                             <Cpu className="h-2.5 w-2.5" />
-                            <span className="capitalize">{item.model_id}</span>
+                            <span className="capitalize">{formatModelName(item.model_id)}</span>
                           </span>
                           <span className="inline-flex items-center gap-1 caption px-2 py-0.5 rounded-md bg-canvas-soft text-body uppercase">
                             {item.language}
