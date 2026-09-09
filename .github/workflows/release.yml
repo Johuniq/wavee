@@ -183,7 +183,9 @@ jobs:
             pkg-config \
             libasound2-dev \
             libgtk-3-dev \
-            libayatana-appindicator3-dev
+            libayatana-appindicator3-dev \
+            libclang-dev \
+            clang
 
       - name: Setup ONNX Runtime for Intel macOS
         if: contains(matrix.args, 'x86_64-apple-darwin')
