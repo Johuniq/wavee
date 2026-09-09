@@ -13,12 +13,14 @@ struct TranslationRequest {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct TranslationResponse {
-    responseData: ResponseData,
+    #[serde(rename = "responseData")]
+    response_data: ResponseData,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct ResponseData {
-    translatedText: String,
+    #[serde(rename = "translatedText")]
+    translated_text: String,
 }
 
 pub async fn translate(
@@ -63,5 +65,5 @@ pub async fn translate(
         .await
         .map_err(|e| format!("Failed to parse translation response: {}", e))?;
 
-    Ok(result.responseData.translatedText)
+    Ok(result.response_data.translated_text)
 }

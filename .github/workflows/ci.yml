@@ -11,88 +11,68 @@ permissions:
   contents: read
 
 jobs:
-  frontend:
+  frontend-typecheck:
     name: Frontend Typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "lts/*"
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
         with:
           version: 9
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Typecheck
-        run: pnpm run typecheck
-
-  macos-bundle:
-    name: macOS Bundle Check
-    runs-on: macos-latest
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "lts/*"
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
         with:
           version: 9
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+  rust-fmt:
+    name: Rust Fmt Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin
+          components: rustfmt
+      - run: cargo fmt --all -- --check
 
-      - name: Setup libclang for bindgen
-        run: |
-          brew install llvm
-          LLVM_PREFIX="$(brew --prefix llvm)"
-          echo "LIBCLANG_PATH=${LLVM_PREFIX}/lib" >> "$GITHUB_ENV"
+  rust-clippy:
+    name: Rust Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo clippy --all-targets --all-features -- -D warnings
 
-      - name: Setup CMake
-        run: |
-          brew install cmake
-          echo "CMAKE=$(command -v cmake)" >> "$GITHUB_ENV"
+  rust-tests-linux:
+    name: Rust Tests (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test -j 1
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Verify Rust toolchain
-        run: rustc -vV
-
-      - name: Build macOS app bundle
-        run: pnpm tauri build --bundles app --target aarch64-apple-darwin
-
-      - name: Validate macOS app bundle
-        run: |
-          APP_PATH="$(find src-tauri/target/aarch64-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app' -type d -print -quit)"
-          test -n "$APP_PATH"
-          plutil -lint "$APP_PATH/Contents/Info.plist"
-          # Re-sign ad hoc in CI so verification checks the bundle contents
-          # produced by this build instead of any transient partial signature.
-          codesign --force --deep --sign - "$APP_PATH"
-          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
-
-  rust:
-    name: Rust Tests
+  rust-tests-windows:
+    name: Rust Tests (Windows)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
+      - uses: dtolnay/rust-toolchain@stable
       - name: Setup CMake
         shell: pwsh
         run: |
@@ -102,7 +82,84 @@ jobs:
           }
           "CMAKE=$cmake" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           & $cmake --version
-
-      - name: Run Rust tests
-        working-directory: src-tauri
+      - working-directory: src-tauri
         run: cargo test -j 1
+
+  build-linux:
+    name: Build (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+      - run: sudo apt-get update
+      - run: sudo apt-get install -y libwebkit2gtk-4.1-dev libssl-dev pkg-config libasound2-dev libgtk-3-dev libayatana-appindicator3-dev
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tauri build --bundles appimage,deb
+
+  build-windows:
+    name: Build (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Setup CMake
+        shell: pwsh
+        run: |
+          $cmake = "${env:ProgramFiles}\CMake\bin\cmake.exe"
+          if (-not (Test-Path -LiteralPath $cmake)) {
+            $cmake = (Get-Command cmake.exe -ErrorAction Stop).Source
+          }
+          if (-not (Test-Path -LiteralPath $cmake)) {
+            throw "cmake.exe not found at $cmake"
+          }
+          "CMAKE=$cmake" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & $cmake --version
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tauri build --bundles nsis,msi
+
+  build-macos:
+    name: Build (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - name: Setup libclang and CMake
+        run: |
+          brew install llvm cmake
+          LLVM_PREFIX="$(brew --prefix llvm)"
+          echo "LIBCLANG_PATH=${LLVM_PREFIX}/lib" >> "$GITHUB_ENV"
+          echo "CMAKE=$(command -v cmake)" >> "$GITHUB_ENV"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tauri build --bundles app --target aarch64-apple-darwin
+      - name: Validate macOS app bundle
+        run: |
+          APP_PATH="$(find src-tauri/target/aarch64-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app' -type d -print -quit)"
+          test -n "$APP_PATH"
+          plutil -lint "$APP_PATH/Contents/Info.plist"
+          codesign --force --deep --sign - "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
