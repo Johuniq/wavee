@@ -186,6 +186,7 @@ jobs:
             libayatana-appindicator3-dev \
             libclang-dev \
             clang
+          echo "LIBCLANG_PATH=$(find /usr/lib -name 'libclang.so*' -printf '%h\n' | head -1)" >> "$GITHUB_ENV"
 
       - name: Setup ONNX Runtime for Intel macOS
         if: contains(matrix.args, 'x86_64-apple-darwin')
