@@ -393,6 +393,10 @@ impl Database {
             "ALTER TABLE license ADD COLUMN usage INTEGER NOT NULL DEFAULT 0",
             [],
         );
+        let _ = conn.execute(
+            "ALTER TABLE license ADD COLUMN validations INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
         // Cloud providers table (BYOK)
         conn.execute(
             "CREATE TABLE IF NOT EXISTS cloud_providers (
