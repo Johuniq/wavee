@@ -152,7 +152,7 @@ async fn license_manager_validation_rejection_is_sanitized() {
     let message = result.unwrap_err();
     assert_eq!(
         message,
-        "License validation was rejected by the license server."
+        "License validation was rejected by the license server. HTTP 422"
     );
     assert!(!message.contains("0 more usages"));
     assert!(!message.contains("BadRequest"));
