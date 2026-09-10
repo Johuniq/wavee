@@ -1,13 +1,11 @@
 import { AiFormattingProvidersTab } from "@/components/ai-formatting-providers-tab";
 import {
-  ArrowLeft,
   Check,
   Wand2,
   Zap
 } from "@/components/icons";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { testAiFormattingConnection } from "@/lib/ai-formatting-api";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
 import {
@@ -15,17 +13,11 @@ import {
   AI_FORMATTING_STYLE_LABELS,
   type AiFormattingStyle,
 } from "@/types";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
-interface AiFormattingViewProps {
-  onClose: () => void;
-}
-
-export function AiFormattingView({ onClose }: AiFormattingViewProps) {
+export function AiFormattingView() {
   const { settings, updateSettings, aiFormattingProviders } = useAppStore();
-  const { success: toastSuccess, error: toastError, info: toastInfo } = useToast();
-
-  const [isTestingGlobal, setIsTestingGlobal] = useState(false);
+  const { success: toastSuccess, error: _toastError } = useToast();
 
   const aiFormattingEnabled = settings.aiFormattingEnabled ?? false;
   const aiFormattingProviderId = settings.aiFormattingProviderId;
@@ -58,23 +50,6 @@ export function AiFormattingView({ onClose }: AiFormattingViewProps) {
     );
   };
 
-  const handleTestActive = async () => {
-    if (!aiFormattingProviderId) {
-      toastError("No Provider Selected", "Please configure and select a provider first");
-      return;
-    }
-    try {
-      setIsTestingGlobal(true);
-      const msg = await testAiFormattingConnection(aiFormattingProviderId, null, null, null);
-      toastSuccess("Connection Successful", msg);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toastError("Connection Failed", msg);
-    } finally {
-      setIsTestingGlobal(false);
-    }
-  };
-
   return (
     <div className="flex h-full flex-col overflow-hidden bg-canvas">
       {/* ─── HEADER ─── */}
@@ -82,12 +57,7 @@ export function AiFormattingView({ onClose }: AiFormattingViewProps) {
         <div className="@container max-w-[1280px] mx-auto w-full px-4 sm:px-6 xl:px-10 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <button
-                onClick={onClose}
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-hairline text-ink hover:bg-canvas-soft transition-colors cursor-pointer"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-              </button>
+
               <div>
                 <p className="eyebrow-uppercase text-ink-mid">AI Formatting</p>
                 <h1 className="display-sm text-ink mt-1">
@@ -95,25 +65,6 @@ export function AiFormattingView({ onClose }: AiFormattingViewProps) {
                 </h1>
               </div>
             </div>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(
-                  JSON.stringify(
-                    {
-                      enabled: aiFormattingEnabled,
-                      provider: aiFormattingProviderId,
-                      style: aiFormattingStyle,
-                    },
-                    null,
-                    2
-                  )
-                );
-                toastInfo("Debug Info", "Current AI formatting config copied to clipboard");
-              }}
-              className="caption text-body-muted hover:text-ink transition-colors px-2 py-1 rounded cursor-pointer"
-            >
-              Debug
-            </button>
           </div>
         </div>
       </div>
@@ -156,18 +107,6 @@ export function AiFormattingView({ onClose }: AiFormattingViewProps) {
                 <div className="flex items-center justify-between gap-2 pt-2">
                   <span className="caption text-on-dark-muted">Active style</span>
                   <span className="caption-strong text-on-dark">{activeStyleInfo.name}</span>
-                </div>
-                <div className="mt-3">
-                  <button
-                    onClick={handleTestActive}
-                    disabled={!aiFormattingProviderId || isTestingGlobal || !aiFormattingEnabled}
-                    className="paper-button-outline-dark size-sm w-full cursor-pointer disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
-                  >
-                    {isTestingGlobal && (
-                      <span className="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    )}
-                    Test connection
-                  </button>
                 </div>
               </div>
             </div>
