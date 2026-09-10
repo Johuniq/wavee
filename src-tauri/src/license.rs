@@ -120,9 +120,30 @@ impl LicenseStatus {
             "granted" => LicenseStatus::Granted,
             "revoked" => LicenseStatus::Revoked,
             "disabled" => LicenseStatus::Disabled,
+            "expired" => LicenseStatus::Expired,
             _ => LicenseStatus::Invalid,
         }
     }
+}
+
+/// Outcome of an online license validation attempt.
+///
+/// This distinguishes authoritative rejections (revoked, disabled, invalid,
+/// or activation limit reached) from transient network failures so callers
+/// can decide whether to fall back to the local cache or the offline grace
+/// period. Authoritative rejections must never grant access.
+#[derive(Debug, Clone)]
+pub enum LicenseValidationOutcome {
+    /// Online validation succeeded and the license allows usage.
+    Granted,
+    /// The license server rejected the key/activation (revoked, disabled,
+    /// invalid, or activation limit reached). Callers must NOT grant access
+    /// and should not fall back to a stale local copy.
+    Rejected,
+    /// The request failed for a non-authoritative reason (network error,
+    /// timeout, 5xx server error). Callers may fall back to the cached
+    /// license or the offline grace period.
+    OfflineFallback,
 }
 
 // =============================================================================
@@ -324,7 +345,7 @@ fn compute_device_id() -> String {
         hasher.update(user.as_bytes());
     }
 
-    // Platform-specific hardware identifiers
+// Platform-specific hardware identifiers
     #[cfg(target_os = "macos")]
     {
         // Get macOS IOPlatformUUID
@@ -341,6 +362,31 @@ fn compute_device_id() -> String {
         // Get Windows machine UUID
         if let Ok(output) = command_output_hidden("wmic", &["csproduct", "get", "UUID"]) {
             hasher.update(&output.stdout);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // D-Bus machine ID is the canonical stable device identifier on
+        // Linux. It is unique per machine and survives reboots. Without it,
+        // the fingerprint would fall back to hostname + username only, which
+        // is not unique and defeats device binding / cache decryption.
+        let mut machine_id = None;
+        for path in &["/etc/machine-id", "/var/lib/dbus/machine-id"] {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                let id = content.trim();
+                if !id.is_empty() {
+                    machine_id = Some(id.as_bytes().to_vec());
+                    break;
+                }
+            }
+        }
+        if let Some(id) = machine_id {
+            hasher.update(&id);
+        } else {
+            // Last-resort fallback: mix in a fixed salt so the two sources
+            // (hostname+username vs. machine-id) never collide.
+            hasher.update(b"wavee-linux-device-id-fallback");
         }
     }
 
@@ -841,6 +887,24 @@ self.mark_online_attempt();
         }
     }
 
+    /// Classify a validate() failure into an authoritative rejection or a
+    /// transient failure. Used by the Tauri command layer to decide whether
+    /// access may still be granted from a stale DB/cache row.
+    pub fn is_authoritative_validate_error(&self, error: &str) -> bool {
+        is_authoritative_validate_error(error)
+    }
+
+    /// Classify a validate() failure into an authoritative rejection or a
+    /// transient failure. Used by the Tauri command layer to decide whether
+    /// access may still be granted from a stale DB/cache row.
+    pub fn classify_validate_error(&self, error: &str) -> LicenseValidationOutcome {
+        if is_authoritative_validate_error(error) {
+            LicenseValidationOutcome::Rejected
+        } else {
+            LicenseValidationOutcome::OfflineFallback
+        }
+    }
+
     /// Validate the current license
     ///
     /// First tries online validation with Polar API, falls back to cached
@@ -902,16 +966,23 @@ self.mark_online_attempt();
                         device_label: device_label.clone(),
                     });
                 }
-                Err(e) => {
-                    if is_authoritative_validate_error(&e) {
-                        warn!("License rejected by Polar - clearing cache: {}", e);
-                        let _ = clear_cache();
-                        return Err(
-                            "License validation was rejected. Please activate again.".to_string()
-                        );
+                Err(error) => {
+                    match self.classify_validate_error(&error) {
+                        LicenseValidationOutcome::Granted => {
+                            // Should not happen here (Ok above), but stay safe.
+                        }
+                        LicenseValidationOutcome::Rejected => {
+                            warn!("License rejected by Polar - clearing cache: {}", error);
+                            let _ = clear_cache();
+                            return Err(
+                                "License validation was rejected. Please activate again.".to_string()
+                            );
+                        }
+                        LicenseValidationOutcome::OfflineFallback => {
+                            warn!("Validation failed (non-authoritative): {}", error);
+                            // Fall through to offline validation
+                        }
                     }
-                    warn!("Validation failed: {}", e);
-                    // Fall through to offline validation
                 }
             }
 
@@ -1189,7 +1260,22 @@ self.mark_online_attempt();
 
         warn!("License validation rejected by server: {}", status);
         debug!("License validation response body: {}", body);
-        Err("License validation was rejected by the license server.".to_string())
+
+        // Distinguish authoritative rejections (4xx) from transient
+        // failures (5xx, network). Authoritative rejections clear the
+        // cache; transient failures fall through to the offline grace
+        // period so a server outage does not lock users out.
+        if status.is_client_error() {
+            Err(format!(
+                "License validation was rejected by the license server. HTTP {}",
+                status.as_u16()
+            ))
+        } else {
+            Err(format!(
+                "License validation request failed (non-authoritative). HTTP {}",
+                status.as_u16()
+            ))
+        }
     }
 }
 
@@ -1203,18 +1289,11 @@ impl Default for LicenseManager {
 // Helper Functions
 // =============================================================================
 
-/// Mask license key for display
+/// Mask license key for display. Delegates to the canonical
+/// `security::mask_license_key` so every code path produces the same
+/// masked form (first 4 + last 4 characters).
 fn mask_key(key: &str) -> String {
-    if key.len() <= 8 {
-        return "****".to_string();
-    }
-
-    let parts: Vec<&str> = key.split('-').collect();
-    if parts.len() >= 2 {
-        format!("****-{}", parts.last().unwrap_or(&"****"))
-    } else {
-        format!("****{}", &key[key.len().saturating_sub(6)..])
-    }
+    security::mask_license_key(key)
 }
 
 fn is_authoritative_validate_error(error: &str) -> bool {
@@ -1222,6 +1301,9 @@ fn is_authoritative_validate_error(error: &str) -> bool {
         return true;
     }
 
+    // Only 4xx responses are authoritative. 5xx (and any other network
+    // failure) must fall through to the offline grace period so a transient
+    // server outage does not wipe every user's license cache.
     error.contains("HTTP 400")
         || error.contains("HTTP 401")
         || error.contains("HTTP 403")
@@ -1235,8 +1317,44 @@ fn is_authoritative_validate_error(error: &str) -> bool {
 // =============================================================================
 
 #[cfg(test)]
+fn classify_validate_error(error: &str) -> LicenseValidationOutcome {
+    if is_authoritative_validate_error(error) {
+        LicenseValidationOutcome::Rejected
+    } else {
+        LicenseValidationOutcome::OfflineFallback
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_classify_validate_error() {
+        // 4xx responses are authoritative rejections.
+        assert!(matches!(
+            classify_validate_error("License validation was rejected by the license server. HTTP 403"),
+            LicenseValidationOutcome::Rejected
+        ));
+        assert!(matches!(
+            classify_validate_error("License validation was rejected by the license server. HTTP 401"),
+            LicenseValidationOutcome::Rejected
+        ));
+        // 5xx responses are non-authoritative and fall through to offline grace.
+        assert!(matches!(
+            classify_validate_error("License validation request failed (non-authoritative). HTTP 500"),
+            LicenseValidationOutcome::OfflineFallback
+        ));
+        assert!(matches!(
+            classify_validate_error("License validation request failed (non-authoritative). HTTP 503"),
+            LicenseValidationOutcome::OfflineFallback
+        ));
+        // Network errors are non-authoritative.
+        assert!(matches!(
+            classify_validate_error("reqwest error: connection reset"),
+            LicenseValidationOutcome::OfflineFallback
+        ));
+    }
 
     #[test]
     fn test_device_id_is_stable() {
@@ -1255,8 +1373,10 @@ mod tests {
 
     #[test]
     fn test_mask_key() {
+        // Unified with security::mask_license_key: first 4 + last 4 chars.
         assert_eq!(mask_key("ABC"), "****");
-        assert_eq!(mask_key("ABC-DEF-GHI-JKL"), "****-JKL");
+        assert_eq!(mask_key("ABC-DEF-GHI-JKL"), "ABC-****-JKL");
+        assert_eq!(mask_key("1234-5678-9012"), "1234****9012");
     }
 
     #[test]

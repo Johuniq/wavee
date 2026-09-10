@@ -121,9 +121,13 @@ export function LicenseView({ onClose: _onClose, onLicenseChange }: LicenseViewP
   };
 
   const handleCopyLicense = async () => {
-    if (license?.license_key) {
+    // Prefer the unmasked display_key (the real license key). The
+    // license_key field is already masked by the backend, so copying it
+    // would paste "1234****9012" instead of the real key.
+    const keyToCopy = license?.display_key || license?.license_key;
+    if (keyToCopy) {
       try {
-        await navigator.clipboard.writeText(license.license_key);
+        await navigator.clipboard.writeText(keyToCopy);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       } catch (err) {
@@ -228,7 +232,9 @@ export function LicenseView({ onClose: _onClose, onLicenseChange }: LicenseViewP
                             className="flex-1 px-2.5 py-2 rounded-md text-xs font-mono text-on-dark truncate"
                             style={{ background: '#14100e', border: '1px solid #36342e' }}
                           >
-                            {maskLicenseKey(license.license_key)}
+                            {license.display_key
+                              ? maskLicenseKey(license.display_key)
+                              : license.license_key}
                           </code>
                           <button
                             onClick={handleCopyLicense}

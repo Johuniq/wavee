@@ -37,6 +37,21 @@ impl Transcriber {
         }
     }
 
+    /// Run a tiny dummy audio sample through the model to force CUDA kernel
+    /// compilation, ONNX graph optimization, and any first-call allocations.
+    /// Doing this at load time (rather than on the first hotkey press) hides
+    /// the multi-second cold-start cost from the user.
+    pub fn warm_up(&mut self) -> Result<(), String> {
+        // 1 second of silence at 16 kHz. Short enough to be cheap, long
+        // enough to exercise the full mel-encoder + decoder path.
+        let dummy: Vec<f32> = vec![0.0; 16_000];
+        match self {
+            Self::Whisper(transcriber) => transcriber.transcribe(&dummy).map(|_| ()),
+            Self::Parakeet(transcriber) => transcriber.transcribe(&dummy).map(|_| ()),
+            Self::Qwen3Asr(transcriber) => transcriber.transcribe(&dummy).map(|_| ()),
+        }
+    }
+
     pub fn set_language(&mut self, language: &str) {
         match self {
             Self::Whisper(transcriber) => transcriber.set_language(language),
@@ -319,11 +334,12 @@ fn configure_ort_acceleration() {
 fn default_ort_accelerator() -> OrtAccelerator {
     #[cfg(target_os = "windows")]
     {
-        // DirectML is fast when it works, but on some Windows GPU/driver
-        // combinations it can hard-fail during ONNX MemcpyToHost nodes. CPU is
-        // the safer production default; advanced users can opt into DirectML
-        // with WAVEE_ORT_ACCELERATOR=directml.
-        OrtAccelerator::CpuOnly
+        // DirectML is the GPU backend for ONNX Runtime on Windows and is
+        // dramatically faster than CPU for Parakeet/Qwen3 inference. It
+        // can hard-fail on some GPU/driver combinations during
+        // MemcpyToHost nodes, so advanced users can force CPU with
+        // WAVEE_ORT_ACCELERATOR=cpu.
+        OrtAccelerator::DirectMl
     }
 
     #[cfg(target_os = "macos")]

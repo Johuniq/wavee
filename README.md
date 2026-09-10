@@ -12,6 +12,8 @@ Wavee is a local-first desktop dictation app for Windows, macOS, and Linux. Hold
 
 [Download Latest Release](https://github.com/johuniq/wavee/releases/latest) · [Report A Bug](https://github.com/johuniq/wavee/issues/new?template=bug_report.yml) · [Contribute](CONTRIBUTING.md)
 
+> **What's New in v2.0.0** — Wavee now ships a redesigned dashboard-based interface with dedicated Overview, History, Models, Transcribe, Vocabulary, AI Formatting, License, Settings, Advanced, and Help views. New features include a custom vocabulary system, AI-powered text formatting with multiple cloud providers, cloud transcription support, in-app update checking, and a flexible notch-pill recording overlay.
+
 ## Why Wavee
 
 - **Voice to cursor**: dictate once and place the result into the app you are already using.
@@ -27,6 +29,7 @@ Wavee is built to cover the full desktop dictation workflow from start to finish
 
 - Live microphone dictation
 - Audio file transcription
+- Cloud transcription via multiple providers
 - Global hotkeys with push-to-talk and toggle modes
 - Direct cursor insertion
 - Clipboard output mode
@@ -37,6 +40,55 @@ Wavee is built to cover the full desktop dictation workflow from start to finish
 - Recording indicators and desktop integration
 - Local-first data handling
 - Windows, macOS, and Linux desktop support
+
+## v2.0.0 — What's New
+
+Wavee 2.0.0 is a major release that reimagines the app around a modern dashboard experience. The single-view interface has been replaced with a multi-page dashboard that puts the most-used workflows one click away.
+
+### New Dashboard Navigation
+
+A redesigned sidebar groups everything into logical sections — General, Transcription, Account, Configuration, and Support — so you can jump between Overview, History, Models, Transcribe, License, Settings, Advanced, Vocabulary, AI Formatting, and Help without hunting through menus.
+
+### Custom Vocabulary
+
+Define domain-specific terms that local transcription models consistently mangle — product names, internal codenames, library names, acronyms, niche jargon — and have them replaced automatically in the final output.
+
+Open **Dashboard → Vocabulary** (or **Settings → Custom Vocabulary**) to add pairs:
+
+- **You say**: the phrase the model tends to mishear (e.g. `next js`, `k eight s`, `wave e`)
+- **Wavee writes**: the canonical text that should appear in your output (e.g. `Next.js`, `k8s`, `Wavee`)
+
+Matching is case-insensitive and whole-word aware, so longer phrases always win over shorter substrings and replacements never fire inside unrelated words. The written form is preserved verbatim, so include the casing, punctuation, and symbols you want.
+
+This pairs naturally with Wavee's code-aware post-processing: dictating `next js slash app slash layout dot tsx` becomes `Next.js/app/@layout.tsx`, without the model deciding it's "next j s" along the way.
+
+### AI Formatting
+
+Let a cloud AI model clean up and polish your dictated text after transcription. Configure multiple providers — Gemini, Anthropic, OpenAI, DeepSeek, or a custom endpoint — with per-provider model selection, style presets, and connection testing. Formatting runs after transcription so your output reads like something you actually wrote it, not something you spoke.
+
+### Cloud Transcription
+
+Beyond local models, Wavee can transcribe through cloud providers including Groq, OpenAI, Deepgram, and Mistral. Cloud transcription is useful when you want maximum accuracy or when your device can't run a local model comfortably.
+
+### Automated Updates
+
+Background update checking notifies you when a new version is available, then downloads and installs it while you keep working. Updates are signed and verified before installation.
+
+### Enhanced Recording Overlay
+
+The recording indicator is now a versatile "notch-pill" overlay that can be positioned in various screen locations — top-center, bottom-right, and more — so it stays out of your way while still giving clear feedback while you dictate.
+
+### Data Management
+
+Export your transcription history as JSON files from the Advanced view, and import or export your full transcript archive. A factory-reset option wipes all local data if you ever want to start fresh.
+
+### Improved License Management
+
+License verification now uses smart caching so hotkey-driven dictation stays responsive and continues to work offline during grace periods. Online re-validation runs on a throttled interval, so you only wait for a network call when it actually matters.
+
+### Refactored Model Metadata
+
+Model metadata now includes explicit language support and auto-detection capabilities, making it easier to pick the right model for your workflow.
 
 ## How It Works
 
@@ -141,14 +193,18 @@ Saying `undo`, `paste`, `select all`, or `backspace word` can trigger editing be
 
 Wavee lets you define domain-specific terms that local transcription models consistently mangle — product names, internal codenames, library names, acronyms, niche jargon — and have them replaced automatically in the final output.
 
-Open **Settings → Custom Vocabulary** to add pairs:
+Open **Dashboard → Vocabulary** to add pairs:
 
-- **You say**: the phrase Whisper tends to mishear (e.g. `next js`, `k eight s`, `wave e`)
+- **You say**: the phrase the model tends to mishear (e.g. `next js`, `k eight s`, `wave e`)
 - **Wavee writes**: the canonical text that should appear in your output (e.g. `Next.js`, `k8s`, `Wavee`)
 
 Matching is case-insensitive and whole-word aware, so longer phrases always win over shorter substrings and replacements never fire inside unrelated words. The written form is preserved verbatim, so include the casing, punctuation, and symbols you want.
 
-This pairs naturally with Wavee's code-aware post-processing: dictating `next js slash app slash layout dot tsx` becomes `Next.js/app/@layout.tsx`, without Whisper deciding it's "next j s" along the way.
+This pairs naturally with Wavee's code-aware post-processing: dictating `next js slash app slash layout dot tsx` becomes `Next.js/app/@layout.tsx`, without the model deciding it's "next j s" along the way.
+
+### 7. AI Formatting
+
+After transcription, Wavee can hand the raw text to a cloud AI model for cleanup and polishing. Configure one or more providers — Gemini, Anthropic, OpenAI, DeepSeek, or a custom endpoint — with per-provider model selection, style presets, and connection testing. Formatting runs after transcription so your output reads like something you actually wrote it, not something you spoke.
 
 ## Voice Commands
 
@@ -210,9 +266,8 @@ winget install Johuniq.Wavee
 1. Download the latest Windows installer from [Releases](https://github.com/johuniq/wavee/releases/latest).
 2. Run the installer.
 3. Open Wavee.
-4. Choose a transcription model during setup.
-5. Grant microphone permission if Windows prompts for it.
-6. Press the configured recording hotkey and speak.
+4. Complete the setup wizard — choose a transcription model, set your hotkeys, and grant microphone access.
+5. Press the configured recording hotkey and speak.
 
 ### Windows Unknown Publisher Warning
 
@@ -232,7 +287,7 @@ You only need to do this for the unsigned installer you downloaded.
 2. Open the DMG.
 3. Drag **Wavee** to **Applications**.
 4. Open Wavee from Applications.
-5. Grant **Microphone** and **Accessibility** permissions when prompted.
+5. Complete the setup wizard — choose a transcription model, set your hotkeys, and grant **Microphone** and **Accessibility** permissions when prompted.
 6. Press the configured recording hotkey and speak.
 
 ### macOS "Apple Could Not Verify" Warning
@@ -255,20 +310,20 @@ You only need to do this once for the downloaded app.
 1. Download the latest `Wavee_*.AppImage` from [Releases](https://github.com/johuniq/wavee/releases/latest).
 2. Make it executable: `chmod +x Wavee_*.AppImage`
 3. Run it: `./Wavee_*.AppImage`
-4. Choose a transcription model during setup.
-5. Grant microphone permission if your desktop environment prompts for it.
-6. Press the configured recording hotkey and speak.
+4. Complete the setup wizard — choose a transcription model, set your hotkeys, and grant microphone access.
+5. Press the configured recording hotkey and speak.
 
 **Or install via DEB (Ubuntu/Debian):**
 1. Download the latest `.deb` package from [Releases](https://github.com/johuniq/wavee/releases/latest).
 2. `sudo apt install ./wavee_*.deb`
 3. Open Wavee from the Applications menu.
-4. Choose a transcription model during setup.
+4. Complete the setup wizard.
 
 **Or install via RPM (Fedora/RHEL):**
 1. Download the latest `.rpm` package from [Releases](https://github.com/johuniq/wavee/releases/latest).
 2. `sudo dnf install ./wavee-*.rpm`
 3. Open Wavee from the Applications menu.
+4. Complete the setup wizard.
 
 Note: Wavee requires PulseAudio or ALSA for microphone access on Linux. Install `pulseaudio` or `alsa-utils` if audio is not detected.
 
@@ -326,7 +381,6 @@ cargo test -j 1
 src/                 React frontend
 src-tauri/           Rust/Tauri backend
 src-tauri/tests/     Backend integration and E2E tests
-scripts/             Release and maintenance scripts
 public/              Static frontend assets
 .github/             CI, issue templates, and release workflow
 ```

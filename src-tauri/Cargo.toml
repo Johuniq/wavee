@@ -87,6 +87,10 @@ getrandom = { version = "0.2", features = ["std"] }
 # Whisper speech-to-text
 whisper-rs = "0.16"
 transcribe-rs = { version = "0.3.11", features = ["onnx"] }
+# Qwen3-ASR: GPU acceleration is detected at build time by build.rs. The
+# crate's `cuda`/`metal` Cargo features are NOT enabled here so the app
+# builds on machines without a CUDA toolkit; build.rs emits
+# `cargo:rustc-cfg=feature:cuda` only when nvcc is found.
 qwen3-asr = { path = "vendor/qwen3-asr", default-features = false }
 ort = { path = "vendor/ort", default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-native", "copy-dylibs", "api-24"] }
 

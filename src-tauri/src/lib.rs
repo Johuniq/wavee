@@ -290,20 +290,41 @@ fn license_status_to_response(status: &LicenseStatus) -> String {
 }
 
 #[allow(unused_variables)]
-async fn has_valid_license_verified(license_manager: &LicenseManager) -> bool {
+async fn verified_license_check(license_manager: &LicenseManager) -> VerifiedLicenseResult {
     // Fast path: trust the local cache so hotkey-driven calls don't hit
     // Polar on every push-to-talk and dictation still works offline.
     if license_manager.is_cached_license_valid() {
-        return true;
+        return VerifiedLicenseResult::Granted;
     }
 
     match license_manager.validate_throttled().await {
-        Ok(info) => info.status.allows_usage(),
+        Ok(info) => {
+            if info.status.allows_usage() {
+                VerifiedLicenseResult::Granted
+            } else {
+                VerifiedLicenseResult::Rejected
+            }
+        }
         Err(error) => {
-            debug!("Verified license check failed: {}", error);
-            false
+            if license_manager.is_authoritative_validate_error(&error) {
+                // Authoritative rejection (revoked/disabled/invalid). The
+                // cache has already been cleared by LicenseManager. Callers
+                // must NOT fall back to a stale DB row.
+                VerifiedLicenseResult::Rejected
+            } else {
+                // Transient failure (network/5xx). Callers may fall back to
+                // the DB row / offline grace period.
+                VerifiedLicenseResult::OfflineFallback
+            }
         }
     }
+}
+
+/// Outcome of an online license check.
+enum VerifiedLicenseResult {
+    Granted,
+    Rejected,
+    OfflineFallback,
 }
 
 #[allow(unused_variables)]
@@ -807,8 +828,16 @@ async fn load_model(
     }
 
     // Load new model
-    let new_transcriber = Transcriber::new(&model_id, model_path.to_str().unwrap(), &language)
+    let mut new_transcriber = Transcriber::new(&model_id, model_path.to_str().unwrap(), &language)
         .map_err(CommandError::Transcription)?;
+
+    // Warm up the model now, during the (already slow) load path, so the
+    // first hotkey press doesn't pay the multi-second CUDA kernel compile /
+    // ONNX graph optimization cost. This is a tiny dummy sample so it's cheap
+    // relative to the load itself.
+    if let Err(e) = new_transcriber.warm_up() {
+        warn!("Model warm-up failed (first dictation may be slower): {}", e);
+    }
 
     let mut transcriber_guard = transcriber.lock().unwrap();
     *transcriber_guard = Some(new_transcriber);
@@ -868,16 +897,20 @@ async fn transcribe_audio(
         }
     }
 
-    let mut transcriber_guard = transcriber.lock().unwrap();
-
-    if let Some(ref mut t) = *transcriber_guard {
-        let text = t
-            .transcribe(&audio_samples)
-            .map_err(CommandError::Transcription)?;
-        Ok(text)
-    } else {
-        Err(CommandError::Transcription("No model loaded".to_string()))
-    }
+    // Local transcription is blocking (CPU/GPU inference). Run it on a
+    // dedicated blocking thread so the async runtime (and therefore the UI)
+    // stays responsive while the model runs. The transcriber is Send+Sync so
+    // we can move it into the blocking closure.
+    tokio::task::spawn_blocking(move || {
+        let mut transcriber_guard = transcriber.lock().unwrap();
+        if let Some(ref mut t) = *transcriber_guard {
+            t.transcribe(&audio_samples).map_err(CommandError::Transcription)
+        } else {
+            Err(CommandError::Transcription("No model loaded".to_string()))
+        }
+    })
+    .await
+    .map_err(|_| CommandError::Transcription("Transcription task panicked".to_string()))?
 }
 
 #[tauri::command]
@@ -919,15 +952,19 @@ async fn record_and_transcribe(
         }
     }
 
-    let mut transcriber_guard = transcriber.lock().unwrap();
-    if let Some(ref mut t) = *transcriber_guard {
-        let text = t
-            .transcribe(&samples)
-            .map_err(CommandError::Transcription)?;
-        Ok(text)
-    } else {
-        Err(CommandError::Transcription("No model loaded".to_string()))
-    }
+    // Local transcription is blocking (CPU/GPU inference). Run it on a
+    // dedicated blocking thread so the async runtime (and therefore the UI)
+    // stays responsive while the model runs.
+    tokio::task::spawn_blocking(move || {
+        let mut transcriber_guard = transcriber.lock().unwrap();
+        if let Some(ref mut t) = *transcriber_guard {
+            t.transcribe(&samples).map_err(CommandError::Transcription)
+        } else {
+            Err(CommandError::Transcription("No model loaded".to_string()))
+        }
+    })
+    .await
+    .map_err(|_| CommandError::Transcription("Transcription task panicked".to_string()))?
 }
 
 // ==================== Translation Commands ====================
@@ -2194,9 +2231,9 @@ impl From<LicenseData> for LicenseResponse {
 }
 
 #[tauri::command]
-fn get_license(
-    db: State<DbState>,
-    license_manager: State<LicenseManagerState>,
+async fn get_license(
+    db: State<'_, DbState>,
+    license_manager: State<'_, LicenseManagerState>,
 ) -> CommandResult<LicenseResponse> {
     // First try to get from secure cache
     if let Some(info) = license_manager.0.get_cached_info() {
@@ -2205,6 +2242,26 @@ fn get_license(
 
     // Fall back to database
     let license = db.0.get_license().map_err(CommandError::Database)?;
+
+    // If the DB row claims the license is active, re-validate online before
+    // returning it. A revoked/disabled license must not be displayed as
+    // "active" just because the DB row hasn't been updated yet.
+    if db_license_allows_usage(&license) {
+        match license_manager.0.validate().await {
+            Ok(info) => return Ok(LicenseResponse::from(info)),
+            Err(error) => {
+                if license_manager.0.is_authoritative_validate_error(&error) {
+                    warn!("get_license: license authoritatively rejected: {}", error);
+                    let _ = clear_cache();
+                    // Return the DB row as-is; the UI will show the
+                    // rejected status rather than a stale "active".
+                    return Ok(LicenseResponse::from(license));
+                }
+                // Transient failure: return the DB row (offline grace).
+            }
+        }
+    }
+
     Ok(LicenseResponse::from(license))
 }
 
@@ -2265,23 +2322,25 @@ async fn validate_license(
     let license_info = match license_manager.0.validate().await {
         Ok(info) => info,
         Err(error) => {
-            let stored_license = db.0.get_license().map_err(CommandError::Database)?;
-            let Some(license_key) = stored_license.license_key.as_deref() else {
+            // Distinguish authoritative rejections (revoked/disabled/invalid)
+            // from transient network failures. Authoritative rejections must
+            // never grant access from a stale DB row.
+            if license_manager.0.is_authoritative_validate_error(&error) {
+                warn!("License authoritatively rejected: {}", error);
+                let _ = clear_cache();
                 return Err(CommandError::License(error));
-            };
-            let Some(activation_id) = stored_license.activation_id.as_deref() else {
-                return Err(CommandError::License(error));
-            };
+            }
 
+            // Transient failure (network/5xx): fall back to the stored DB
+            // license for offline grace. Do NOT make another online call.
+            let stored_license = db.0.get_license().map_err(CommandError::Database)?;
             if !db_license_allows_usage(&stored_license) {
                 return Err(CommandError::License(error));
             }
 
-            license_manager
-                .0
-                .validate_activation(license_key, activation_id)
-                .await
-                .map_err(CommandError::License)?
+            // Build a LicenseInfo from the stored DB row so the UI reflects
+            // the offline-grace state.
+            return Ok(LicenseResponse::from(stored_license));
         }
     };
 
@@ -2357,10 +2416,16 @@ async fn is_license_valid(
     let db = db.0.clone();
     let license_manager = license_manager.0.clone();
 
-    // Prefer server validation. LicenseManager falls back to offline grace
-    // only for non-authoritative network failures.
-    if has_valid_license_verified(&license_manager).await {
-        return Ok(true);
+    match verified_license_check(&license_manager).await {
+        VerifiedLicenseResult::Granted => return Ok(true),
+        VerifiedLicenseResult::Rejected => {
+            // Authoritative rejection: a revoked/disabled license must not
+            // grant access from a stale DB row.
+            return Ok(false);
+        }
+        VerifiedLicenseResult::OfflineFallback => {
+            // Transient failure: fall back to the DB row / trial.
+        }
     }
 
     if let Ok(license) = db.get_license() {
@@ -2393,6 +2458,9 @@ fn start_trial(db: State<DbState>) -> CommandResult<LicenseResponse> {
                 license.status = "trial_expired".to_string();
                 db.0.save_license(&license)
                     .map_err(CommandError::Database)?;
+                // Clear any cached license so the UI reflects the expired
+                // state rather than a stale granted cache.
+                let _ = clear_cache();
                 return Err(CommandError::License(
                     "Trial state is invalid. Please activate a license.".to_string(),
                 ));
@@ -2406,6 +2474,7 @@ fn start_trial(db: State<DbState>) -> CommandResult<LicenseResponse> {
                     license.status = "trial_expired".to_string();
                     db.0.save_license(&license)
                         .map_err(CommandError::Database)?;
+                    let _ = clear_cache();
                     return Err(CommandError::License(
                         "Trial state is invalid. Please activate a license.".to_string(),
                     ));
@@ -2415,6 +2484,7 @@ fn start_trial(db: State<DbState>) -> CommandResult<LicenseResponse> {
                     license.status = "trial_expired".to_string();
                     db.0.save_license(&license)
                         .map_err(CommandError::Database)?;
+                    let _ = clear_cache();
                     return Err(CommandError::License(
                         "Trial has expired. Please purchase a license.".to_string(),
                     ));
@@ -2425,7 +2495,10 @@ fn start_trial(db: State<DbState>) -> CommandResult<LicenseResponse> {
         return Ok(LicenseResponse::from(license));
     }
 
-    // Start new trial
+    // Start new trial. Clear any cached license so the UI reflects the
+    // trial state rather than a stale granted cache.
+    let _ = clear_cache();
+
     let trial_started_at = chrono::Utc::now().to_rfc3339();
     license.status = "trial".to_string();
     license.trial_started_at = Some(trial_started_at.clone());
@@ -2460,13 +2533,22 @@ async fn get_trial_status(
     let license_manager = license_manager.0.clone();
 
     // Check for active license first with server validation when possible.
-    if has_valid_license_verified(&license_manager).await {
-        return Ok(serde_json::json!({
-            "isInTrial": false,
-            "daysRemaining": 0,
-            "trialExpired": false,
-            "hasLicense": true
-        }));
+    match verified_license_check(&license_manager).await {
+        VerifiedLicenseResult::Granted => {
+            return Ok(serde_json::json!({
+                "isInTrial": false,
+                "daysRemaining": 0,
+                "trialExpired": false,
+                "hasLicense": true
+            }));
+        }
+        VerifiedLicenseResult::Rejected => {
+            // Authoritative rejection: do not fall back to a stale DB row.
+            // Fall through to trial checks below.
+        }
+        VerifiedLicenseResult::OfflineFallback => {
+            // Transient failure: fall back to the DB row below.
+        }
     }
 
     let license = db.get_license().map_err(CommandError::Database)?;
@@ -2484,6 +2566,10 @@ async fn get_trial_status(
         let expected_hash = calculate_trial_integrity_hash(trial_started);
         if license.trial_integrity_hash.as_deref() != Some(expected_hash.as_str()) {
             warn!("Trial integrity check failed in get_trial_status");
+            // Persist the expired state so the UI consistently reports it.
+            let mut expired = license.clone();
+            expired.status = "trial_expired".to_string();
+            let _ = db.save_license(&expired);
             return Ok(serde_json::json!({
                 "isInTrial": false,
                 "daysRemaining": 0,
@@ -2500,6 +2586,13 @@ async fn get_trial_status(
             } else {
                 (7 - days_since_start).max(0)
             };
+
+            if days_remaining <= 0 {
+                // Persist the expired state so the UI consistently reports it.
+                let mut expired = license.clone();
+                expired.status = "trial_expired".to_string();
+                let _ = db.save_license(&expired);
+            }
 
             return Ok(serde_json::json!({
                 "isInTrial": days_remaining > 0,
@@ -2530,12 +2623,21 @@ async fn can_use_app(
 
     // Prefer server validation. LicenseManager falls back to offline grace
     // only for non-authoritative network failures.
-    if has_valid_license_verified(&license_manager).await {
-        return Ok(serde_json::json!({
-            "canUse": true,
-            "reason": "licensed",
-            "daysRemaining": null
-        }));
+    match verified_license_check(&license_manager).await {
+        VerifiedLicenseResult::Granted => {
+            return Ok(serde_json::json!({
+                "canUse": true,
+                "reason": "licensed",
+                "daysRemaining": null
+            }));
+        }
+        VerifiedLicenseResult::Rejected => {
+            // Authoritative rejection: do not fall back to a stale DB row.
+            // Fall through to trial checks below.
+        }
+        VerifiedLicenseResult::OfflineFallback => {
+            // Transient failure: fall back to the DB row below.
+        }
     }
 
     let license = db.get_license().map_err(CommandError::Database)?;
@@ -2552,6 +2654,11 @@ async fn can_use_app(
         let expected_hash = calculate_trial_integrity_hash(trial_started);
         if license.trial_integrity_hash.as_deref() != Some(expected_hash.as_str()) {
             warn!("Trial integrity check failed in can_use_app");
+            // Persist the expired state so subsequent calls don't re-evaluate
+            // a corrupted trial.
+            let mut expired = license.clone();
+            expired.status = "trial_expired".to_string();
+            let _ = db.save_license(&expired);
             return Ok(serde_json::json!({
                 "canUse": false,
                 "reason": "trial_expired",
@@ -2575,6 +2682,11 @@ async fn can_use_app(
                     "daysRemaining": days_remaining
                 }));
             } else {
+                // Persist the expired state so the UI consistently shows
+                // "Trial Period Ended" rather than recomputing each call.
+                let mut expired = license.clone();
+                expired.status = "trial_expired".to_string();
+                let _ = db.save_license(&expired);
                 return Ok(serde_json::json!({
                     "canUse": false,
                     "reason": "trial_expired",
@@ -3595,12 +3707,32 @@ async fn ensure_app_access_verified(
         .map(|license| db_license_allows_usage(&license))
         .unwrap_or(false);
 
-    if has_valid_license_verified(license_manager).await || has_db_license || has_active_trial(db) {
-        Ok(())
-    } else {
-        Err(CommandError::License(
-            "A valid license or active trial is required.".to_string(),
-        ))
+    let has_trial = has_active_trial(db);
+
+    match license_manager.validate().await {
+        Ok(_) => Ok(()),
+        Err(error) => {
+            if license_manager.is_authoritative_validate_error(&error) {
+                // Authoritative rejection (revoked/disabled/invalid). The
+                // cache has already been cleared by LicenseManager. Do NOT
+                // fall back to the DB row — a revoked license must not
+                // continue dictating.
+                warn!("App access denied: license authoritatively rejected: {}", error);
+                return Err(CommandError::License(
+                    "A valid license or active trial is required.".to_string(),
+                ));
+            }
+
+            // Transient failure (network/5xx): fall back to the DB row and
+            // the trial. This is the offline grace period.
+            if has_db_license || has_trial {
+                Ok(())
+            } else {
+                Err(CommandError::License(
+                    "A valid license or active trial is required.".to_string(),
+                ))
+            }
+        }
     }
 }
 

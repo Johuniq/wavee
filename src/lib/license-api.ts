@@ -201,10 +201,12 @@ export function formatExpirationDate(expiresAt: string | null): string {
 }
 
 /**
- * Mask license key for display (show only last 6 characters)
+ * Mask license key for display. Mirrors the backend
+ * `security::mask_license_key` format (first 4 + last 4 characters) so the
+ * UI and backend agree on how a key is masked.
  */
 export function maskLicenseKey(key: string | null): string {
   if (!key) return "****";
-  if (key.length <= 6) return "****";
-  return `****${key.slice(-6)}`;
+  if (key.length <= 8) return "****";
+  return `${key.slice(0, 4)}****${key.slice(-4)}`;
 }

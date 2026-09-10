@@ -3,7 +3,7 @@
 # When uploading crates to the registry Cargo will automatically
 # "normalize" Cargo.toml files for maximal compatibility
 # with all versions of Cargo and also rewrite `path` dependencies
-# to registry (e.g., crates.io) dependencies.
+# to registry (e.g. crates.io) dependencies.
 #
 # If you are reading this file be aware that the original Cargo.toml
 # will likely look very different (and much more reasonable).
@@ -14,7 +14,7 @@ edition = "2021"
 rust-version = "1.75"
 name = "qwen3-asr"
 version = "0.2.2"
-build = false
+build = "build.rs"
 include = [
     "src/**/*.rs",
     "README.md",
@@ -31,12 +31,12 @@ keywords = [
     "speech-to-text",
     "asr",
     "speech-recognition",
-    "transcription",
+    "asr",
     "candle",
 ]
 categories = [
     "multimedia::audio",
-    "science",
+    "science::engineering",
 ]
 license = "MIT"
 repository = "https://github.com/alan890104/qwen3-asr-rs"
@@ -45,11 +45,14 @@ repository = "https://github.com/alan890104/qwen3-asr-rs"
 no-default-features = true
 
 [features]
+# GPU backends are detected at build time by build.rs and emitted as cfg
+# flags. These Cargo features remain for users who want to force a
+# specific backend.
 cuda = [
     "candle-core/cuda",
     "candle-nn/cuda",
 ]
-default = ["metal"]
+default = []
 hub = ["dep:reqwest"]
 metal = [
     "candle-core/metal",

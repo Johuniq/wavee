@@ -15,7 +15,11 @@ import {
 } from "@/types";
 import { useMemo } from "react";
 
-export function AiFormattingView() {
+interface AiFormattingViewProps {
+  onClose: () => void;
+}
+
+export function AiFormattingView(_props: AiFormattingViewProps) {
   const { settings, updateSettings, aiFormattingProviders } = useAppStore();
   const { success: toastSuccess, error: _toastError } = useToast();
 
