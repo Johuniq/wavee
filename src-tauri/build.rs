@@ -9,7 +9,7 @@
 //   2. `metal` is macOS-only and would fail on Linux/Windows.
 //
 // Instead we detect the toolchain at build time and emit
-// `cargo:rustc-cfg=feature:cuda` only when `nvcc --version` succeeds. The
+// `cargo:rustc-cfg=feature="cuda"` only when `nvcc --version` succeeds. The
 // crate's `best_device()` then picks CUDA → Metal → CPU automatically.
 //
 // macOS always uses Metal (the `candle-core/metal` feature is enabled
@@ -30,9 +30,7 @@ fn main() {
             .unwrap_or(false);
 
         if has_nvcc {
-            println!(
-                "cargo:rustc-cfg=feature:cuda"
-            );
+            println!("cargo:rustc-cfg=feature=\"cuda\"");
             println!("cargo:warning=Qwen3-ASR CUDA acceleration enabled");
         } else {
             println!("cargo:warning=Qwen3-ASR CUDA not detected; using CPU fallback");
@@ -45,7 +43,7 @@ fn main() {
     // will pick Metal when the feature is on.
     #[cfg(target_os = "macos")]
     {
-        println!("cargo:rustc-cfg=feature:metal");
+        println!("cargo:rustc-cfg=feature=\"metal\"");
         println!("cargo:warning=Qwen3-ASR Metal acceleration enabled");
     }
 
