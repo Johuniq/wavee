@@ -22,7 +22,7 @@ fn main() {
             .unwrap_or(false);
 
         if has_nvcc {
-            println!("cargo:rustc-cfg=feature:cuda");
+            println!("cargo:rustc-cfg=feature=\"cuda\"");
             println!("cargo:warning=qwen3-asr: CUDA toolkit detected; enabling GPU acceleration");
         } else {
             println!("cargo:warning=qwen3-asr: CUDA toolkit not found; using CPU fallback");
@@ -34,7 +34,7 @@ fn main() {
     // unconditionally enable it on macOS.
     #[cfg(target_os = "macos")]
     {
-        println!("cargo:rustc-cfg=feature:metal");
+        println!("cargo:rustc-cfg=feature=\"metal\"");
         println!("cargo:warning=qwen3-asr: Metal acceleration enabled");
     }
 
