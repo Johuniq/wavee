@@ -53,6 +53,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["nsis", "msi", "dmg", "app", "appimage", "deb", "rpm"],
     "icon": [
       "icons/32x32.png",
