@@ -143,7 +143,7 @@ jobs:
       - name: Setup CMake
         run: echo "CMAKE=$(command -v cmake)" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
-      - run: pnpm tauri build --bundles appimage,deb --verbose
+      - run: pnpm tauri build --bundles appimage,deb --verbose --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
   build-windows:
     name: Build (Windows)
@@ -206,7 +206,7 @@ jobs:
             Remove-Item -Recurse -Force "src-tauri/target/release/build/whisper-rs-sys-*" -ErrorAction SilentlyContinue
           }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm tauri build --bundles nsis,msi --verbose
+      - run: pnpm tauri build --bundles nsis,msi --verbose --config '{\"bundle\":{\"createUpdaterArtifacts\":false}}'
 
   build-macos:
     name: Build (macOS)
@@ -239,7 +239,7 @@ jobs:
           # the only guarantee when the build script itself changes.
           rm -rf src-tauri/target
       - run: pnpm install --frozen-lockfile
-      - run: pnpm tauri build --bundles app --target aarch64-apple-darwin
+      - run: pnpm tauri build --bundles app --target aarch64-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":false}}'
       - name: Validate macOS app bundle
         run: |
           APP_PATH="$(find src-tauri/target/aarch64-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app' -type d -print -quit)"
