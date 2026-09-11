@@ -11,6 +11,9 @@ keywords = ["voice", "speech-to-text", "transcription", "whisper", "tauri"]
 categories = ["multimedia::audio"]
 rust-version = "1.81"
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mobile)', 'cfg(cuda)', 'cfg(metal)'] }
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]

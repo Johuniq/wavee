@@ -15,11 +15,17 @@ pub use inference::{AsrInference, TranscribeOptions, TranscribeResult};
 pub use mel::load_audio_wav;
 pub use streaming::{StreamingOptions, StreamingState};
 
-/// Select the best available device: CUDA (if `cuda` feature) → Metal (if `metal` feature) → CPU.
+/// Select the best available device: CUDA (if `cuda` cfg is set) → Metal
+/// (if `metal` cfg is set) → CPU.
+///
+/// These cfg flags are emitted by the crate's `build.rs`, which detects
+/// the CUDA toolkit at build time and unconditionally enables Metal on
+/// macOS. Users can also force a backend via the `cuda`/`metal` Cargo
+/// features — the crate's `build.rs` maps those to the same cfg flags.
 ///
 /// Logs the selected device at `info` level and any fallback at `warn` level.
 pub fn best_device() -> candle_core::Device {
-    #[cfg(feature = "cuda")]
+    #[cfg(cuda)]
     {
         match candle_core::Device::new_cuda(0) {
             Ok(device) => {
@@ -27,11 +33,11 @@ pub fn best_device() -> candle_core::Device {
                 return device;
             }
             Err(e) => {
-                log::warn!("CUDA feature enabled but device creation failed: {e}, falling back");
+                log::warn!("CUDA device creation failed: {e}, falling back");
             }
         }
     }
-    #[cfg(feature = "metal")]
+    #[cfg(metal)]
     {
         match candle_core::Device::new_metal(0) {
             Ok(device) => {
@@ -39,7 +45,7 @@ pub fn best_device() -> candle_core::Device {
                 return device;
             }
             Err(e) => {
-                log::warn!("Metal feature enabled but device creation failed: {e}, falling back");
+                log::warn!("Metal device creation failed: {e}, falling back");
             }
         }
     }

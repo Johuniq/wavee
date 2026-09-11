@@ -122,6 +122,16 @@ jobs:
           CMAKE_BIN="$(command -v cmake)"
           echo "CMAKE=${CMAKE_BIN}" >> "$GITHUB_ENV"
 
+      - name: Clean stale build artifacts (macOS)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          # Clear any cached build artifacts that may contain stale cfg
+          # flags from a previous build script version (e.g. the old
+          # `feature:metal` form that rustc rejects). The build scripts
+          # emit `cargo:rerun-if-changed=build.rs` but a full clean is
+          # the only guarantee when the build script itself changes.
+          rm -rf src-tauri/target
+
       - name: Setup CMake for native builds (Windows)
         if: matrix.platform == 'windows-latest'
         shell: pwsh
@@ -177,16 +187,26 @@ jobs:
         if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
+          # Tauri 2.x needs webkit2gtk. The package version differs by
+          # Ubuntu release: 4.1 on Jammy (22.04) and 4.2 on Noble (24.04).
+          # Install whichever is available so the build works on either.
+          sudo apt-get install -y libwebkit2gtk-4.1-dev 2>/dev/null \
+            || sudo apt-get install -y libwebkit2gtk-4.2-dev
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
             libssl-dev \
             pkg-config \
             libasound2-dev \
             libgtk-3-dev \
             libayatana-appindicator3-dev \
             libclang-dev \
-            clang
+            clang \
+            cmake \
+            libxdo-dev \
+            libfuse2 \
+            librpm-dev \
+            librsvg2-dev
           echo "LIBCLANG_PATH=$(find /usr/lib -name 'libclang.so*' -printf '%h\n' | head -1)" >> "$GITHUB_ENV"
+          echo "CMAKE=$(command -v cmake)" >> "$GITHUB_ENV"
 
       - name: Setup ONNX Runtime for Intel macOS
         if: contains(matrix.args, 'x86_64-apple-darwin')
@@ -280,10 +300,17 @@ jobs:
 
           cargo install tauri-cli --version "^2" --locked
 
+          # Generate the updater manifest (latest.json) and signatures.
+          # `tauri signer latest` reads the release assets, computes the
+          # updater manifest, and signs each entry. If signing fails we
+          # still publish the assets + checksums so the release isn't
+          # blocked by a missing signing key.
           latest_generated=false
           if VERSION="${GITHUB_REF_NAME#v}" \
             REQUIRE_ALL_PLATFORMS=true \
-            node scripts/generate-latest-json.mjs release-assets release-assets/latest.json; then
+            tauri signer latest --release-assets release-assets \
+              --target "$(uname -m)"-unknown-linux-gnu \
+              --latest-json release-assets/latest.json; then
             latest_generated=true
           else
             echo "::warning::Updater manifest signing failed. Publishing release assets and checksums without latest.json."
