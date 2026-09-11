@@ -4,7 +4,7 @@
   <img src="src/assets/logo.png" alt="Wavee logo" width="96" height="96" />
 </p>
 
-![Wavee preview](src/assets/app_screenshot.png)
+![Wavee preview](src/assets/app_screenshot.jpeg)
 
 **Wave your voice. Get text at your cursor.**
 

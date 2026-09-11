@@ -235,42 +235,7 @@ jobs:
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
-          includeUpdaterJson: true
-
-      - name: Upload macOS updater app archive
-        if: matrix.platform == 'macos-latest'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          VERSION="${GITHUB_REF_NAME#v}"
-          if [[ "${{ matrix.args }}" == *"aarch64-apple-darwin"* ]]; then
-            TARGET="aarch64-apple-darwin"
-            ARCH="aarch64"
-          else
-            TARGET="x86_64-apple-darwin"
-            ARCH="x64"
-          fi
-
-          MACOS_BUNDLE_DIR="src-tauri/target/${TARGET}/release/bundle/macos"
-          APP_NAME="$(find "$MACOS_BUNDLE_DIR" -maxdepth 1 -name "*.app" -type d -print -quit)"
-
-          if [[ -z "$APP_NAME" ]]; then
-            echo "::error::No .app bundle found in ${MACOS_BUNDLE_DIR}"
-            find "src-tauri/target/${TARGET}/release/bundle" -maxdepth 3 -print || true
-            exit 1
-          fi
-
-          ARCHIVE="Wavee_${VERSION}_${ARCH}.app.tar.gz"
-          COPYFILE_DISABLE=1 tar -C "$MACOS_BUNDLE_DIR" \
-            --exclude='._*' \
-            --exclude='.DS_Store' \
-            -czf "$ARCHIVE" "$(basename "$APP_NAME")"
-
-          gh release upload "$GITHUB_REF_NAME" "$ARCHIVE" \
-            --repo "$GITHUB_REPOSITORY" \
-            --clobber
+          includeUpdaterJson: false
 
   publish-release:
     runs-on: ubuntu-latest
@@ -285,11 +250,9 @@ jobs:
         with:
           node-version: "lts/*"
 
-      - name: Generate release checksums
+      - name: Generate updater manifest and checksums
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           mkdir -p release-assets
@@ -298,45 +261,79 @@ jobs:
             --dir release-assets \
             --clobber
 
-          cargo install tauri-cli --version "^2" --locked
+          VERSION="${GITHUB_REF_NAME#v}"
+          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          NOTES=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json body -q '.body' 2>/dev/null || echo "")
 
-          # Generate the updater manifest (latest.json) and signatures.
-          # `tauri signer latest` reads the release assets, computes the
-          # updater manifest, and signs each entry. If signing fails we
-          # still publish the assets + checksums so the release isn't
-          # blocked by a missing signing key.
-          latest_generated=false
-          if VERSION="${GITHUB_REF_NAME#v}" \
-            REQUIRE_ALL_PLATFORMS=true \
-            tauri signer latest --release-assets release-assets \
-              --target "$(uname -m)"-unknown-linux-gnu \
-              --latest-json release-assets/latest.json; then
-            latest_generated=true
-          else
-            echo "::warning::Updater manifest signing failed. Publishing release assets and checksums without latest.json."
-            rm -f release-assets/latest.json
-          fi
+          # Build latest.json for the Tauri updater plugin.
+          # Each platform's entry needs the download URL and the signature
+          # from the corresponding .sig file produced by tauri-action.
+          export VERSION PUB_DATE RELEASE_URL NOTES
+          node <<'MANIFEST_SCRIPT'
+          const fs = require("fs");
+          const path = require("path");
 
-          sig_files=()
-          for sig_file in release-assets/*.sig; do
-            [[ -e "$sig_file" ]] || continue
-            sig_files+=("$sig_file")
-          done
+          const dir = "release-assets";
+          const files = fs.readdirSync(dir);
+          const { VERSION, PUB_DATE, RELEASE_URL, NOTES } = process.env;
 
-          if (( ${#sig_files[@]} > 0 )); then
-            gh release upload "$GITHUB_REF_NAME" "${sig_files[@]}" \
-              --repo "$GITHUB_REPOSITORY" \
-              --clobber
-          else
-            echo "No standalone .sig files were generated; latest.json contains updater signatures."
-          fi
+          // Tauri v2 updater platform keys → asset filename patterns.
+          // Each pattern matches the updater-compatible bundle for that target.
+          const platformDefs = [
+            { key: "windows-x86_64",  re: /\.nsis\.zip$/i },
+            { key: "linux-x86_64",    re: /\.AppImage\.tar\.gz$/i },
+            { key: "darwin-aarch64",  re: /(aarch64|arm64).*\.app\.tar\.gz$/i },
+            { key: "darwin-x86_64",   re: /(x86_64|x64).*\.app\.tar\.gz$/i },
+          ];
 
-          if [[ "$latest_generated" == "true" && -f release-assets/latest.json ]]; then
+          const platforms = {};
+
+          for (const { key, re } of platformDefs) {
+            const asset = files.find(f => re.test(f) && !f.endsWith(".sig"));
+            if (!asset) {
+              console.log(`SKIP ${key}: no matching asset`);
+              continue;
+            }
+
+            const sigPath = path.join(dir, asset + ".sig");
+            if (!fs.existsSync(sigPath)) {
+              console.log(`SKIP ${key}: no .sig for ${asset}`);
+              continue;
+            }
+
+            platforms[key] = {
+              signature: fs.readFileSync(sigPath, "utf8").trim(),
+              url: `${RELEASE_URL}/${asset}`,
+            };
+            console.log(`  OK ${key}: ${asset}`);
+          }
+
+          if (Object.keys(platforms).length === 0) {
+            console.error("WARNING: no signed updater artifacts found – latest.json will not be generated.");
+            console.error("Make sure TAURI_SIGNING_PRIVATE_KEY is set so tauri-action produces .sig files.");
+            process.exit(0);
+          }
+
+          const manifest = {
+            version: VERSION,
+            notes: NOTES || "",
+            pub_date: PUB_DATE,
+            platforms,
+          };
+
+          const out = path.join(dir, "latest.json");
+          fs.writeFileSync(out, JSON.stringify(manifest, null, 2) + "\n");
+          console.log(`Generated ${out} with platforms: ${Object.keys(platforms).join(", ")}`);
+          MANIFEST_SCRIPT
+
+          if [[ -f release-assets/latest.json ]]; then
             gh release upload "$GITHUB_REF_NAME" release-assets/latest.json \
               --repo "$GITHUB_REPOSITORY" \
               --clobber
+            echo "Uploaded latest.json"
           else
-            echo "Skipping latest.json upload because updater signing did not complete."
+            echo "::warning::latest.json was not generated. The in-app updater will not work for this release."
           fi
 
           cd release-assets
