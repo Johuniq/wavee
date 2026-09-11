@@ -12,6 +12,8 @@
 // here — the build script only signals which backend to use.
 
 fn main() {
+    tauri_build::build();
+
     // --- CUDA detection (Linux + Windows) ---
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     {

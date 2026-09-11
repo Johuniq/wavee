@@ -86,9 +86,9 @@ impl TextInjector {
                 .map_err(|e| e.to_string())?;
         }
 
-        #[cfg(target_os = "windows")]
+        #[cfg(not(target_os = "macos"))]
         {
-            // Windows: Ctrl+V with minimal delay
+            // Windows / Linux: Ctrl+V with minimal delay
             self.enigo
                 .key(Key::Control, Direction::Press)
                 .map_err(|e| e.to_string())?;
